@@ -3,14 +3,16 @@ import {
   getAllWorkers,
   deleteWorker,
   updateWorker,
-  getWorkerPerformance,
-  getWorkerDailyPerformancePercentage,
+  importWorkersBulk,
+  toggleWorkerCountRevenue,
+  getWorkerKpi,
 } from '../apis/index';
+import { PERIOD_OPTIONS, getDateRangeForPeriod, formatMoney, getTodayDate } from '../../utils/dateFilters';
 import AddWorkerForm from './AddWorkerForm';
+import { parseWorkersFromExcelFile } from '../../utils/workerExcel';
+import { useAuth } from '../../context/AuthContext';
 import {
   Typography,
-  List,
-  ListItem,
   IconButton,
   Divider,
   Dialog,
@@ -27,12 +29,26 @@ import {
   Paper,
   Avatar,
   Tooltip,
+  Alert,
+  Switch,
+  FormControlLabel,
+  ToggleButton,
+  ToggleButtonGroup,
 } from '@mui/material';
-import { Edit, Delete, TrendingUp, Person, Phone } from '@mui/icons-material';
+import { Edit, Delete, TrendingUp, Person, Phone, UploadFile, MonetizationOn, MoneyOff } from '@mui/icons-material';
+import { filterWorkersByKeyword } from '../../utils/workerSearch';
 
 const WorkersPage = () => {
+  const { user } = useAuth();
+  const canImportExcel = user?.role === 'admin' || user?.role === 'giam_sat';
+  const canManageRevenue = canImportExcel;
   const [workers, setWorkers] = useState([]);
   const [searchName, setSearchName] = useState('');
+  const [filterKeyword, setFilterKeyword] = useState('');
+  const [importing, setImporting] = useState(false);
+  const [importMessage, setImportMessage] = useState('');
+  const [importError, setImportError] = useState('');
+  const [togglingRevenueId, setTogglingRevenueId] = useState(null);
   const [editOpen, setEditOpen] = useState(false);
   const [editData, setEditData] = useState({ id: '', name: '', phone: '' });
 
@@ -41,29 +57,22 @@ const WorkersPage = () => {
   const [deleteTargetId, setDeleteTargetId] = useState(null);
 
   const [performanceOpen, setPerformanceOpen] = useState(false);
-  const [performanceData, setPerformanceData] = useState(null);
-  const [dailyPercentage, setDailyPercentage] = useState(null);
+  const [kpiData, setKpiData] = useState(null);
   const [performanceLoading, setPerformanceLoading] = useState(false);
   const [performanceError, setPerformanceError] = useState('');
   const [selectedWorker, setSelectedWorker] = useState(null);
-  const [fromDate, setFromDate] = useState('');
-  const [toDate, setToDate] = useState('');
-  const [dailyDate, setDailyDate] = useState('');
-
-  // Get today's date in YYYY-MM-DD format
-  const getTodayDate = () => {
-    const today = new Date();
-    return today.toISOString().split('T')[0];
-  };
+  const [kpiPeriod, setKpiPeriod] = useState('today');
+  const [kpiFromDate, setKpiFromDate] = useState(getTodayDate());
+  const [kpiToDate, setKpiToDate] = useState(getTodayDate());
 
   const fetchWorkers = async () => {
-    try {
-      const res = await getAllWorkers();
-      setWorkers(res.data);
-    } catch (error) {
-      console.error('Lỗi khi lấy danh sách thợ:', error);
-    }
-  };
+  try {
+    const res = await getAllWorkers();
+    setWorkers(res.data.workers || res.data || []);
+  } catch (error) {
+    console.error('Lỗi khi lấy danh sách thợ:', error);
+  }
+};
 
   useEffect(() => {
     fetchWorkers();
@@ -120,73 +129,110 @@ const WorkersPage = () => {
     }
   };
 
-  const handleViewPerformance = async (worker) => {
+  const handleToggleCountRevenue = async (worker) => {
+    const nextValue = worker.countRevenue === false;
+    setTogglingRevenueId(worker._id);
+    try {
+      await toggleWorkerCountRevenue(worker._id, nextValue);
+      setWorkers((prev) =>
+        prev.map((item) =>
+          item._id === worker._id ? { ...item, countRevenue: nextValue } : item
+        )
+      );
+    } catch (error) {
+      console.error('Lỗi khi cập nhật trạng thái tính doanh thu:', error);
+      alert(error.response?.data?.message || 'Không thể cập nhật trạng thái tính doanh thu');
+    } finally {
+      setTogglingRevenueId(null);
+    }
+  };
+
+  const fetchKpiForWorker = async (workerId, period = kpiPeriod, from = kpiFromDate, to = kpiToDate) => {
+    if (!workerId) return;
+    setPerformanceLoading(true);
+    setPerformanceError('');
+    try {
+      const params = { workerId, period };
+      if (period === 'custom') {
+        params.from = from;
+        params.to = to;
+      }
+      const res = await getWorkerKpi(params);
+      setKpiData(res.data?.data || null);
+    } catch (err) {
+      setPerformanceError(err.response?.data?.message || 'Lỗi khi lấy KPI thợ!');
+      setKpiData(null);
+    } finally {
+      setPerformanceLoading(false);
+    }
+  };
+
+  const handleViewPerformance = (worker) => {
     setSelectedWorker(worker);
     setPerformanceOpen(true);
-    setPerformanceData(null);
-    setDailyPercentage(null);
+    setKpiData(null);
     setPerformanceError('');
-    setFromDate('');
-    setToDate('');
-
-    // Set today's date by default
-    const today = getTodayDate();
-    setDailyDate(today);
-
-    // Automatically fetch today's performance
-    setTimeout(() => {
-      fetchDailyPercentageForWorker(worker._id, today);
-    }, 100);
+    setKpiPeriod('today');
+    const range = getDateRangeForPeriod('today');
+    setKpiFromDate(range.from);
+    setKpiToDate(range.to);
   };
 
-  const fetchDailyPercentageForWorker = async (workerId, date) => {
-    if (!workerId || !date) return;
-    setPerformanceLoading(true);
-    setPerformanceError('');
+  useEffect(() => {
+    if (kpiPeriod !== 'custom') {
+      const range = getDateRangeForPeriod(kpiPeriod);
+      setKpiFromDate(range.from);
+      setKpiToDate(range.to);
+    }
+  }, [kpiPeriod]);
+
+  useEffect(() => {
+    if (performanceOpen && selectedWorker) {
+      fetchKpiForWorker(selectedWorker._id);
+    }
+  }, [performanceOpen, selectedWorker?._id, kpiPeriod, kpiFromDate, kpiToDate]);
+
+  const filteredWorkers = filterWorkersByKeyword(workers, filterKeyword);
+
+  const handleImportExcel = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    setImportMessage('');
+    setImportError('');
+
     try {
-      const res = await getWorkerDailyPerformancePercentage(workerId, date);
-      setDailyPercentage(res.data.data);
+      setImporting(true);
+      const parsedWorkers = await parseWorkersFromExcelFile(file);
+
+      if (parsedWorkers.length === 0) {
+        setImportError('Không tìm thấy dòng thợ hợp lệ (cần cột STT và Tên nhân viên).');
+        return;
+      }
+
+      const res = await importWorkersBulk(parsedWorkers);
+      setImportMessage(res.data.message || `Đã import ${parsedWorkers.length} thợ`);
+      await fetchWorkers();
     } catch (err) {
-      setPerformanceError('Lỗi khi lấy phần trăm hiệu suất ngày!');
+      console.error('Lỗi import Excel:', err);
+      setImportError(err.response?.data?.message || err.message || 'Import Excel thất bại');
     } finally {
-      setPerformanceLoading(false);
+      setImporting(false);
     }
   };
-
-  const fetchPerformance = async () => {
-    if (!selectedWorker || !fromDate || !toDate) return;
-    setPerformanceLoading(true);
-    setPerformanceError('');
-    try {
-      const res = await getWorkerPerformance(selectedWorker._id, fromDate, toDate);
-      setPerformanceData(res.data.data);
-    } catch (err) {
-      setPerformanceError('Lỗi khi lấy hiệu suất thợ!');
-    } finally {
-      setPerformanceLoading(false);
-    }
-  };
-
-  const fetchDailyPercentage = async () => {
-    if (!selectedWorker || !dailyDate) return;
-    await fetchDailyPercentageForWorker(selectedWorker._id, dailyDate);
-  };
-
-  const filteredWorkers = searchName.trim()
-    ? workers.filter(w => w.name.toLowerCase().includes(searchName.trim().toLowerCase()))
-    : workers;
 
   return (
     <Box
       sx={{
-        p: 3,
+        p: { xs: 1.5, sm: 3 },
         width: '100%',
         maxWidth: '100%',
         backgroundColor: '#f8fafc',
         minHeight: '100vh',
         borderRadius: 0,
         boxSizing: 'border-box',
-        px: 2, // horizontal padding
+        px: { xs: 1.5, sm: 2 },
       }}
     >
       <Box
@@ -216,53 +262,102 @@ const WorkersPage = () => {
       </Box>
       <Divider sx={{ mb: 2 }} />
 
-      <Box sx={{
-        display: 'flex',
-        flexDirection: { xs: 'column', sm: 'row' },
-        alignItems: 'stretch',
-        justifyContent: 'center',
-        gap: 1,
-        mb: 2,
-        width: '100%',
-        maxWidth: 1100,
-        mx: 'auto',
-      }}>
+      <Box
+        sx={{
+          display: 'flex',
+          flexDirection: { xs: 'column', md: 'row' },
+          alignItems: { xs: 'stretch', md: 'center' },
+          gap: { xs: 2, md: 0 },
+          background: '#fff',
+          borderRadius: 3,
+          boxShadow: '0 2px 12px rgba(0,0,0,0.06)',
+          p: { xs: 2, sm: 2.5 },
+          mb: importMessage || importError ? 1 : 2,
+          width: '100%',
+        }}
+      >
         <Box
           sx={{
-            flex: { xs: 'unset', sm: 1 },
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'center',
-            background: '#fff',
-            borderRadius: 3,
-            boxShadow: '0 2px 12px rgba(0,0,0,0.06)',
-            p: { xs: 0, sm: 2.5 },
-            minHeight: 80,
-            width: '100%',
-            maxWidth: '100%',
-            mx: 0,
+            justifyContent: { xs: 'center', md: 'flex-start' },
+            gap: 2,
+            flexShrink: 0,
+            pr: { md: 2.5 },
+            mr: { md: 2.5 },
+            pb: { xs: 2, md: 0 },
+            borderRight: { md: '1px solid #e2e8f0' },
+            borderBottom: { xs: '1px solid #e2e8f0', md: 'none' },
           }}
         >
-          <Box sx={{ textAlign: 'center', width: '100%' }}>
-            <Typography sx={{ fontWeight: 'bold', fontSize: 22, color: '#2563eb', mb: 1 }}>
+          <Box sx={{ textAlign: 'center', minWidth: 72 }}>
+            <Typography sx={{ fontWeight: 700, fontSize: 14, color: '#2563eb', mb: 0.25, lineHeight: 1.2 }}>
               Tổng số thợ
             </Typography>
-            <Typography sx={{ fontWeight: 'bold', fontSize: 32, color: '#1e293b' }}>
+            <Typography sx={{ fontWeight: 800, fontSize: 28, color: '#1e293b', lineHeight: 1 }}>
               {filteredWorkers.length}
             </Typography>
           </Box>
+
+          {canImportExcel && (
+            <>
+              <Divider orientation="vertical" flexItem sx={{ borderColor: '#e2e8f0', display: { xs: 'none', sm: 'block' } }} />
+              <Button
+                variant="outlined"
+                component="label"
+                startIcon={<UploadFile sx={{ fontSize: 18 }} />}
+                disabled={importing}
+                size="small"
+                sx={{
+                  borderRadius: 2,
+                  fontWeight: 700,
+                  fontSize: 13,
+                  px: 1.5,
+                  py: 0.75,
+                  whiteSpace: 'nowrap',
+                  textTransform: 'none',
+                }}
+              >
+                {importing ? 'Đang import...' : 'Import Excel'}
+                <input
+                  type="file"
+                  hidden
+                  accept=".xlsx,.xls,.csv"
+                  onChange={handleImportExcel}
+                />
+              </Button>
+            </>
+          )}
         </Box>
-        <Box
-          sx={{
-            flex: { xs: 'unset', sm: 2 },
-            minWidth: 0,
-            width: { xs: '100%', sm: 'unset' },
-            mb: { xs: 2, sm: 0 },
-          }}
-        >
-          <AddWorkerForm onSuccess={fetchWorkers} searchName={searchName} setSearchName={setSearchName} />
+
+        <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+          <TextField
+            size="small"
+            label="Tìm kiếm thợ theo tên"
+            placeholder="Nhập tên, SBD..."
+            value={filterKeyword}
+            onChange={(e) => setFilterKeyword(e.target.value)}
+            fullWidth
+          />
+          <AddWorkerForm
+            embedded
+            onSuccess={fetchWorkers}
+            searchName={searchName}
+            setSearchName={setSearchName}
+          />
         </Box>
       </Box>
+
+      {(importMessage || importError) && (
+        <Box sx={{ mb: 2, width: '100%' }}>
+          {importMessage && <Alert severity="success">{importMessage}</Alert>}
+          {importError && (
+            <Alert severity="error" sx={{ mt: importMessage ? 1 : 0 }}>
+              {importError}
+            </Alert>
+          )}
+        </Box>
+      )}
 
       <Grid container spacing={2} sx={{ mt: 3, width: '100%', mx: 0 }} justifyContent="center">
         {filteredWorkers.map((w) => (
@@ -270,7 +365,7 @@ const WorkersPage = () => {
             <Card
               elevation={2}
               sx={{
-                width: { xs: '90vw', sm: 200 },
+                width: { xs: '100%', sm: 200 },
                 minHeight: 220,
                 borderRadius: 3,
                 display: 'flex',
@@ -282,22 +377,41 @@ const WorkersPage = () => {
             >
               <CardContent sx={{ p: 0, width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                 <Avatar
-                  sx={{
-                    bgcolor: '#3b82f6',
-                    width: 56,
-                    height: 56,
-                    mb: 1.5
-                  }}
-                >
-                  <Person fontSize="large" />
-                </Avatar>
+  src={w.avatar || ''}
+  alt={w.name}
+  sx={{
+    bgcolor: '#3b82f6',
+    width: 56,
+    height: 56,
+    mb: 1.5,
+    border: '2px solid #dbeafe',
+    boxShadow: '0 4px 12px rgba(59,130,246,0.25)'
+  }}
+>
+  {!w.avatar && <Person fontSize="large" />}
+</Avatar>
                 <Typography
                   variant="h6"
                   fontWeight="bold"
-                  sx={{ color: '#1e293b', fontSize: 18, textAlign: 'center', mb: 2 }}
+                  sx={{ color: '#1e293b', fontSize: 18, textAlign: 'center', mb: 0.5 }}
                 >
                   {w.name}
                 </Typography>
+                {w.soBaoDanh && (
+                  <Chip
+                    label={`SBD: ${w.soBaoDanh}`}
+                    size="small"
+                    sx={{ mb: 1, fontWeight: 600 }}
+                  />
+                )}
+                {w.countRevenue === false && (
+                  <Chip
+                    label="Không tính DT"
+                    size="small"
+                    color="warning"
+                    sx={{ mb: 1, fontWeight: 600 }}
+                  />
+                )}
                 {w.phone && (
                   <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 2 }}>
                     <Phone sx={{ fontSize: 16, color: '#64748b', mr: 1 }} />
@@ -307,6 +421,42 @@ const WorkersPage = () => {
                   </Box>
                 )}
                 <Box sx={{ width: '100%', mt: 2 }}>
+                  {canManageRevenue && (
+                    <Box sx={{ display: 'flex', justifyContent: 'center', mb: 1 }}>
+                      <Tooltip
+                        title={
+                          w.countRevenue === false
+                            ? 'Bật tính doanh thu cho thợ này'
+                            : 'Tắt tính doanh thu cho thợ này'
+                        }
+                      >
+                        <FormControlLabel
+                          sx={{ m: 0, gap: 0.5 }}
+                          control={
+                            <Switch
+                              size="small"
+                              checked={w.countRevenue !== false}
+                              onChange={() => handleToggleCountRevenue(w)}
+                              disabled={togglingRevenueId === w._id}
+                              color="success"
+                            />
+                          }
+                          label={
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                              {w.countRevenue === false ? (
+                                <MoneyOff sx={{ fontSize: 16, color: '#f59e0b' }} />
+                              ) : (
+                                <MonetizationOn sx={{ fontSize: 16, color: '#10b981' }} />
+                              )}
+                              <Typography variant="caption" sx={{ fontWeight: 700, color: '#475569' }}>
+                                Tính DT
+                              </Typography>
+                            </Box>
+                          }
+                        />
+                      </Tooltip>
+                    </Box>
+                  )}
                   <Box sx={{ display: 'flex', justifyContent: 'center', gap: 1, mb: 1 }}>
                     <Tooltip title="Chỉnh sửa">
                       <IconButton
@@ -461,44 +611,47 @@ const WorkersPage = () => {
         </DialogActions>
       </Dialog>
 
-      {/* Dialog xem hiệu suất thợ */}
+      {/* Dialog xem KPI thợ */}
       <Dialog open={performanceOpen} onClose={() => setPerformanceOpen(false)} maxWidth="md" fullWidth>
         <DialogTitle sx={{ fontSize: 22, fontWeight: 'bold', color: '#1e293b', borderBottom: '1px solid #e2e8f0' }}>
-          📊 Hiệu suất của thợ: {selectedWorker?.name}
+          📊 KPI thợ: {selectedWorker?.name}
         </DialogTitle>
         <DialogContent sx={{ p: 3 }}>
           <Paper elevation={1} sx={{ p: 3, borderRadius: 2, bgcolor: '#f8fafc' }}>
-            <Typography fontWeight="bold" sx={{ mb: 2, color: '#1e293b' }}>
-              📈 Xem phần trăm hiệu suất trong ngày:
-            </Typography>
-            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 3 }}>
-              <TextField
-                label="Ngày"
-                type="date"
-                size="small"
-                value={dailyDate}
-                onChange={e => setDailyDate(e.target.value)}
-                InputLabelProps={{ shrink: true }}
-                sx={{
-                  '& .MuiOutlinedInput-root': {
-                    borderRadius: 2,
-                  }
-                }}
-              />
-              <Button
-                variant="contained"
-                size="small"
-                onClick={fetchDailyPercentage}
-                disabled={performanceLoading || !dailyDate}
-                sx={{
-                  bgcolor: '#10b981',
-                  '&:hover': { bgcolor: '#059669' },
-                  px: 3
-                }}
-              >
-                {performanceLoading ? 'Đang tải...' : 'Xem hiệu suất'}
-              </Button>
-            </Box>
+            <ToggleButtonGroup
+              value={kpiPeriod}
+              exclusive
+              onChange={(_, val) => val && setKpiPeriod(val)}
+              size="small"
+              sx={{ mb: 2, flexWrap: 'wrap' }}
+            >
+              {PERIOD_OPTIONS.map((opt) => (
+                <ToggleButton key={opt.value} value={opt.value}>
+                  {opt.label}
+                </ToggleButton>
+              ))}
+            </ToggleButtonGroup>
+
+            {kpiPeriod === 'custom' && (
+              <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
+                <TextField
+                  label="Từ ngày"
+                  type="date"
+                  size="small"
+                  value={kpiFromDate}
+                  onChange={(e) => setKpiFromDate(e.target.value)}
+                  InputLabelProps={{ shrink: true }}
+                />
+                <TextField
+                  label="Đến ngày"
+                  type="date"
+                  size="small"
+                  value={kpiToDate}
+                  onChange={(e) => setKpiToDate(e.target.value)}
+                  InputLabelProps={{ shrink: true }}
+                />
+              </Box>
+            )}
 
             {performanceError && (
               <Typography color="error" sx={{ mb: 2 }}>
@@ -506,91 +659,90 @@ const WorkersPage = () => {
               </Typography>
             )}
 
-            {dailyPercentage && (
+            {performanceLoading ? (
+              <Typography color="text.secondary">Đang tải KPI...</Typography>
+            ) : kpiData ? (
               <Box>
-                <Typography fontWeight="bold" sx={{ mb: 2, color: '#1e293b' }}>
-                  📋 Thống kê hiệu suất ngày {dailyPercentage.date}:
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  Khoảng: {kpiFromDate} → {kpiToDate} · Tính từ thợ thực hiện hạng mục
                 </Typography>
                 <Grid container spacing={2}>
-                  <Grid item xs={12} sm={6}>
+                  <Grid item xs={6} sm={4}>
                     <Card sx={{ bgcolor: '#f0f9ff', border: '1px solid #0ea5e9' }}>
                       <CardContent sx={{ p: 2 }}>
                         <Typography variant="h6" color="#0c4a6e" fontWeight="bold">
-                          {dailyPercentage.totalCarsInDate}
+                          {kpiData.carsDone ?? 0}
                         </Typography>
-                        <Typography variant="body2" color="#0369a1">
-                          Tổng số xe trong ngày
-                        </Typography>
+                        <Typography variant="body2" color="#0369a1">Số xe đã làm</Typography>
                       </CardContent>
                     </Card>
                   </Grid>
-                  <Grid item xs={12} sm={6}>
+                  <Grid item xs={6} sm={4}>
+                    <Card sx={{ bgcolor: '#e0f2fe', border: '1px solid #38bdf8' }}>
+                      <CardContent sx={{ p: 2 }}>
+                        <Typography variant="h6" color="#0c4a6e" fontWeight="bold">
+                          {kpiData.totalRepairItems ?? 0}
+                        </Typography>
+                        <Typography variant="body2" color="#0369a1">Hạng mục thực hiện</Typography>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                  <Grid item xs={6} sm={4}>
+                    <Card sx={{ bgcolor: '#faf5ff', border: '1px solid #a78bfa' }}>
+                      <CardContent sx={{ p: 2 }}>
+                        <Typography variant="h6" color="#5b21b6" fontWeight="bold">
+                          {formatMoney(kpiData.revenueBeforeCommission)}
+                        </Typography>
+                        <Typography variant="body2" color="#7c3aed">DT trước hoa hồng</Typography>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                  <Grid item xs={6} sm={4}>
                     <Card sx={{ bgcolor: '#f0fdf4', border: '1px solid #22c55e' }}>
                       <CardContent sx={{ p: 2 }}>
                         <Typography variant="h6" color="#166534" fontWeight="bold">
-                          {dailyPercentage.totalWork}
+                          {formatMoney(kpiData.revenueAfterCommission)}
                         </Typography>
-                        <Typography variant="body2" color="#15803d">
-                          Tổng số công việc
+                        <Typography variant="body2" color="#15803d">DT sau trừ 25%</Typography>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                  <Grid item xs={6} sm={4}>
+                    <Card sx={{ bgcolor: '#ecfdf5', border: '1px solid #34d399' }}>
+                      <CardContent sx={{ p: 2 }}>
+                        <Typography variant="h6" color="#065f46" fontWeight="bold">
+                          {kpiData.carsOnTime ?? 0}
+                        </Typography>
+                        <Typography variant="body2" color="#047857">Xe đúng hạn</Typography>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                  <Grid item xs={6} sm={4}>
+                    <Card sx={{ bgcolor: '#fef2f2', border: '1px solid #f87171' }}>
+                      <CardContent sx={{ p: 2 }}>
+                        <Typography variant="h6" color="#991b1b" fontWeight="bold">
+                          {kpiData.carsLate ?? 0}
+                        </Typography>
+                        <Typography variant="body2" color="#dc2626">Xe trễ</Typography>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                  <Grid item xs={6} sm={4}>
+                    <Card sx={{ bgcolor: '#fef3c7', border: '1px solid #f59e0b' }}>
+                      <CardContent sx={{ p: 2 }}>
+                        <Typography variant="h5" color="#92400e" fontWeight="bold" textAlign="center">
+                          {kpiData.performancePercentage ?? 0}%
+                        </Typography>
+                        <Typography variant="body2" color="#a16207" textAlign="center">
+                          Hiệu suất ({kpiData.totalWork}/{kpiData.totalCarsInRange} xe)
                         </Typography>
                       </CardContent>
                     </Card>
                   </Grid>
                 </Grid>
-
-                <Card sx={{ mt: 2, bgcolor: '#fef3c7', border: '1px solid #f59e0b' }}>
-                  <CardContent sx={{ p: 2 }}>
-                    <Typography variant="h5" color="#92400e" fontWeight="bold" textAlign="center">
-                      {dailyPercentage.performancePercentage}
-                    </Typography>
-                    <Typography variant="body1" color="#a16207" textAlign="center" fontWeight="bold">
-                      Phần trăm hiệu suất
-                    </Typography>
-                  </CardContent>
-                </Card>
-
-                {/* Hiển thị chi tiết nếu có */}
-                {dailyPercentage.details && Array.isArray(dailyPercentage.details) && dailyPercentage.details.length > 0 && (
-                  <Box sx={{ mt: 3 }}>
-                    <Typography fontWeight="bold" sx={{ mb: 2, color: '#1e293b' }}>
-                      📝 Chi tiết công việc:
-                    </Typography>
-                    <Paper elevation={1} sx={{ maxHeight: 300, overflow: 'auto', borderRadius: 2 }}>
-                      <Box sx={{ overflow: 'auto' }}>
-                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
-                          <thead>
-                            <tr style={{ background: '#f1f5f9' }}>
-                              {Object.keys(dailyPercentage.details[0]).map((key) => {
-                                let viLabel = key;
-                                if (key === 'plateNumber') viLabel = 'Biển số';
-                                else if (key === 'action') viLabel = 'Hành động';
-                                else if (key === 'note') viLabel = 'Ghi chú';
-                                else if (key === 'timestamp') viLabel = 'Thời gian';
-                                return (
-                                  <th key={key} style={{ border: '1px solid #e2e8f0', padding: 8, fontWeight: 600, color: '#1e293b' }}>
-                                    {viLabel}
-                                  </th>
-                                );
-                              })}
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {dailyPercentage.details.map((row, idx) => (
-                              <tr key={idx} style={{ background: idx % 2 === 0 ? '#fff' : '#f8fafc' }}>
-                                {Object.entries(row).map(([key, val], i) => (
-                                  <td key={i} style={{ border: '1px solid #e2e8f0', padding: 8 }}>
-                                    {key === 'timestamp' ? new Date(val).toLocaleString('vi-VN') : String(val)}
-                                  </td>
-                                ))}
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </Box>
-                    </Paper>
-                  </Box>
-                )}
               </Box>
+            ) : (
+              <Typography color="text.secondary">Chưa có dữ liệu KPI.</Typography>
             )}
           </Paper>
         </DialogContent>

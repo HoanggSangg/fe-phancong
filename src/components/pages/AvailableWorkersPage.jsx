@@ -13,7 +13,7 @@ import {
   Divider,
 } from '@mui/material';
 import { Person } from '@mui/icons-material';
-import { getAvailableWorkers } from '../apis'; // ✅ nhớ đúng path
+import { getAvailableWorkers } from '../apis';
 
 const AvailableWorkersPage = () => {
   const [workers, setWorkers] = useState([]);
@@ -24,7 +24,7 @@ const AvailableWorkersPage = () => {
     const fetchAvailableWorkers = async () => {
       try {
         const res = await getAvailableWorkers();
-        setWorkers(res.data);
+        setWorkers(res.data.workers || res.data || []);
       } catch (err) {
         console.error('Lỗi khi lấy danh sách thợ rảnh:', err);
       } finally {
@@ -36,8 +36,31 @@ const AvailableWorkersPage = () => {
   }, []);
 
   const filteredWorkers = workers.filter((worker) =>
-    worker.name.toLowerCase().includes(searchTerm.toLowerCase())
+    worker.name?.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const removeVietnameseTones = (str = '') => {
+    return str
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/đ/g, 'd')
+      .replace(/Đ/g, 'D')
+      .toLowerCase();
+  };
+
+  const getWorkerPrefix = (worker) => {
+    const teamName = removeVietnameseTones(worker.team?.name || '');
+
+    if (
+      teamName.includes('lai xe') ||
+      teamName.includes('tai xe') ||
+      teamName.includes('driver')
+    ) {
+      return 'Tài xế';
+    }
+
+    return 'KTV';
+  };
 
   return (
     <Box
@@ -49,7 +72,7 @@ const AvailableWorkersPage = () => {
         minHeight: '100vh',
         borderRadius: 0,
         boxSizing: 'border-box',
-        px: { xs: 0, sm: 2 },
+        px: { xs: 1, sm: 2 },
       }}
     >
       <Paper
@@ -80,8 +103,11 @@ const AvailableWorkersPage = () => {
             mb: { xs: 2, sm: 0 },
           }}
         >
-          <span role="img" aria-label="worker" style={{ fontSize: 44 }}>🧑‍🔧</span>
+          <span role="img" aria-label="worker" style={{ fontSize: 44 }}>
+            🧑‍🔧
+          </span>
         </Box>
+
         <Box>
           <Typography
             variant="h4"
@@ -90,18 +116,29 @@ const AvailableWorkersPage = () => {
               fontSize: { xs: 24, sm: 32 },
               color: '#1e293b',
               mb: 1,
-              textShadow: '0 2px 8px rgba(0,0,0,0.06)',
             }}
           >
             Danh sách thợ đang rảnh
           </Typography>
-          <Typography sx={{ color: '#64748b', fontSize: 17, fontWeight: 400, maxWidth: 600 }}>
+
+          <Typography
+            sx={{
+              color: '#64748b',
+              fontSize: 17,
+              fontWeight: 400,
+              maxWidth: 600,
+            }}
+          >
             Tra cứu nhanh các thợ hiện đang rảnh để phân công công việc hiệu quả hơn.
           </Typography>
         </Box>
       </Paper>
-      <Box mb={3}><Divider /></Box>
-      <Box display="flex" gap={2} mb={3} justifyContent="center">
+
+      <Box mb={3}>
+        <Divider />
+      </Box>
+
+      <Box display="flex" gap={2} mb={3} justifyContent="center" sx={{ px: { xs: 0, sm: 2 } }}>
         <TextField
           label="Tìm kiếm thợ rảnh theo tên"
           variant="outlined"
@@ -109,9 +146,14 @@ const AvailableWorkersPage = () => {
           fullWidth
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          sx={{ maxWidth: 400, background: '#fff', borderRadius: 2 }}
+          sx={{
+            maxWidth: { xs: '100%', sm: 450 },
+            background: '#fff',
+            borderRadius: 2,
+          }}
         />
       </Box>
+
       {loading ? (
         <Box display="flex" justifyContent="center" mt={4}>
           <CircularProgress />
@@ -119,53 +161,106 @@ const AvailableWorkersPage = () => {
       ) : filteredWorkers.length === 0 ? (
         <Typography align="center">🚫 Hiện không có thợ nào rảnh.</Typography>
       ) : (
-        <Grid container spacing={2} sx={{ mt: 1, width: '100%', mx: 0 }} justifyContent="center">
-          {filteredWorkers.map((worker, idx) => (
-            <Grid item xs={12} sm={6} md={2} key={worker._id} sx={{ display: 'flex', justifyContent: 'center' }}>
+        <Grid
+          container
+          spacing={3}
+          sx={{ mt: 1, width: '100%', mx: 0 }}
+          justifyContent="center"
+        >
+          {filteredWorkers.map((worker) => (
+            <Grid
+              item
+              xs={12}
+              sm={6}
+              md={4}
+              key={worker._id}
+              sx={{
+                display: 'flex',
+                justifyContent: 'center',
+              }}
+            >
               <Card
-                elevation={2}
+                elevation={4}
                 sx={{
-                  width: { xs: '90vw', sm: 200 },
-                  minHeight: 160,
-                  borderRadius: 3,
+                  width: { xs: '92vw', sm: 260 },
+                  minHeight: 280,
+                  borderRadius: 5,
                   display: 'flex',
                   flexDirection: 'column',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  py: 2,
+                  py: 3,
+                  transition: 'all .25s ease',
+                  '&:hover': {
+                    transform: 'translateY(-6px)',
+                    boxShadow: '0 12px 30px rgba(37,99,235,0.15)',
+                  },
                 }}
               >
-                <CardContent sx={{ p: 0, width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                <CardContent
+                  sx={{
+                    p: 0,
+                    width: '100%',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                  }}
+                >
                   <Avatar
+                    src={worker.avatar || ''}
+                    alt={worker.name || 'Ảnh thợ'}
                     sx={{
                       bgcolor: '#3b82f6',
-                      width: 48,
-                      height: 48,
-                      mb: 1.5
+                      width: 110,
+                      height: 110,
+                      mb: 2,
+                      border: '4px solid #dbeafe',
+                      boxShadow: '0 8px 20px rgba(59,130,246,0.25)',
                     }}
                   >
-                    <Person fontSize="medium" />
+                    {!worker.avatar && <Person sx={{ fontSize: 50 }} />}
                   </Avatar>
+
                   <Typography
-                    variant="h6"
-                    fontWeight="bold"
-                    sx={{ color: '#1e293b', fontSize: 17, textAlign: 'center', mb: 1 }}
+                    sx={{
+                      fontSize: 22,
+                      fontWeight: 800,
+                      color: '#0f172a',
+                      textAlign: 'center',
+                      mb: 1,
+                    }}
                   >
-                    {worker.name}
+                    {getWorkerPrefix(worker)} {worker.name}
                   </Typography>
-                  <Typography sx={{ color: '#64748b', fontSize: 14 }}>
-                    STT: {idx + 1}
+
+                  <Typography
+                    sx={{
+                      fontSize: 17,
+                      fontWeight: 700,
+                      color: '#2563eb',
+                      textAlign: 'center',
+                      mb: 1,
+                    }}
+                  >
+                    MNV: {worker.soBaoDanh || '---'}
                   </Typography>
+
+                  <Box
+                    sx={{
+                      mt: 1,
+                      px: 2,
+                      py: 0.7,
+                      borderRadius: 999,
+                      bgcolor: '#dcfce7',
+                      color: '#15803d',
+                      fontWeight: 800,
+                      fontSize: 14,
+                    }}
+                  >
+                    ĐANG RẢNH
+                  </Box>
                 </CardContent>
               </Card>
-            </Grid>
-          ))}
-          {/* Add empty placeholders if needed to always show 6 columns */}
-          {Array.from({ length: filteredWorkers.length % 6 === 0 ? 0 : 6 - (filteredWorkers.length % 6) }).map((_, idx) => (
-            <Grid item xs={12} sm={6} md={2} key={`empty-${idx}`} sx={{ display: 'flex', justifyContent: 'center' }}>
-              <Box sx={{ visibility: 'hidden', maxWidth: 200, width: '100%' }}>
-                <Card />
-              </Box>
             </Grid>
           ))}
         </Grid>

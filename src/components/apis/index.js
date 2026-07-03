@@ -1,78 +1,92 @@
-﻿import axios from 'axios';
+﻿import { api } from './axios';
 
-// ⚙️ Tự phát hiện IP nội bộ hay từ xa
-const isInternalNetwork =
-  window.location.hostname.startsWith('192.') ||
-  window.location.hostname === 'localhost';
+export const login = (data) => api.post('/auth/login', data);
+export const register = (data) => api.post('/auth/register', data);
+export const getMe = () => api.get('/auth/me');
+export const getUsers = () => api.get('/auth/users');
+export const createUser = (data) => api.post('/auth/users', data);
+export const updateUser = (id, data) => api.put(`/auth/users/${id}`, data);
+export const deleteUser = (id) => api.delete(`/auth/users/${id}`);
 
-const API_BASE = isInternalNetwork
-  ? 'http://192.168.1.20:3000/api'         // 👉 IP nội bộ
-  : 'http://100.127.133.38:3000/api';      // 👉 IP Tailscale từ xa
-
-// ============================= WORKER =============================
-export const getAllWorkers = () => axios.get(`${API_BASE}/worker`);
-export const getWorkerById = (id) => axios.get(`${API_BASE}/worker/${id}`);
-export const createWorker = (data) => axios.post(`${API_BASE}/worker`, data);
-export const updateWorker = (id, data) => axios.put(`${API_BASE}/worker/${id}`, data);
-export const deleteWorker = (id) => axios.delete(`${API_BASE}/worker/${id}`);
-export const getAvailableWorkers = () => axios.get(`${API_BASE}/worker/available`);
-export const getBusyWorkersWithCars = () => axios.get(`${API_BASE}/worker/busy`);
+export const getAllWorkers = () => api.get('/worker');
+export const getWorkerById = (id) => api.get(`/worker/${id}`);
+export const createWorker = (data) => api.post('/worker', data);
+export const importWorkersBulk = (workers) => api.post('/worker/import', { workers });
+export const updateWorker = (id, data) => api.put(`/worker/${id}`, data);
+export const toggleWorkerCountRevenue = (id, countRevenue) =>
+  api.patch(`/worker/${id}/count-revenue`, { countRevenue });
+export const deleteWorker = (id) => api.delete(`/worker/${id}`);
+export const getAvailableWorkers = () => api.get('/worker/available');
+export const getBusyWorkersWithCars = () => api.get('/worker/busy');
+export const lookupCarOrRO = (keyword, plate = '') =>
+  api.get(`/external/lookup/${keyword}`, { params: { plate } });
 export const getWorkerPerformance = (workerId, from, to) =>
-  axios.get(`${API_BASE}/worker/${workerId}/performance`, {
-    params: { from, to },
-  });
+  api.get(`/worker/${workerId}/performance`, { params: { from, to } });
 export const getWorkerDailyPerformancePercentage = (workerId, date) =>
-  axios.get(`${API_BASE}/worker/${workerId}/performance/daily`, {
-    params: { date },
-  });
-export const searchWorkersByName = (name) => axios.get(`${API_BASE}/worker`, { params: { name } });
+  api.get(`/worker/${workerId}/performance/daily`, { params: { date } });
+export const searchWorkersByName = (name) => api.get('/worker', { params: { name } });
 
-// ============================= SUPERVISOR =============================
-export const getAllSupervisors = () => axios.get(`${API_BASE}/supervisors`);
-export const getSupervisorById = (id) => axios.get(`${API_BASE}/supervisors/${id}`);
-export const createSupervisor = (data) => axios.post(`${API_BASE}/supervisors`, data);
-export const updateSupervisor = (id, data) => axios.put(`${API_BASE}/supervisors/${id}`, data);
-export const deleteSupervisor = (id) => axios.delete(`${API_BASE}/supervisors/${id}`);
+export const getAllSupervisors = () => api.get('/supervisors');
+export const getSupervisorById = (id) => api.get(`/supervisors/${id}`);
+export const createSupervisor = (data) => api.post('/supervisors', data);
+export const updateSupervisor = (id, data) => api.put(`/supervisors/${id}`, data);
+export const deleteSupervisor = (id) => api.delete(`/supervisors/${id}`);
 
-// ============================= CAR =============================
-export const getAllCars = () => axios.get(`${API_BASE}/cars`);
-export const getCarById = (id) => axios.get(`${API_BASE}/cars/${id}`);
-export const createCar = (data) => axios.post(`${API_BASE}/cars`, data);
-export const updateCar = (id, data) => axios.put(`${API_BASE}/cars/${id}`, data);
-export const deleteCar = (id) => axios.delete(`${API_BASE}/cars/${id}`);
-
+export const getAllCars = () => api.get('/cars');
+export const getCarById = (id) => api.get(`/cars/${id}`);
+export const createCar = (data) => api.post('/cars', data);
+export const updateCar = (id, data) => api.put(`/cars/${id}`, data);
+export const deleteCar = (id) => api.delete(`/cars/${id}`);
 export const updateCarStatus = (id, status = []) =>
-  axios.put(`${API_BASE}/cars/${id}/status`, { status });
-
+  api.put(`/cars/${id}/status`, { status });
 export const updateCarStatusWithWorker = (id, status, newWorkerId = null) =>
-  axios.put(`${API_BASE}/cars/${id}/status`, {
-    status,
-    ...(newWorkerId && { newWorkerId }),
-  });
-
+  api.put(`/cars/${id}/status`, { status, ...(newWorkerId && { newWorkerId }) });
 export const getCarByPlateNumber = (plateNumber) =>
-  axios.get(`${API_BASE}/cars/by-plate/${plateNumber}`);
+  api.get(`/cars/by-plate/${plateNumber}`);
+export const getCarStats = () => api.get('/cars/stats');
+export const getWorkingAndPendingCars = () => api.get('/cars/working-pending');
+export const getCarsByLocation = (locationId) => api.get(`/cars/by-location/${locationId}`);
+export const getOverdueCars = () => api.get('/cars/overdue');
+export const getRepairHistory = (params) => api.get('/cars/repair-history', { params });
+export const getCarRepairItems = (carId) => api.get(`/cars/${carId}/repair-items`);
+export const assignRepairItemWorkers = (carId, assignments) =>
+  api.put(`/cars/${carId}/repair-items/assignments`, { assignments });
+export const saveManualRepairItems = (carId, items) =>
+  api.put(`/cars/${carId}/repair-items/manual`, { items });
 
-export const getCarStats = () => axios.get(`${API_BASE}/cars/stats`);
-export const getWorkingAndPendingCars = () =>
-  axios.get(`${API_BASE}/cars/working-pending`);
-export const getCarsByLocation = (locationId) =>
-  axios.get(`${API_BASE}/cars/by-location/${locationId}`);
-export const getOverdueCars = () => axios.get(`${API_BASE}/cars/overdue`);
+export const getAllLocations = () => api.get('/locations');
+export const getLocationById = (id) => api.get(`/locations/${id}`);
+export const createLocation = (data) => api.post('/locations', data);
+export const updateLocation = (id, data) => api.put(`/locations/${id}`, data);
+export const deleteLocation = (id) => api.delete(`/locations/${id}`);
 
-// ============================= CATE CAR =============================
-export const getAllCateCars = () => axios.get(`${API_BASE}/catecar`);
-export const createCateCar = (data) => axios.post(`${API_BASE}/catecar/create`, data);
-export const updateCateCar = (id, data) => axios.put(`${API_BASE}/catecar/${id}`, data);
-export const deleteCateCar = (id) => axios.delete(`${API_BASE}/catecar/${id}`);
+export const getCarWorkerHistory = (id) => api.get(`/cars/${id}/workers/history`);
 
-// ============================= LOCATION =============================
-export const getAllLocations = () => axios.get(`${API_BASE}/locations`);
-export const getLocationById = (id) => axios.get(`${API_BASE}/locations/${id}`);
-export const createLocation = (data) => axios.post(`${API_BASE}/locations`, data);
-export const updateLocation = (id, data) => axios.put(`${API_BASE}/locations/${id}`, data);
-export const deleteLocation = (id) => axios.delete(`${API_BASE}/locations/${id}`);
+export const getAllWokers = () => api.get('/wokers');
+export const getWokerById = (id) => api.get(`/wokers/${id}`);
+export const createWoker = (data) => api.post('/wokers/create', data);
+export const updateWoker = (id, data) => api.put(`/wokers/${id}`, data);
+export const deleteWoker = (id) => api.delete(`/wokers/${id}`);
+export const getWorkerRevenueChart = (from, to) =>
+  api.get('/worker/revenue/chart', { params: { from, to } });
+export const getWokersByDate = (date) => api.get('/wokers/by-date', { params: { date } });
+export const getWorkerWeeklyRevenueSummary = (date) =>
+  api.get('/worker/revenue/weekly-summary', { params: { date } });
 
-// ============================= HISTORY =============================
-export const getCarWorkerHistory = (id) =>
-  axios.get(`${API_BASE}/cars/${id}/workers/history`);
+export const getWorkerKpi = (params) => api.get('/worker/kpi', { params });
+export const getAllWorkersKpi = (params) => api.get('/worker/kpi/all', { params });
+
+export const getAllTeams = () => api.get('/teams');
+export const getTeamById = (teamId) => api.get(`/teams/${teamId}`);
+export const createTeam = (data) => api.post('/teams', data);
+export const updateTeam = (teamId, data) => api.put(`/teams/${teamId}`, data);
+export const deleteTeam = (teamId) => api.delete(`/teams/${teamId}`);
+export const addWorkerToTeam = (teamId, workerId) =>
+  api.post(`/teams/${teamId}/workers`, { workerId });
+export const removeWorkerFromTeam = (teamId, workerId) =>
+  api.delete(`/teams/${teamId}/workers/${workerId}`);
+export const addManualJobToWorker = (workerId, data) =>
+  api.post(`/worker/${workerId}/manual-jobs`, data);
+export const removeManualJobFromWorker = (workerId, jobId) =>
+  api.delete(`/worker/${workerId}/manual-jobs/${jobId}`);
+export const getOperationLogs = (params) => api.get('/audit-logs', { params });

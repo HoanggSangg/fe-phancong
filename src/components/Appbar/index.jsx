@@ -9,40 +9,43 @@ import {
   ListItem,
   ListItemButton,
   ListItemText,
+  ListSubheader,
   Divider,
   Typography,
   useTheme,
   useMediaQuery,
   GlobalStyles,
+  Button,
+  Chip,
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
+import LogoutIcon from '@mui/icons-material/Logout';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
+import { getNavGroupsForRole, ROLE_LABELS } from '../../utils/permissions';
 
 const AppBarComponent = () => {
   const [openDrawer, setOpenDrawer] = useState(false);
   const navigate = useNavigate();
+  const { user, logout } = useAuth();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
-  const navItems = [
-    { label: 'Xe trong ngày', path: '/cars' },
-    { label: 'Quản lý xe', path: '/cars/manage' },
-    { label: 'Thêm xe', path: '/cars/add' },
-    { label: 'Loại xe', path: '/catecars' },
-    { label: 'Thợ', path: '/workers/main' },
-    { label: 'Địa điểm', path: '/locations' },
-    { label: 'Thợ rảnh', path: '/workers/available' },
-    { label: 'Giám sát', path: '/supervisors' },
-  ];
+  const navGroups = getNavGroupsForRole(user?.role);
 
   const handleNavigate = (path) => {
     navigate(path);
     setOpenDrawer(false);
   };
 
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+    setOpenDrawer(false);
+  };
+
   return (
     <>
-      {/* Keyframes cho hiệu ứng marquee */}
       <GlobalStyles
         styles={{
           '@keyframes marquee': {
@@ -52,7 +55,6 @@ const AppBarComponent = () => {
         }}
       />
 
-      {/* AppBar chính */}
       <AppBar
         position="fixed"
         sx={{
@@ -60,26 +62,17 @@ const AppBarComponent = () => {
           zIndex: (theme) => theme.zIndex.drawer + 1,
         }}
       >
-        <Toolbar
-          sx={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            position: 'relative',
-            minHeight: '64px',
-          }}
-        >
-          {/* Logo bên trái */}
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+        <Toolbar sx={{ display: 'flex', justifyContent: 'space-between', position: 'relative', minHeight: '64px' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <Box
               component="img"
               src="https://res.cloudinary.com/drbjrsm0s/image/upload/v1745463450/logo_ulbaie.png"
               alt="Bá Thành Logo"
               sx={{ height: 40, width: 80, cursor: 'pointer' }}
-              onClick={() => navigate('/')} // ✅ Điều hướng về trang gốc
+              onClick={() => navigate('/cars')}
             />
           </Box>
 
-          {/* Thông báo giữa thanh navbar (chỉ hiện trên desktop) */}
           {!isMobile && (
             <Box
               sx={{
@@ -107,27 +100,19 @@ const AppBarComponent = () => {
                   fontSize: '1.5rem',
                 }}
               >
-                🚨 <strong>THÔNG BÁO:</strong> Mới cập nhật thêm phần xe trễ hẹn 🚗🛠️
+                🚨 <strong>THÔNG BÁO:</strong> PHẦN MỀM ĐÃ TRỞ LẠI 🚗🛠️
               </Typography>
             </Box>
           )}
 
-          {/* Icon menu (bên phải) */}
-          <IconButton
-            edge="end"
-            color="inherit"
-            aria-label="menu"
-            onClick={() => setOpenDrawer((prev) => !prev)}
-          >
+          <IconButton edge="end" color="inherit" aria-label="menu" onClick={() => setOpenDrawer((prev) => !prev)}>
             <MenuIcon />
           </IconButton>
         </Toolbar>
       </AppBar>
 
-      {/* Offset chiều cao AppBar */}
       <Toolbar sx={{ minHeight: isMobile ? '85px' : '64px' }} />
 
-      {/* Thông báo tách riêng trên mobile */}
       {isMobile && (
         <Box
           sx={{
@@ -153,47 +138,70 @@ const AppBarComponent = () => {
               fontSize: '1rem',
             }}
           >
-            🚨 <strong>THÔNG BÁO:</strong> Mới cập nhật thêm phần xe trễ hẹn. 🚗🛠️
+            🚨 <strong>THÔNG BÁO:</strong> Phần mềm đã quay trở lại 🚗🛠️
           </Typography>
         </Box>
       )}
 
-      {/* Drawer Menu */}
       <Drawer
         anchor="right"
         open={openDrawer}
         onClose={() => setOpenDrawer(false)}
         PaperProps={{
           sx: {
-            width: 250,
+            width: { xs: '85vw', sm: 280 },
             height: 'calc(100% - 64px)',
             top: '64px',
           },
         }}
       >
-        <Box
-          sx={{
-            width: '100%',
-            height: '100%',
-            overflowY: 'auto',
-          }}
-          role="presentation"
-          onClick={() => setOpenDrawer(false)}
-          onKeyDown={() => setOpenDrawer(false)}
-        >
-          <List sx={{ mt: 2 }}>
-            {navItems.map((item) => (
-              <ListItem key={item.path} disablePadding>
-                <ListItemButton
-                  onClick={() => handleNavigate(item.path)}
-                  sx={{ mt: 1 }} // thêm khoảng cách trên
-                >
-                  <ListItemText primary={item.label} />
-                </ListItemButton>
-              </ListItem>
+        <Box sx={{ width: '100%', height: '100%', overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
+          {user && (
+            <Box sx={{ p: 2, bgcolor: '#fafafa' }}>
+              <Typography fontWeight="bold">{user.fullName}</Typography>
+              <Typography variant="body2" color="text.secondary">{ROLE_LABELS[user.role]}</Typography>
+            </Box>
+          )}
+
+          <Box sx={{ flex: 1 }}>
+            {navGroups.map((group) => (
+              <List
+                key={group.title}
+                dense
+                subheader={
+                  <ListSubheader
+                    sx={{
+                      bgcolor: '#fff',
+                      color: '#b71c1c',
+                      fontWeight: 700,
+                      fontSize: '0.8rem',
+                      lineHeight: '32px',
+                    }}
+                  >
+                    {group.title}
+                  </ListSubheader>
+                }
+              >
+                {group.items.map((item) => (
+                  <ListItem key={item.path} disablePadding>
+                    <ListItemButton onClick={() => handleNavigate(item.path)} sx={{ py: 0.8, pl: 3 }}>
+                      <ListItemText
+                        primary={item.label}
+                        primaryTypographyProps={{ fontSize: '0.92rem' }}
+                      />
+                    </ListItemButton>
+                  </ListItem>
+                ))}
+              </List>
             ))}
-          </List>
+          </Box>
+
           <Divider />
+          <Box sx={{ p: 2 }}>
+            <Button fullWidth variant="outlined" color="error" startIcon={<LogoutIcon />} onClick={handleLogout}>
+              Đăng xuất
+            </Button>
+          </Box>
         </Box>
       </Drawer>
     </>

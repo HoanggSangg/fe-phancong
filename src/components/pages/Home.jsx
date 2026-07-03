@@ -117,7 +117,7 @@ const Home = () => {
         getWorkingAndPendingCars(),
         getCarStats(),
         getOverdueCars(),
-        getAllLocations(),
+        getAllLocations().catch(() => ({ data: [] })),
       ]);
 
       const carStatusData = resWorkingPending.data || {};
@@ -157,10 +157,8 @@ const Home = () => {
   };
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      fetchData();
-    }, 1000);
-
+    fetchData();
+    const interval = setInterval(fetchData, 1000);
     return () => clearInterval(interval);
   }, []);
 
@@ -189,7 +187,7 @@ const Home = () => {
         </Stack>
         <Stack spacing={1}>
           <Stack direction="row" alignItems="center" spacing={1}><LocationOnIcon fontSize="small" /><Typography fontSize={18}>{car.location?.name || '---'}</Typography></Stack>
-          <Stack direction="row" alignItems="center" spacing={1}><DirectionsCarIcon fontSize="small" /><Typography fontSize={18}>{car.carType?.name || '---'}</Typography></Stack>
+          <Stack direction="row" alignItems="center" spacing={1}><DirectionsCarIcon fontSize="small" /><Typography fontSize={18}>{car.externalCarTypeName || '---'}</Typography></Stack>
           <Stack direction="row" alignItems="center" spacing={1}><QueryBuilderIcon fontSize="small" /><Typography fontSize={18}>{car.currentTime}</Typography></Stack>
           <Stack direction="row" alignItems="center" spacing={1}><PersonIcon fontSize="small" /><Typography fontSize={18}>Thợ chính:</Typography> {mainWorkers ? <Chip label={mainWorkers} color="primary" size="small" /> : <Chip label="Trống" color="error" size="small" />}</Stack>
           <Stack direction="row" alignItems="center" spacing={1}><GroupIcon fontSize="small" /><Typography fontSize={18}>Thợ phụ:</Typography> {subWorkers ? <Chip label={subWorkers} color="secondary" size="small" /> : <Chip label="Trống" color="error" size="small" />}</Stack>
@@ -220,7 +218,7 @@ const Home = () => {
                 <TableCell align="center"><Typography fontSize={19} sx={{ color }}>{index + 1}</Typography></TableCell>
                 <TableCell><Typography fontSize={19} sx={{ color }}>{car.plateNumber}</Typography></TableCell>
                 <TableCell><Typography fontSize={19} sx={{ color }}>{car.location?.name || '---'}</Typography></TableCell>
-                <TableCell><Typography fontSize={19} sx={{ color }}>{car.carType?.name || '---'}</Typography></TableCell>
+                <TableCell><Typography fontSize={19} sx={{ color }}>{car.externalCarTypeName || '---'}</Typography></TableCell>
                 <TableCell><Typography fontSize={19} sx={{ color }}>{car.currentTime}</Typography></TableCell>
                 <TableCell>{mainWorkers ? <Chip label={mainWorkers} color="primary" size="small" /> : <Chip label="Trống" color="error" size="small" />}</TableCell>
                 <TableCell>{subWorkers ? <Chip label={subWorkers} color="primary" size="small" /> : <Chip label="Trống" color="error" size="small" />}</TableCell>
@@ -358,7 +356,7 @@ const Home = () => {
         <Typography variant="h6" fontWeight="bold" gutterBottom>📊 Thống kê xe:</Typography>
         <Grid container spacing={2} sx={{ width: '100%' }}>
           {statsConfig.map((stat, idx) => (
-            <Grid item xs={3} sm={3} md={2} key={stat.key}>
+            <Grid item xs={6} sm={4} md={2} key={stat.key}>
               <Paper
                 elevation={3}
                 sx={{
@@ -393,7 +391,7 @@ const Home = () => {
           ) : isMobile ? (
             <Stack spacing={2}>{filterCars(carsToday).map(renderCarCard)}</Stack>
           ) : (
-            <Paper elevation={2} sx={{ p: 2 }}>{renderCarTable(filterCars(carsToday))}</Paper>
+            <Paper elevation={2} sx={{ p: 2, overflowX: 'auto' }}>{renderCarTable(filterCars(carsToday))}</Paper>
           )}
         </Box>
       )}
@@ -406,7 +404,7 @@ const Home = () => {
           ) : isMobile ? (
             <Stack spacing={2}>{filterCars(overdueCars).map(renderCarCard)}</Stack>
           ) : (
-            <Paper elevation={2} sx={{ p: 2 }}>{renderCarTable(filterCars(overdueCars))}</Paper>
+            <Paper elevation={2} sx={{ p: 2, overflowX: 'auto' }}>{renderCarTable(filterCars(overdueCars))}</Paper>
           )}
         </Box>
       )}
@@ -425,7 +423,7 @@ const Home = () => {
               ) : isMobile ? (
                 <Stack spacing={2}>{filtered.map(renderCarCard)}</Stack>
               ) : (
-                <Paper elevation={2} sx={{ p: 2 }}>{renderCarTable(filtered)}</Paper>
+                <Paper elevation={2} sx={{ p: 2, overflowX: 'auto' }}>{renderCarTable(filtered)}</Paper>
               )}
             </Box>
           );

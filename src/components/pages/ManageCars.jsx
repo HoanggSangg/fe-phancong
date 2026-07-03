@@ -6,10 +6,12 @@ import {
   getAllSupervisors,
   updateCarStatusWithWorker,
   getAvailableWorkers,
-  getAllCateCars,
   getCarsByLocation,
   getAllLocations,
-  getAllWorkers
+  getAllWorkers,
+  getCarRepairItems,
+  assignRepairItemWorkers,
+  saveManualRepairItems,
 } from '../apis/index';
 import {
   Typography,
@@ -48,6 +50,7 @@ import {
 import {
   Edit,
   Delete,
+  Add,
   CheckCircle,
   Schedule,
   BuildCircle,
@@ -60,13 +63,109 @@ import {
   SwapHoriz,
   History,
   Error,
-  Lock,
+  ReceiptLong,
+  EditNote,
 } from '@mui/icons-material';
+import FullscreenIcon from '@mui/icons-material/Fullscreen';
 import { Link } from 'react-router-dom';
-import moment from 'moment';
+import dayjs from 'dayjs';
+import customParseFormat from 'dayjs/plugin/customParseFormat';
+import Slide from '@mui/material/Slide';
+import { useAuth } from '../../context/AuthContext';
+import { canDeleteCars, canManageCars, isAdmin } from '../../utils/permissions';
+import { formatMoney } from '../../utils/dateFilters';
+import FullscreenDialog from '../common/FullscreenDialog';
+import OperationVoiceControls from '../common/OperationVoiceControls';
+import useOperationVoiceMonitor from '../../hooks/useOperationVoiceMonitor';
+
+dayjs.extend(customParseFormat);
 import DirectionsCarIcon from '@mui/icons-material/DirectionsCar';
 
+const mapRepairItemToState = (item) => {
+  const base = {
+    ...item,
+    isManual: Boolean(item.isManual),
+  };
+
+  if (item.workerAssignments?.length > 0) {
+    return {
+      ...base,
+      selectedWorkers: item.workerAssignments.map((assignment) => ({
+        worker: assignment.worker,
+        percentage: assignment.percentage ?? 100,
+      })),
+    };
+  }
+
+  if (item.worker) {
+    return {
+      ...base,
+      selectedWorkers: [{ worker: item.worker, percentage: 100 }],
+    };
+  }
+
+  return {
+    ...base,
+    selectedWorkers: [{ worker: null, percentage: 100 }],
+  };
+};
+
+const createEmptyManualItem = () => ({
+  _id: `temp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+  isManual: true,
+  groupName: 'Phát sinh',
+  content: '',
+  quantity: 1,
+  unitPrice: 0,
+  amount: 0,
+  unit: '',
+  selectedWorkers: [{ worker: null, percentage: 100 }],
+});
+
+const getItemWorkerTotalPercentage = (item) =>
+  (item.selectedWorkers || [])
+    .filter((entry) => entry.worker)
+    .reduce((sum, entry) => sum + (Number(entry.percentage) || 0), 0);
+
+const isItemWorkerPercentageValid = (item) => {
+  const workers = (item.selectedWorkers || []).filter((entry) => entry.worker);
+  if (workers.length === 0) return true;
+  return getItemWorkerTotalPercentage(item) <= 100.01;
+};
+
+const getWorkerRevenuePreview = (repairItems, workersById = {}) => {
+  const preview = {};
+
+  repairItems.forEach((item) => {
+    const amount = Number(item.amount || 0);
+    (item.selectedWorkers || []).forEach((entry) => {
+      if (!entry.worker?._id) return;
+
+      const workerMeta = workersById[entry.worker._id] || entry.worker;
+      if (workerMeta.countRevenue === false) return;
+
+      const share = amount * ((Number(entry.percentage) || 0) / 100);
+      const key = entry.worker._id;
+      preview[key] = {
+        name: entry.worker.name,
+        total: (preview[key]?.total || 0) + share,
+      };
+    });
+  });
+
+  return Object.values(preview);
+};
+
 const ManageCars = () => {
+  const { user } = useAuth();
+  const canDelete = canDeleteCars(user?.role);
+  const adminUser = isAdmin(user?.role);
+  const {
+    voiceEnabled,
+    toggleVoice,
+    testVoice,
+  } = useOperationVoiceMonitor({ poll: adminUser });
+  const canManage = canManageCars(user?.role);
   const [filterDate, setFilterDate] = useState(null);
   const [cars, setCars] = useState([]);
   const [allCars, setAllCars] = useState([]);
@@ -78,25 +177,27 @@ const ManageCars = () => {
   const [allWorkers, setAllWorkers] = useState([]);
   const [availableWorkers, setAvailableWorkers] = useState([]);
   const [supervisors, setSupervisors] = useState([]);
-  const [carTypes, setCarTypes] = useState([]);
   const [locations, setLocations] = useState([]);
   const [selectedLocation, setSelectedLocation] = useState('all');
   const [selectedNewWorker, setSelectedNewWorker] = useState('');
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
 
-  const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
-  const [password, setPassword] = useState('');
-  const [deleteTargetId, setDeleteTargetId] = useState(null);
+  const [repairDialogOpen, setRepairDialogOpen] = useState(false);
+  const [repairCar, setRepairCar] = useState(null);
+  const [repairItems, setRepairItems] = useState([]);
+  const [repairLoading, setRepairLoading] = useState(false);
+  const [repairSaving, setRepairSaving] = useState(false);
 
   const ErrorIcon = Error;
 
   const [searchPlate, setSearchPlate] = useState('');
   const [tableSupervisor, setTableSupervisor] = useState('');
+  const [pageFullscreen, setPageFullscreen] = useState(false);
 
   // Danh sách xe sau khi lọc theo ngày nhận xe
   const displayedCars = useMemo(() => {
     if (!filterDate) return cars;
-    const selected = moment(filterDate).format('YYYY-MM-DD');
+    const selected = dayjs(filterDate).format('YYYY-MM-DD');
     return cars.filter(car => car.currentDate === selected);
   }, [cars, filterDate]);
 
@@ -121,16 +222,6 @@ const ManageCars = () => {
       console.error('Lỗi khi lấy danh sách địa điểm:', err);
     }
   };
-  const isCarPasswordVerified = () => {
-    const verifiedUntil = localStorage.getItem('car_verified_until');
-    return verifiedUntil && new Date(verifiedUntil) > new Date();
-  };
-
-  const markCarPasswordVerified = () => {
-    const expiry = new Date(Date.now() + 60 * 60 * 10000); // 10 giờ
-    localStorage.setItem('car_verified_until', expiry.toISOString());
-  };
-
   const fetchAllWorkers = async () => {
     try {
       const res = await getAllWorkers();
@@ -148,6 +239,11 @@ const ManageCars = () => {
       console.error('Lỗi khi lấy thợ rảnh:', err);
     }
   };
+
+  const workersById = useMemo(
+    () => Object.fromEntries((allWorkers || []).map((worker) => [worker._id, worker])),
+    [allWorkers]
+  );
 
   const STATUS_OPTIONS = [
     { value: 'pending', label: 'Chờ sửa', icon: <Schedule />, color: 'default' },
@@ -189,14 +285,13 @@ const ManageCars = () => {
     }
   };
 
-  const fetchCarTypes = async () => {
-    try {
-      const res = await getAllCateCars();
-      setCarTypes(res.data);
-    } catch (error) {
-      console.error('Lỗi khi lấy loại xe:', error);
-    }
-  };
+  useEffect(() => {
+    fetchCars();
+    fetchData();
+    fetchLocations();
+    fetchAllWorkers();
+    fetchAvailableWorkers();
+  }, []);
 
   const handleLocationChange = async (locationId) => {
     setSelectedLocation(locationId);
@@ -217,15 +312,6 @@ const ManageCars = () => {
       }
     }
   };
-
-  useEffect(() => {
-    fetchCars();
-    fetchData();
-    fetchCarTypes();
-    fetchLocations();
-    fetchAllWorkers();
-    fetchAvailableWorkers();
-  }, []);
 
   const getWorkerNames = (car, role) => {
     const names = car.workers
@@ -270,23 +356,11 @@ const ManageCars = () => {
         .filter((w) => w.role === "sub")
         .map((w) => w.worker._id);
 
-      // 👇 Xử lý deliveryTime tách ra ngày và giờ
-      const momentDelivery = moment(car.deliveryTime, 'DD-MM-YYYY HH[h]');
-      const deliveryDate = momentDelivery.isValid()
-        ? momentDelivery.format('YYYY-MM-DD') // Phù hợp với type="date"
-        : '';
-      const deliveryHour = momentDelivery.isValid()
-        ? momentDelivery.format('HH') // Giờ dạng '00' đến '23'
-        : '';
-
       setEditData({
         ...car,
         mainWorkers: mainWorkerIds,
         subWorkers: subWorkerIds,
         supervisor: car.supervisor?._id || '',
-        carType: car.carType || null,
-        deliveryDate,
-        deliveryHour,
       });
 
       setEditOpen(true);
@@ -297,14 +371,8 @@ const ManageCars = () => {
 
   const handleEditSave = async () => {
     try {
-      // Gộp ngày và giờ lại theo định dạng yêu cầu
-      const formattedDate = moment(editData.deliveryDate, 'YYYY-MM-DD').format('DD-MM-YYYY');
-      const deliveryTime = `${formattedDate} ${editData.deliveryHour}h`;
-
       const updatedCar = {
         plateNumber: editData.plateNumber,
-        carType: editData.carType?._id || '',
-        deliveryTime,
         supervisor: editData.supervisor || null,
         workers: [
           ...editData.mainWorkers.map((id) => ({ worker: id, role: 'main' })),
@@ -324,12 +392,206 @@ const ManageCars = () => {
     }
   };
 
-  const handleDelete = async (id) => {
-    if (isCarPasswordVerified()) {
-      confirmDelete(id);
-    } else {
-      setDeleteTargetId(id);
-      setConfirmDialogOpen(true);
+  const handleDelete = (id) => {
+    if (!canDelete) return;
+    confirmDelete(id);
+  };
+
+  const handleLoadRepairItems = async (car) => {
+    try {
+      setRepairCar(car);
+      setRepairLoading(true);
+      setRepairDialogOpen(true);
+      setRepairItems([]);
+
+      const res = await getCarRepairItems(car._id);
+      setRepairItems((res.data || []).map(mapRepairItemToState));
+    } catch (err) {
+      console.error('Lỗi khi tải chi tiết sửa chữa:', err);
+      setSnackbar({
+        open: true,
+        message: err.response?.data?.message || 'Không tải được chi tiết sửa chữa',
+        severity: 'error',
+      });
+      setRepairDialogOpen(false);
+    } finally {
+      setRepairLoading(false);
+    }
+  };
+
+  const handleRepairWorkerChange = (itemId, rowIndex, worker) => {
+    setRepairItems((prev) =>
+      prev.map((item) =>
+        item._id === itemId
+          ? {
+              ...item,
+              selectedWorkers: item.selectedWorkers.map((entry, index) =>
+                index === rowIndex ? { ...entry, worker } : entry
+              ),
+            }
+          : item
+      )
+    );
+  };
+
+  const handleRepairPercentageChange = (itemId, rowIndex, percentage) => {
+    setRepairItems((prev) =>
+      prev.map((item) =>
+        item._id === itemId
+          ? {
+              ...item,
+              selectedWorkers: item.selectedWorkers.map((entry, index) =>
+                index === rowIndex
+                  ? { ...entry, percentage: Math.min(100, Math.max(0, Number(percentage) || 0)) }
+                  : entry
+              ),
+            }
+          : item
+      )
+    );
+  };
+
+  const handleAddRepairWorkerRow = (itemId) => {
+    setRepairItems((prev) =>
+      prev.map((item) =>
+        item._id === itemId
+          ? {
+              ...item,
+              selectedWorkers: [...item.selectedWorkers, { worker: null, percentage: 0 }],
+            }
+          : item
+      )
+    );
+  };
+
+  const handleRemoveRepairWorkerRow = (itemId, rowIndex) => {
+    setRepairItems((prev) =>
+      prev.map((item) => {
+        if (item._id !== itemId) return item;
+        if (item.selectedWorkers.length <= 1) {
+          return {
+            ...item,
+            selectedWorkers: [{ worker: null, percentage: 100 }],
+          };
+        }
+        return {
+          ...item,
+          selectedWorkers: item.selectedWorkers.filter((_, index) => index !== rowIndex),
+        };
+      })
+    );
+  };
+
+  const handleManualFieldChange = (itemId, field, value) => {
+    setRepairItems((prev) =>
+      prev.map((item) => {
+        if (item._id !== itemId) return item;
+        const next = { ...item, [field]: value };
+        if (field === 'quantity' || field === 'unitPrice') {
+          next.amount = Math.round(
+            (Number(next.quantity) || 0) * (Number(next.unitPrice) || 0)
+          );
+        }
+        if (field === 'amount') {
+          next.amount = Math.max(Number(value) || 0, 0);
+        }
+        return next;
+      })
+    );
+  };
+
+  const handleAddManualItem = () => {
+    setRepairItems((prev) => [...prev, createEmptyManualItem()]);
+  };
+
+  const handleRemoveManualItem = (itemId) => {
+    setRepairItems((prev) => prev.filter((item) => item._id !== itemId));
+  };
+
+  const apiRepairItems = useMemo(
+    () => repairItems.filter((item) => !item.isManual),
+    [repairItems]
+  );
+
+  const manualRepairItems = useMemo(
+    () => repairItems.filter((item) => item.isManual),
+    [repairItems]
+  );
+
+  const buildWorkersPayload = (item) =>
+    item.selectedWorkers
+      .filter((entry) => entry.worker)
+      .map((entry) => ({
+        workerId: entry.worker._id,
+        percentage: Number(entry.percentage) || 0,
+      }));
+
+  const handleSaveRepairAssignments = async () => {
+    if (!repairCar) return;
+
+    const invalidPercentItem = repairItems.find((item) => !isItemWorkerPercentageValid(item));
+    if (invalidPercentItem) {
+      setSnackbar({
+        open: true,
+        message: `Hạng mục "${invalidPercentItem.content || '—'}": tổng % thợ không được vượt quá 100 (hiện tại: ${getItemWorkerTotalPercentage(invalidPercentItem)}%)`,
+        severity: 'error',
+      });
+      return;
+    }
+
+    const invalidManualItem = manualRepairItems.find((item) => !String(item.content || '').trim());
+    if (invalidManualItem) {
+      setSnackbar({
+        open: true,
+        message: 'Vui lòng nhập nội dung cho công việc ngoài báo giá',
+        severity: 'error',
+      });
+      return;
+    }
+
+    try {
+      setRepairSaving(true);
+
+      if (apiRepairItems.length > 0) {
+        await assignRepairItemWorkers(
+          repairCar._id,
+          apiRepairItems.map((item) => ({
+            itemId: item._id,
+            workers: buildWorkersPayload(item),
+          }))
+        );
+      }
+
+      const res = await saveManualRepairItems(
+        repairCar._id,
+        manualRepairItems.map((item) => ({
+          _id: item._id,
+          groupName: item.groupName,
+          content: item.content,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          amount: item.amount,
+          unit: item.unit,
+          workers: buildWorkersPayload(item),
+        }))
+      );
+
+      setRepairItems((res.data || []).map(mapRepairItemToState));
+
+      setSnackbar({
+        open: true,
+        message: 'Đã lưu phân công thợ và công việc ngoài báo giá',
+        severity: 'success',
+      });
+    } catch (err) {
+      console.error('Lỗi khi lưu phân công:', err);
+      setSnackbar({
+        open: true,
+        message: err.response?.data?.message || 'Lưu phân công thất bại',
+        severity: 'error',
+      });
+    } finally {
+      setRepairSaving(false);
     }
   };
 
@@ -366,6 +628,7 @@ const ManageCars = () => {
   const needsWorkerSelection = (currentStatus, newStatus) => {
     return (
       (currentStatus === 'done' && newStatus === 'waiting_wash') ||
+      (['done', 'waiting_wash'].includes(currentStatus) && newStatus === 'waiting_handover') ||
       (['waiting_wash', 'waiting_handover'].includes(currentStatus) && newStatus === 'additional_repair')
     );
   };
@@ -469,7 +732,7 @@ const ManageCars = () => {
         <Grid container spacing={2}>
           <Grid item xs={12} sm={6}>
             <Typography variant="body2" color="textSecondary">
-              <strong>Loại xe:</strong> {car.carType?.name || 'Chưa xác định'}
+              <strong>Loại xe:</strong> {car.externalCarTypeName || 'Chưa xác định'}
             </Typography>
             <Typography variant="body2" color="textSecondary" component="span">
               <strong>Tình trạng:</strong>
@@ -511,7 +774,7 @@ const ManageCars = () => {
 
       <CardActions sx={{ justifyContent: 'space-between', flexWrap: 'wrap', gap: 1, px: 1 }}>
         <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', flex: 1 }}>
-          {getAvailableStatusTransitions(car.status).map((status) => (
+          {canManage && getAvailableStatusTransitions(car.status).map((status) => (
             <Button
               key={status}
               size="small"
@@ -526,6 +789,19 @@ const ManageCars = () => {
         </Box>
 
         <Box sx={{ display: 'flex', gap: 0.5 }}>
+          <Tooltip title="Chi tiết lệnh sửa chữa (API + công việc ngoài báo giá)">
+            <span>
+              <IconButton
+                size="small"
+                color="info"
+                onClick={() => handleLoadRepairItems(car)}
+                sx={{ borderRadius: 2 }}
+              >
+                <ReceiptLong />
+              </IconButton>
+            </span>
+          </Tooltip>
+          {canManage && (
           <Tooltip title="Sửa xe">
             <span>
               <IconButton
@@ -538,6 +814,8 @@ const ManageCars = () => {
               </IconButton>
             </span>
           </Tooltip>
+          )}
+          {canDelete && (
           <Tooltip title="Xoá xe">
             <span>
               <IconButton
@@ -550,6 +828,8 @@ const ManageCars = () => {
               </IconButton>
             </span>
           </Tooltip>
+          )}
+          {canManage && (
           <Tooltip title="Lịch sử xe">
             <span>
               <IconButton
@@ -563,27 +843,28 @@ const ManageCars = () => {
               </IconButton>
             </span>
           </Tooltip>
+          )}
         </Box>
       </CardActions>
     </Card>
   );
 
-  const renderTable = (data) => {
-    // Nếu có filterDate, chỉ hiển thị xe có ngày nhận đúng ngày lọc
+  const renderTable = (data, hideSearch = false) => {
     let filtered = data || cars;
     if (filterDate) {
-      const selected = moment(filterDate).format('YYYY-MM-DD');
+      const selected = dayjs(filterDate).format('YYYY-MM-DD');
       filtered = filtered.filter(car => {
         if (!car.currentDate) return false;
         return car.currentDate === selected;
       });
     }
-    // Áp dụng filter biển số và giám sát viên
-    if (searchPlate) {
-      filtered = filtered.filter(car => car.plateNumber?.toLowerCase().includes(searchPlate.toLowerCase()));
-    }
-    if (tableSupervisor) {
-      filtered = filtered.filter(car => car.supervisor?._id === tableSupervisor);
+    if (!hideSearch) {
+      if (searchPlate) {
+        filtered = filtered.filter(car => car.plateNumber?.toLowerCase().includes(searchPlate.toLowerCase()));
+      }
+      if (tableSupervisor) {
+        filtered = filtered.filter(car => car.supervisor?._id === tableSupervisor);
+      }
     }
     const sortedCars = [...filtered].sort(
       (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
@@ -591,7 +872,7 @@ const ManageCars = () => {
 
     return (
       <Paper sx={{ width: '100%', overflowX: 'auto', borderRadius: 3, boxShadow: 3 }}>
-        {/* Bộ lọc tìm kiếm biển số xe và giám sát viên */}
+        {!hideSearch && (
         <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center', p: 2 }}>
           <TextField
             label="Tìm kiếm biển số xe"
@@ -615,6 +896,7 @@ const ManageCars = () => {
             </Select>
           </FormControl>
         </Box>
+        )}
         <Table stickyHeader sx={{ minWidth: 1100 }}>
           <TableHead>
             <TableRow sx={{ background: '#f5f5f5' }}>
@@ -624,7 +906,6 @@ const ManageCars = () => {
               <TableCell sx={{ fontWeight: 'bold', background: '#f5f5f5' }}>Trạng thái</TableCell>
               <TableCell sx={{ fontWeight: 'bold', background: '#f5f5f5' }}>Thợ chính</TableCell>
               <TableCell sx={{ fontWeight: 'bold', background: '#f5f5f5' }}>Thợ phụ</TableCell>
-              <TableCell sx={{ fontWeight: 'bold', background: '#f5f5f5' }}>Ngày nhận</TableCell>
               <TableCell sx={{ fontWeight: 'bold', background: '#f5f5f5' }}>Thời gian giao</TableCell>
               <TableCell sx={{ fontWeight: 'bold', background: '#f5f5f5' }}>Địa điểm</TableCell>
               <TableCell sx={{ fontWeight: 'bold', background: '#f5f5f5' }}>Giám sát</TableCell>
@@ -652,7 +933,7 @@ const ManageCars = () => {
                       </Typography>
                     </Box>
                   </TableCell>
-                  <TableCell>{car.carType?.name || 'Chưa xác định'}</TableCell>
+                  <TableCell>{car.externalCarTypeName || 'Chưa xác định'}</TableCell>
                   <TableCell>
                     <Chip
                       label={getConditionConfig(car.condition).label}
@@ -673,11 +954,11 @@ const ManageCars = () => {
                   </TableCell>
                   <TableCell>{getWorkerNames(car, 'main')}</TableCell>
                   <TableCell>{getWorkerNames(car, 'sub')}</TableCell>
-                  <TableCell>{car.currentDate || 'Chưa xác định'}</TableCell>
                   <TableCell>{car.deliveryTime || 'Chưa xác định'}</TableCell>
                   <TableCell>{car.location?.name || 'Chưa xác định'}</TableCell>
                   <TableCell>{car.supervisor?.name || '---'}</TableCell>
                   <TableCell>
+                    {canManage ? (
                     <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
                       {getAvailableStatusTransitions(car.status).map((status) => (
                         <Tooltip key={status} title={`Chuyển sang ${getStatusConfig(status).label}`}>
@@ -692,11 +973,27 @@ const ManageCars = () => {
                         </Tooltip>
                       ))}
                     </Box>
+                    ) : (
+                      <Chip label={getStatusConfig(car.status).label} size="small" color={getStatusConfig(car.status).color} />
+                    )}
                   </TableCell>
 
                   <TableCell>
                     <Box sx={{ display: 'flex', gap: 0.5 }}>
-                      <Tooltip title="Sửa xe">
+                      <Tooltip title="Chi tiết lệnh sửa chữa (API + công việc ngoài báo giá)">
+            <span>
+              <IconButton
+                size="small"
+                color="info"
+                onClick={() => handleLoadRepairItems(car)}
+                sx={{ borderRadius: 2 }}
+              >
+                <ReceiptLong />
+              </IconButton>
+            </span>
+          </Tooltip>
+          {canManage && (
+          <Tooltip title="Sửa xe">
                         <span>
                           <IconButton
                             size="small"
@@ -708,6 +1005,8 @@ const ManageCars = () => {
                           </IconButton>
                         </span>
                       </Tooltip>
+          )}
+                      {canDelete && (
                       <Tooltip title="Xoá xe">
                         <span>
                           <IconButton
@@ -720,6 +1019,8 @@ const ManageCars = () => {
                           </IconButton>
                         </span>
                       </Tooltip>
+                      )}
+                      {canManage && (
                       <Tooltip title="Lịch sử xe">
                         <span>
                           <IconButton
@@ -733,6 +1034,7 @@ const ManageCars = () => {
                           </IconButton>
                         </span>
                       </Tooltip>
+                      )}
                     </Box>
                   </TableCell>
                 </TableRow>
@@ -744,34 +1046,263 @@ const ManageCars = () => {
     );
   };
 
+  const compactInputSx = {
+    '& .MuiInputBase-root': { fontSize: 13, height: 32 },
+    '& .MuiInputLabel-root': { fontSize: 12 },
+  };
 
-  return (
-    <Box sx={{ p: { xs: 2, sm: 4 } }}>
-      <Box
-        sx={{
-          background: '#f5f5f5',
-          borderRadius: 2,
-          px: { xs: 2, sm: 4 },
-          py: { xs: 2, sm: 3 },
-          mb: 3,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 2,
-        }}
-      >
-        <DirectionsCarIcon color="primary" sx={{ fontSize: 40 }} />
-        <Box>
-          <Typography variant="h5" fontWeight="bold" color="primary">
-            Quản lý xe
-          </Typography>
-          <Typography variant="body2" color="textSecondary">
-            Theo dõi, cập nhật trạng thái và lịch sử xe trong hệ thống
-          </Typography>
+  const renderInlineWorkers = (item) => (
+    <Stack spacing={0.5} sx={{ minWidth: 320 }}>
+      {(item.selectedWorkers || []).map((entry, rowIndex) => (
+        <Box
+          key={`${item._id}-${rowIndex}`}
+          sx={{ display: 'flex', gap: 0.75, alignItems: 'center' }}
+        >
+          <Autocomplete
+            size="small"
+            disabled={!canManage}
+            sx={{ width: 220, ...compactInputSx }}
+            options={allWorkers}
+            getOptionLabel={(option) => option.name || ''}
+            value={entry.worker}
+            onChange={(_, newValue) => handleRepairWorkerChange(item._id, rowIndex, newValue)}
+            renderInput={(params) => (
+              <TextField {...params} placeholder="Chọn thợ" />
+            )}
+            isOptionEqualToValue={(option, value) => option._id === value?._id}
+          />
+          <TextField
+            size="small"
+            type="number"
+            label="%"
+            disabled={!canManage}
+            value={entry.percentage}
+            onChange={(e) => handleRepairPercentageChange(item._id, rowIndex, e.target.value)}
+            inputProps={{ min: 0, max: 100, step: 1 }}
+            sx={{ width: 72, ...compactInputSx }}
+          />
+          {canManage && (
+            <IconButton
+              size="small"
+              color="error"
+              onClick={() => handleRemoveRepairWorkerRow(item._id, rowIndex)}
+              sx={{ p: 0.25 }}
+            >
+              <Delete sx={{ fontSize: 16 }} />
+            </IconButton>
+          )}
         </Box>
-      </Box>
-      <Divider sx={{ mb: 2 }} />
+      ))}
+      {canManage && (
+        <IconButton
+          size="small"
+          color="primary"
+          onClick={() => handleAddRepairWorkerRow(item._id)}
+          sx={{ alignSelf: 'flex-start', p: 0.25 }}
+        >
+          <Add sx={{ fontSize: 16 }} />
+        </IconButton>
+      )}
+      {item.selectedWorkers?.some((entry) => entry.worker) && (
+        <Typography
+          variant="caption"
+          color={isItemWorkerPercentageValid(item) ? 'success.main' : 'error'}
+          sx={{ lineHeight: 1.2 }}
+        >
+          {getItemWorkerTotalPercentage(item)}%
+        </Typography>
+      )}
+    </Stack>
+  );
 
-      {/* Bộ lọc địa điểm và ngày giao xe */}
+  const renderCompactRepairTableHead = (editable = false) => (
+    <TableRow>
+      <TableCell sx={{ fontWeight: 'bold', py: 0.75, px: 1, width: 36 }}>#</TableCell>
+      <TableCell sx={{ fontWeight: 'bold', py: 0.75, px: 1, width: 90 }}>Nhóm</TableCell>
+      <TableCell sx={{ fontWeight: 'bold', py: 0.75, px: 1, minWidth: 160 }}>Nội dung</TableCell>
+      <TableCell sx={{ fontWeight: 'bold', py: 0.75, px: 1, width: 72 }} align="right">SL</TableCell>
+      <TableCell sx={{ fontWeight: 'bold', py: 0.75, px: 1, width: 120 }} align="right">ĐG</TableCell>
+      <TableCell sx={{ fontWeight: 'bold', py: 0.75, px: 1, width: 120 }} align="right">TT</TableCell>
+      <TableCell sx={{ fontWeight: 'bold', py: 0.75, px: 1, minWidth: 340 }}>Thợ · %</TableCell>
+      {editable && canManage && (
+        <TableCell sx={{ fontWeight: 'bold', py: 0.75, px: 0.5, width: 36 }} />
+      )}
+    </TableRow>
+  );
+
+  const renderManualRepairItemCard = (item, index) => (
+    <TableRow key={item._id} hover sx={{ bgcolor: '#fffbeb' }}>
+      <TableCell sx={{ py: 0.5, px: 1, verticalAlign: 'middle' }}>{index + 1}</TableCell>
+      <TableCell sx={{ py: 0.5, px: 1, verticalAlign: 'middle' }}>
+        <TextField
+          size="small"
+          disabled={!canManage}
+          value={item.groupName || ''}
+          onChange={(e) => handleManualFieldChange(item._id, 'groupName', e.target.value)}
+          sx={{ width: 84, ...compactInputSx }}
+        />
+      </TableCell>
+      <TableCell sx={{ py: 0.5, px: 1, verticalAlign: 'middle' }}>
+        <TextField
+          size="small"
+          disabled={!canManage}
+          placeholder="Nội dung *"
+          value={item.content || ''}
+          onChange={(e) => handleManualFieldChange(item._id, 'content', e.target.value)}
+          fullWidth
+          sx={compactInputSx}
+        />
+      </TableCell>
+      <TableCell sx={{ py: 0.5, px: 1, verticalAlign: 'middle' }} align="right">
+        <TextField
+          size="small"
+          type="number"
+          disabled={!canManage}
+          value={item.quantity ?? 1}
+          onChange={(e) => handleManualFieldChange(item._id, 'quantity', e.target.value)}
+          inputProps={{ min: 0, step: 1 }}
+          sx={{ width: 64, ...compactInputSx }}
+        />
+      </TableCell>
+      <TableCell sx={{ py: 0.5, px: 1, verticalAlign: 'middle' }} align="right">
+        <TextField
+          size="small"
+          type="number"
+          disabled={!canManage}
+          value={item.unitPrice ?? 0}
+          onChange={(e) => handleManualFieldChange(item._id, 'unitPrice', e.target.value)}
+          inputProps={{ min: 0, step: 1000 }}
+          sx={{ width: 112, ...compactInputSx }}
+        />
+      </TableCell>
+      <TableCell sx={{ py: 0.5, px: 1, verticalAlign: 'middle' }} align="right">
+        <TextField
+          size="small"
+          type="number"
+          disabled={!canManage}
+          value={item.amount ?? 0}
+          onChange={(e) => handleManualFieldChange(item._id, 'amount', e.target.value)}
+          inputProps={{ min: 0, step: 1000 }}
+          sx={{ width: 112, ...compactInputSx }}
+        />
+      </TableCell>
+      <TableCell sx={{ py: 0.5, px: 1, verticalAlign: 'middle' }}>
+        {renderInlineWorkers(item)}
+      </TableCell>
+      {canManage && (
+        <TableCell sx={{ py: 0.5, px: 0.5, verticalAlign: 'middle' }}>
+          <IconButton size="small" color="error" onClick={() => handleRemoveManualItem(item._id)} sx={{ p: 0.25 }}>
+            <Delete sx={{ fontSize: 16 }} />
+          </IconButton>
+        </TableCell>
+      )}
+    </TableRow>
+  );
+
+  const renderManualRepairSection = () => (
+    <Box>
+      <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
+        <Stack direction="row" alignItems="center" spacing={1}>
+          <EditNote color="warning" sx={{ fontSize: 18 }} />
+          <Typography variant="subtitle1" fontWeight="bold">
+            Công việc ngoài báo giá
+          </Typography>
+          <Chip label="Nhập tay" size="small" color="warning" variant="outlined" sx={{ height: 20 }} />
+        </Stack>
+        {canManage && (
+          <Button size="small" variant="contained" color="warning" startIcon={<Add />} onClick={handleAddManualItem}>
+            Thêm
+          </Button>
+        )}
+      </Stack>
+
+      {manualRepairItems.length === 0 ? (
+        <Alert severity="warning" sx={{ py: 0.5 }}>
+          Chưa có công việc ngoài báo giá.
+        </Alert>
+      ) : (
+        <Paper variant="outlined" sx={{ overflowX: 'auto', borderColor: '#fcd34d' }}>
+          <Table size="small" sx={{ minWidth: 1100 }}>
+            <TableHead>
+              {renderCompactRepairTableHead(true)}
+            </TableHead>
+            <TableBody>
+              {manualRepairItems.map((item, index) => renderManualRepairItemCard(item, index))}
+            </TableBody>
+          </Table>
+        </Paper>
+      )}
+    </Box>
+  );
+
+  const renderApiRepairItemCard = (item, index) => (
+    <TableRow key={item._id} hover>
+      <TableCell sx={{ py: 0.5, px: 1, verticalAlign: 'middle' }}>{index + 1}</TableCell>
+      <TableCell sx={{ py: 0.5, px: 1, verticalAlign: 'middle', fontSize: 13 }}>
+        {item.groupName || 'Khác'}
+      </TableCell>
+      <TableCell
+        sx={{
+          py: 0.5,
+          px: 1,
+          verticalAlign: 'middle',
+          fontSize: 13,
+          maxWidth: 280,
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+        }}
+        title={item.content}
+      >
+        {item.content}
+      </TableCell>
+      <TableCell sx={{ py: 0.5, px: 1, verticalAlign: 'middle', fontSize: 13 }} align="right">
+        {item.quantity}
+      </TableCell>
+      <TableCell sx={{ py: 0.5, px: 1, verticalAlign: 'middle', fontSize: 13, whiteSpace: 'nowrap' }} align="right">
+        {formatMoney(item.unitPrice)}
+      </TableCell>
+      <TableCell sx={{ py: 0.5, px: 1, verticalAlign: 'middle', fontSize: 13, whiteSpace: 'nowrap' }} align="right">
+        {formatMoney(item.amount)}
+      </TableCell>
+      <TableCell sx={{ py: 0.5, px: 1, verticalAlign: 'middle' }}>
+        {renderInlineWorkers(item)}
+      </TableCell>
+    </TableRow>
+  );
+
+  const renderApiRepairSection = () => (
+    <Box>
+      <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
+        <ReceiptLong color="info" sx={{ fontSize: 18 }} />
+        <Typography variant="subtitle1" fontWeight="bold">
+          Hạng mục từ báo giá
+        </Typography>
+        <Chip label="API" size="small" variant="outlined" sx={{ height: 20 }} />
+      </Stack>
+
+      {apiRepairItems.length === 0 ? (
+        <Alert severity="info" sx={{ py: 0.5, mb: 1 }}>
+          Chưa có hạng mục từ báo giá.
+        </Alert>
+      ) : (
+        <Paper variant="outlined" sx={{ overflowX: 'auto' }}>
+          <Table size="small" sx={{ minWidth: 1100 }}>
+            <TableHead>
+              {renderCompactRepairTableHead(false)}
+            </TableHead>
+            <TableBody>
+              {apiRepairItems.map((item, index) => renderApiRepairItemCard(item, index))}
+            </TableBody>
+          </Table>
+        </Paper>
+      )}
+    </Box>
+  );
+
+  const renderCarsPanel = (hideSearch = false) => (
+    <>
+      {!hideSearch && (
       <Paper sx={{ p: { xs: 2, sm: 3 }, mb: 3, borderRadius: 3, boxShadow: 3 }}>
         <Grid container spacing={2} alignItems="flex-end">
           <Grid item xs={12} sm={3}>
@@ -801,8 +1332,8 @@ const ManageCars = () => {
               type="date"
               size="small"
               fullWidth
-              value={filterDate ? moment(filterDate).format('YYYY-MM-DD') : ''}
-              onChange={e => setFilterDate(e.target.value ? moment(e.target.value).toDate() : null)}
+              value={filterDate ? dayjs(filterDate).format('YYYY-MM-DD') : ''}
+              onChange={e => setFilterDate(e.target.value ? dayjs(e.target.value).toDate() : null)}
               InputLabelProps={{ shrink: true }}
             />
           </Grid>
@@ -830,9 +1361,9 @@ const ManageCars = () => {
           </Grid>
         </Grid>
       </Paper>
+      )}
 
-      {/* Bộ lọc biển số xe và giám sát viên cho mobile (card view) */}
-      {isMobile && (
+      {!hideSearch && isMobile && (
         <Box sx={{ mb: 2 }}>
           <Stack spacing={2} direction="column">
             <TextField
@@ -860,30 +1391,80 @@ const ManageCars = () => {
         </Box>
       )}
 
-      {/* Hiển thị danh sách xe */}
       {isMobile ? (
         <Box>
           {(() => {
             let filtered = displayedCars;
-            if (searchPlate) {
-              filtered = filtered.filter(car => car.plateNumber?.toLowerCase().includes(searchPlate.toLowerCase()));
-            }
-            if (tableSupervisor) {
-              filtered = filtered.filter(car => car.supervisor?._id === tableSupervisor);
+            if (!hideSearch) {
+              if (searchPlate) {
+                filtered = filtered.filter(car => car.plateNumber?.toLowerCase().includes(searchPlate.toLowerCase()));
+              }
+              if (tableSupervisor) {
+                filtered = filtered.filter(car => car.supervisor?._id === tableSupervisor);
+              }
             }
             return [...filtered]
               .sort((a, b) => {
                 const dateA = a.createdAt ? new Date(a.createdAt) : new Date(0);
                 const dateB = b.createdAt ? new Date(b.createdAt) : new Date(0);
-                return dateB - dateA; // sắp xếp mới nhất lên trước
+                return dateB - dateA;
               })
               .map(renderCarCard);
           })()}
         </Box>
       ) : (
-        renderTable(displayedCars)
+        renderTable(displayedCars, hideSearch)
       )}
+    </>
+  );
 
+  return (
+    <Box sx={{ p: { xs: 2, sm: 4 } }}>
+      <Box
+        sx={{
+          background: '#f5f5f5',
+          borderRadius: 2,
+          px: { xs: 2, sm: 4 },
+          py: { xs: 2, sm: 3 },
+          mb: 3,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 2,
+        }}
+      >
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, minWidth: 0 }}>
+          <DirectionsCarIcon color="primary" sx={{ fontSize: 40 }} />
+          <Box>
+            <Typography variant="h5" fontWeight="bold" color="primary">
+              Quản lý xe
+            </Typography>
+            <Typography variant="body2" color="textSecondary">
+              Theo dõi, cập nhật trạng thái và lịch sử xe trong hệ thống
+            </Typography>
+          </Box>
+        </Box>
+        <Stack direction="row" spacing={1} alignItems="center" sx={{ flexShrink: 0 }}>
+          {adminUser && (
+            <OperationVoiceControls
+              voiceEnabled={voiceEnabled}
+              onToggle={toggleVoice}
+              onTest={testVoice}
+            />
+          )}
+          <Button
+            variant="outlined"
+            size="small"
+            startIcon={<FullscreenIcon />}
+            onClick={() => setPageFullscreen(true)}
+          >
+            {isMobile ? 'Full' : 'Xem full màn hình'}
+          </Button>
+        </Stack>
+      </Box>
+      <Divider sx={{ mb: 2 }} />
+
+      {renderCarsPanel()}
       {/* Dialog cập nhật xe */}
       <Dialog open={editOpen} onClose={() => setEditOpen(false)} maxWidth="md" fullWidth PaperProps={{ sx: { borderRadius: 3 } }}>
         <DialogTitle>
@@ -907,48 +1488,21 @@ const ManageCars = () => {
             </Grid>
             <Grid item xs={12} sm={6}>
               <TextField
+                label="Loại xe (từ API)"
                 fullWidth
-                label="Ngày giao xe (DD-MM-YYYY)"
-                type="date"
-                value={editData.deliveryDate || ''}
-                onChange={(e) =>
-                  setEditData((prev) => ({ ...prev, deliveryDate: e.target.value }))
-                }
+                value={editData.externalCarTypeName || ''}
+                InputProps={{ readOnly: true }}
                 InputLabelProps={{ shrink: true }}
                 sx={{ mb: 2 }}
               />
             </Grid>
             <Grid item xs={12} sm={6}>
-              <FormControl fullWidth sx={{ mb: 2 }}>
-                <InputLabel shrink>Giờ giao xe (HH)</InputLabel>
-                <Select
-                  value={editData.deliveryHour || ''}
-                  label="Giờ giao xe (HH)"
-                  onChange={(e) =>
-                    setEditData((prev) => ({ ...prev, deliveryHour: e.target.value }))
-                  }
-                  displayEmpty
-                  inputProps={{ 'aria-label': 'Giờ giao xe (HH)' }}
-                >
-                  {[...Array(24).keys()].map((hour) => (
-                    <MenuItem key={hour} value={hour}>
-                      {hour}h
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <Autocomplete
-                options={carTypes}
-                getOptionLabel={(option) => option.name || ''}
-                value={editData.carType}
-                onChange={(event, newValue) => {
-                  setEditData((prev) => ({ ...prev, carType: newValue }));
-                }}
-                renderInput={(params) => (
-                  <TextField {...params} label="Loại xe" fullWidth InputLabelProps={{ shrink: true }} sx={{ mb: 2 }} />
-                )}
+              <TextField
+                label="Thời gian giao (từ API)"
+                fullWidth
+                value={editData.deliveryTime || 'Chưa xác định'}
+                InputProps={{ readOnly: true }}
+                InputLabelProps={{ shrink: true }}
                 sx={{ mb: 2 }}
               />
             </Grid>
@@ -1058,9 +1612,11 @@ const ManageCars = () => {
               <Typography variant="body1" gutterBottom>
                 {statusUpdateData.newStatus === 'waiting_wash'
                   ? 'Chọn thợ để rửa xe (tùy chọn - để trống sẽ giữ thợ cũ):'
-                  : statusUpdateData.newStatus === 'additional_repair'
-                    ? 'Chọn thợ mới cho sửa bổ sung (bắt buộc):'
-                    : 'Chọn thợ cho công việc này:'
+                  : statusUpdateData.newStatus === 'waiting_handover'
+                    ? 'Chọn người giao xe hoặc để trống nếu khách tự lấy xe:'
+                    : statusUpdateData.newStatus === 'additional_repair'
+                      ? 'Chọn thợ mới cho sửa bổ sung (bắt buộc):'
+                      : 'Chọn thợ cho công việc này:'
                 }
               </Typography>
               <FormControl fullWidth sx={{ mt: 2, mb: 2 }}>
@@ -1073,6 +1629,12 @@ const ManageCars = () => {
                   {statusUpdateData.newStatus === 'waiting_wash' && (
                     <MenuItem value="">
                       <em>Giữ thợ cũ</em>
+                    </MenuItem>
+                  )}
+
+                  {statusUpdateData.newStatus === 'waiting_handover' && (
+                    <MenuItem value="">
+                      <em>Khách tự lấy xe</em>
                     </MenuItem>
                   )}
                   {availableWorkers.map((worker) => (
@@ -1107,7 +1669,13 @@ const ManageCars = () => {
                   </Typography>
                 </Alert>
               )}
-
+              {statusUpdateData.newStatus === 'waiting_handover' && (
+                <Alert severity="info" sx={{ mt: 2, mb: 2 }}>
+                  <Typography variant="body2">
+                    🚗 <strong>Giao xe:</strong> Chọn thợ/tài xế nếu cần người giao xe. Nếu khách tự lấy xe thì để trống.
+                  </Typography>
+                </Alert>
+              )}
               {statusUpdateData.newStatus === 'additional_repair' && (
                 <Alert severity="warning" sx={{ mt: 2, mb: 2 }}>
                   <Typography variant="body2">
@@ -1156,43 +1724,100 @@ const ManageCars = () => {
           </Button>
         </DialogActions>
       </Dialog>
-      <Dialog open={confirmDialogOpen} onClose={() => setConfirmDialogOpen(false)} PaperProps={{ sx: { borderRadius: 3 } }}>
+
+      <Dialog
+        open={repairDialogOpen}
+        onClose={() => setRepairDialogOpen(false)}
+        maxWidth="xl"
+        fullWidth
+        fullScreen={isMobile}
+        TransitionComponent={Slide}
+        TransitionProps={{ direction: 'up' }}
+        PaperProps={{ sx: { borderRadius: isMobile ? 0 : 3 } }}
+      >
         <DialogTitle>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Lock color="error" />
-            <Typography variant="h6" fontWeight="bold">Xác thực để xoá xe</Typography>
+          <Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <ReceiptLong color="info" />
+              <Typography variant="h6" fontWeight="bold">
+                Chi tiết lệnh sửa chữa — {repairCar?.plateNumber || ''}
+              </Typography>
+            </Box>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+              Mỗi hàng: thông tin hạng mục + phân công thợ trên cùng một dòng
+            </Typography>
           </Box>
         </DialogTitle>
-        <DialogContent sx={{ p: 3 }}>
-          <TextField
-            type="password"
-            label="Nhập mật khẩu"
-            fullWidth
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            sx={{ mt: 2, mb: 2 }}
-          />
+        <DialogContent sx={{ p: isMobile ? 2 : 3 }}>
+          {repairLoading ? (
+            <Typography align="center" sx={{ py: 4 }}>
+              Đang tải chi tiết sửa chữa...
+            </Typography>
+          ) : (
+            <>
+              {renderApiRepairSection()}
+              <Divider sx={{ my: 1.5 }} />
+              {renderManualRepairSection()}
+            </>
+          )}
+
+          {!repairLoading && repairItems.length > 0 && (
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="subtitle1" fontWeight="bold" textAlign="right">
+                Tổng thành tiền hạng mục:{' '}
+                {formatMoney(repairItems.reduce((sum, item) => sum + Number(item.amount || 0), 0))}
+              </Typography>
+              <Typography variant="body2" color="text.secondary" textAlign="right" sx={{ mb: 1 }}>
+                Doanh thu thợ = thành tiền × % thực hiện × 75% (trừ hoa hồng).
+              </Typography>
+              {getWorkerRevenuePreview(repairItems, workersById).length > 0 && (
+                <Paper variant="outlined" sx={{ p: 2 }}>
+                  <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
+                    Xem trước doanh thu theo thợ (chưa trừ hoa hồng)
+                  </Typography>
+                  <Stack spacing={0.5}>
+                    {getWorkerRevenuePreview(repairItems, workersById).map((entry) => (
+                      <Box
+                        key={entry.name}
+                        sx={{ display: 'flex', justifyContent: 'space-between' }}
+                      >
+                        <Typography variant="body2">{entry.name}</Typography>
+                        <Typography variant="body2" fontWeight="bold">
+                          {formatMoney(entry.total)}
+                        </Typography>
+                      </Box>
+                    ))}
+                  </Stack>
+                </Paper>
+              )}
+            </Box>
+          )}
         </DialogContent>
-        <DialogActions sx={{ justifyContent: 'center', gap: 2, p: 2 }}>
-          <Button onClick={() => setConfirmDialogOpen(false)} variant="outlined">Huỷ</Button>
-          <Button
-            variant="contained"
-            color="error"
-            onClick={() => {
-              if (password === '123456@') {
-                markCarPasswordVerified();
-                setConfirmDialogOpen(false);
-                setPassword('');
-                confirmDelete(deleteTargetId);
-              } else {
-                alert('❌ Sai mật khẩu!');
-              }
-            }}
-          >
-            Xác nhận
+        <DialogActions sx={{ justifyContent: 'center', gap: 2, p: 2, flexDirection: isMobile ? 'column' : 'row' }}>
+          <Button onClick={() => setRepairDialogOpen(false)} variant="outlined" fullWidth={isMobile}>
+            Đóng
           </Button>
+          {canManage && (
+          <Button
+            onClick={handleSaveRepairAssignments}
+            variant="contained"
+            color="primary"
+            disabled={repairLoading || repairSaving}
+            fullWidth={isMobile}
+          >
+            {repairSaving ? 'Đang lưu...' : 'Lưu phân công & công việc ghi thêm'}
+          </Button>
+          )}
         </DialogActions>
       </Dialog>
+
+      <FullscreenDialog
+        open={pageFullscreen}
+        onClose={() => setPageFullscreen(false)}
+        title="Quản lý xe — toàn màn hình"
+      >
+        {renderCarsPanel(true)}
+      </FullscreenDialog>
 
       <Snackbar
         open={snackbar.open}
