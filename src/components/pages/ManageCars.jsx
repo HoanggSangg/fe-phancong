@@ -12,6 +12,7 @@ import {
   getCarRepairItems,
   assignRepairItemWorkers,
   saveManualRepairItems,
+  getCarWorkerHistory,
 } from '../apis/index';
 import {
   Typography,
@@ -46,6 +47,8 @@ import {
   CardActions,
   Divider,
   Stack,
+  Avatar,
+  CircularProgress,
 } from '@mui/material';
 import {
   Edit,
@@ -65,14 +68,16 @@ import {
   Error,
   ReceiptLong,
   EditNote,
+  AddCircle,
+  RemoveCircle,
+  Autorenew,
 } from '@mui/icons-material';
 import FullscreenIcon from '@mui/icons-material/Fullscreen';
-import { Link } from 'react-router-dom';
 import dayjs from 'dayjs';
 import customParseFormat from 'dayjs/plugin/customParseFormat';
 import Slide from '@mui/material/Slide';
 import { useAuth } from '../../context/AuthContext';
-import { canDeleteCars, canManageCars, isAdmin } from '../../utils/permissions';
+import { canDeleteCars, canHearOperationVoice, canManageCars } from '../../utils/permissions';
 import { formatMoney } from '../../utils/dateFilters';
 import FullscreenDialog from '../common/FullscreenDialog';
 import OperationVoiceControls from '../common/OperationVoiceControls';
@@ -158,14 +163,14 @@ const getWorkerRevenuePreview = (repairItems, workersById = {}) => {
 
 const ManageCars = () => {
   const { user } = useAuth();
-  const canDelete = canDeleteCars(user?.role);
-  const adminUser = isAdmin(user?.role);
+  const canDelete = canDeleteCars(user);
+  const canHearVoice = canHearOperationVoice(user);
   const {
     voiceEnabled,
     toggleVoice,
     testVoice,
-  } = useOperationVoiceMonitor({ poll: adminUser });
-  const canManage = canManageCars(user?.role);
+  } = useOperationVoiceMonitor({ poll: canHearVoice });
+  const canManage = canManageCars(user);
   const [filterDate, setFilterDate] = useState(null);
   const [cars, setCars] = useState([]);
   const [allCars, setAllCars] = useState([]);
@@ -187,6 +192,11 @@ const ManageCars = () => {
   const [repairItems, setRepairItems] = useState([]);
   const [repairLoading, setRepairLoading] = useState(false);
   const [repairSaving, setRepairSaving] = useState(false);
+
+  const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyData, setHistoryData] = useState(null);
+  const [historyError, setHistoryError] = useState('');
 
   const ErrorIcon = Error;
 
@@ -238,6 +248,38 @@ const ManageCars = () => {
     } catch (err) {
       console.error('Lỗi khi lấy thợ rảnh:', err);
     }
+  };
+
+  const handleOpenWorkerHistory = async (car) => {
+    setHistoryDialogOpen(true);
+    setHistoryLoading(true);
+    setHistoryError('');
+    setHistoryData({ plateNumber: car.plateNumber });
+
+    try {
+      const res = await getCarWorkerHistory(car._id);
+      setHistoryData(res.data.data);
+    } catch (err) {
+      console.error('Lỗi khi tải lịch sử thợ:', err);
+      setHistoryError('Lỗi khi tải lịch sử thay đổi thợ');
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  const formatHistoryNote = (note = '') =>
+    note
+      .replace('waiting_handover', 'Chờ giao xe cho khách hàng')
+      .replace('additional_repair', 'Đang sửa bổ sung');
+
+  const getHistoryActionMeta = (log) => {
+    if (log.action === 'removed' || log.action === 'reassigned') {
+      return { text: log.actionLabel || 'Đã thay đổi', color: 'error.main', Icon: RemoveCircle };
+    }
+    if (log.action === 'added') {
+      return { text: log.actionLabel || 'Thêm mới', color: 'success.main', Icon: AddCircle };
+    }
+    return { text: log.actionLabel || log.action, color: 'text.primary', Icon: Person };
   };
 
   const workersById = useMemo(
@@ -830,13 +872,12 @@ const ManageCars = () => {
           </Tooltip>
           )}
           {canManage && (
-          <Tooltip title="Lịch sử xe">
+          <Tooltip title="Lịch sử thay đổi thợ">
             <span>
               <IconButton
                 size="small"
                 color="secondary"
-                component={Link}
-                to={`/cars/${car._id}/history`}
+                onClick={() => handleOpenWorkerHistory(car)}
                 sx={{ borderRadius: 2 }}
               >
                 <History />
@@ -1021,13 +1062,12 @@ const ManageCars = () => {
                       </Tooltip>
                       )}
                       {canManage && (
-                      <Tooltip title="Lịch sử xe">
+                      <Tooltip title="Lịch sử thay đổi thợ">
                         <span>
                           <IconButton
                             size="small"
                             color="secondary"
-                            component={Link}
-                            to={`/cars/${car._id}/history`}
+                            onClick={() => handleOpenWorkerHistory(car)}
                             sx={{ borderRadius: 2 }}
                           >
                             <History />
@@ -1445,7 +1485,7 @@ const ManageCars = () => {
           </Box>
         </Box>
         <Stack direction="row" spacing={1} alignItems="center" sx={{ flexShrink: 0 }}>
-          {adminUser && (
+          {canHearVoice && (
             <OperationVoiceControls
               voiceEnabled={voiceEnabled}
               onToggle={toggleVoice}
@@ -1808,6 +1848,128 @@ const ManageCars = () => {
             {repairSaving ? 'Đang lưu...' : 'Lưu phân công & công việc ghi thêm'}
           </Button>
           )}
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={historyDialogOpen}
+        onClose={() => setHistoryDialogOpen(false)}
+        maxWidth="md"
+        fullWidth
+        fullScreen={isMobile}
+        PaperProps={{ sx: { borderRadius: isMobile ? 0 : 3 } }}
+      >
+        <DialogTitle>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <History color="secondary" />
+            <Typography variant="h6" fontWeight="bold">
+              Lịch sử thay đổi thợ
+              {historyData?.plateNumber ? `: ${historyData.plateNumber}` : ''}
+            </Typography>
+          </Box>
+        </DialogTitle>
+        <DialogContent sx={{ p: isMobile ? 2 : 3 }}>
+          {historyLoading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
+              <CircularProgress />
+            </Box>
+          ) : historyError ? (
+            <Alert severity="error">{historyError}</Alert>
+          ) : historyData ? (
+            <Stack spacing={2}>
+              <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
+                <Stack direction="row" alignItems="center" spacing={1} mb={1}>
+                  <Autorenew color="primary" />
+                  <Typography variant="subtitle1" fontWeight={600}>
+                    Thợ hiện tại
+                  </Typography>
+                </Stack>
+                {historyData.currentWorkers?.length > 0 ? (
+                  <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                    {historyData.currentWorkers.map((worker, index) => {
+                      const roleLabel =
+                        worker.role === 'main'
+                          ? 'Thợ chính'
+                          : worker.role === 'sub'
+                            ? 'Thợ phụ'
+                            : worker.roleLabel || worker.role;
+                      const chipColor =
+                        worker.role === 'main' ? 'primary' : worker.role === 'sub' ? 'secondary' : 'default';
+
+                      return (
+                        <Chip
+                          key={`${worker.id || worker.name}-${index}`}
+                          avatar={<Avatar><Person fontSize="small" /></Avatar>}
+                          label={<><b>{worker.name}</b> ({roleLabel})</>}
+                          color={chipColor}
+                          variant="outlined"
+                        />
+                      );
+                    })}
+                  </Stack>
+                ) : (
+                  <Typography variant="body2" color="text.secondary">
+                    Không có thợ hiện tại.
+                  </Typography>
+                )}
+              </Paper>
+
+              <Typography variant="subtitle1" fontWeight={600}>
+                Lịch sử thao tác
+              </Typography>
+
+              {historyData.historyLogs?.length > 0 ? (
+                <Paper variant="outlined" sx={{ borderRadius: 2, overflow: 'hidden' }}>
+                  <Box sx={{ maxHeight: 360, overflow: 'auto' }}>
+                    <Table size="small" stickyHeader>
+                      <TableHead>
+                        <TableRow>
+                          <TableCell><strong>Thợ</strong></TableCell>
+                          <TableCell><strong>Hành động</strong></TableCell>
+                          <TableCell><strong>Giai đoạn</strong></TableCell>
+                          <TableCell><strong>Ghi chú</strong></TableCell>
+                          <TableCell><strong>Thời gian</strong></TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {historyData.historyLogs.map((log) => {
+                          const { text, color, Icon } = getHistoryActionMeta(log);
+                          return (
+                            <TableRow key={log.id || `${log.name}-${log.timestamp}`} hover>
+                              <TableCell>
+                                <Stack direction="row" alignItems="center" spacing={1}>
+                                  <Avatar sx={{ width: 28, height: 28 }}>
+                                    <Person fontSize="small" />
+                                  </Avatar>
+                                  <span>{log.name}</span>
+                                </Stack>
+                              </TableCell>
+                              <TableCell sx={{ color, fontWeight: 600 }}>
+                                <Stack direction="row" alignItems="center" spacing={0.5}>
+                                  <Icon fontSize="small" />
+                                  <span>{text}</span>
+                                </Stack>
+                              </TableCell>
+                              <TableCell>{log.phaseLabel || '—'}</TableCell>
+                              <TableCell>{formatHistoryNote(log.note) || '—'}</TableCell>
+                              <TableCell>{new Date(log.timestamp).toLocaleString('vi-VN')}</TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </Box>
+                </Paper>
+              ) : (
+                <Alert severity="info">Chưa có lịch sử thay đổi thợ.</Alert>
+              )}
+            </Stack>
+          ) : null}
+        </DialogContent>
+        <DialogActions sx={{ p: 2 }}>
+          <Button onClick={() => setHistoryDialogOpen(false)} variant="outlined">
+            Đóng
+          </Button>
         </DialogActions>
       </Dialog>
 

@@ -35,62 +35,112 @@ export const ACTIVE_CAR_STATUSES = [
   'additional_repair',
 ];
 
-export const NAV_GROUPS = [
-  {
-    title: 'Quản lý xe',
-    items: [
-      { label: 'Xe trong ngày', path: '/cars', roles: ['admin', 'giam_sat', 'ktv'] },
-      { label: 'Quản lý xe', path: '/cars/manage', roles: ['admin', 'giam_sat', 'ktv'] },
-      { label: 'Thêm xe', path: '/cars/add', roles: ['admin', 'giam_sat'] },
-    ],
-  },
-  {
-    title: 'Thợ & công việc',
-    items: [
-      { label: 'Danh sách thợ', path: '/workers/main', roles: ['admin', 'giam_sat'] },
-      { label: 'Thợ rảnh', path: '/workers/available', roles: ['admin', 'giam_sat', 'ktv'] },
-      { label: 'Chi tiết công việc', path: '/woker', roles: ['admin', 'giam_sat', 'ktv'] },
-      { label: 'Lịch sử sửa chữa', path: '/repair-history', roles: ['admin', 'giam_sat', 'ktv'] },
-      { label: 'KPI thợ', path: '/workers/kpi', roles: ['admin', 'giam_sat', 'ktv'] },
-      { label: 'Quản lý tổ', path: '/teams', roles: ['admin', 'giam_sat'] },
-    ],
-  },
-  {
-    title: 'Báo cáo',
-    items: [
-      { label: 'Doanh thu thợ', path: '/workers/revenue-chart', roles: ['admin', 'giam_sat'] },
-      { label: 'Tuyên dương tuần', path: '/workers/weekly-praise', roles: ['admin', 'giam_sat'] },
-      { label: 'Cảnh báo tuần', path: '/workers/weekly-warning', roles: ['admin', 'giam_sat'] },
-    ],
-  },
-  {
-    title: 'Hệ thống',
-    items: [
-      { label: 'Địa điểm', path: '/locations', roles: ['admin'] },
-      { label: 'Giám sát', path: '/supervisors', roles: ['admin'] },
-      { label: 'Tài khoản', path: '/users', roles: ['admin'] },
-      { label: 'Lịch sử thao tác', path: '/audit-logs', roles: ['admin'] },
-    ],
-  },
+export const PERMISSION_CATALOG = [
+  { key: 'cars.today', label: 'Xe trong ngày', group: 'Quản lý xe', path: '/cars', defaultRoles: ['admin', 'giam_sat', 'ktv'] },
+  { key: 'cars.manage', label: 'Quản lý xe', group: 'Quản lý xe', path: '/cars/manage', defaultRoles: ['admin', 'giam_sat', 'ktv'] },
+  { key: 'cars.add', label: 'Thêm xe', group: 'Quản lý xe', path: '/cars/add', defaultRoles: ['admin', 'giam_sat'] },
+  { key: 'cars.delete', label: 'Xóa xe', group: 'Quản lý xe', defaultRoles: ['admin'] },
+  { key: 'cars.voice', label: 'Nghe thông báo thao tác (Quản lý xe)', group: 'Quản lý xe', defaultRoles: ['admin', 'giam_sat'] },
+  { key: 'workers.main', label: 'Danh sách thợ', group: 'Thợ & công việc', path: '/workers/main', defaultRoles: ['admin', 'giam_sat'] },
+  { key: 'workers.available', label: 'Thợ rảnh', group: 'Thợ & công việc', path: '/workers/available', defaultRoles: ['admin', 'giam_sat', 'ktv'] },
+  { key: 'workers.woker', label: 'Chi tiết công việc', group: 'Thợ & công việc', path: '/woker', defaultRoles: ['admin', 'giam_sat', 'ktv'] },
+  { key: 'workers.repair-history', label: 'Lịch sử sửa chữa', group: 'Thợ & công việc', path: '/repair-history', defaultRoles: ['admin', 'giam_sat', 'ktv'] },
+  { key: 'workers.kpi', label: 'KPI thợ', group: 'Thợ & công việc', path: '/workers/kpi', defaultRoles: ['admin', 'giam_sat', 'ktv'] },
+  { key: 'teams.manage', label: 'Quản lý tổ', group: 'Thợ & công việc', path: '/teams', defaultRoles: ['admin', 'giam_sat'] },
+  { key: 'reports.revenue', label: 'Doanh thu thợ', group: 'Báo cáo', path: '/workers/revenue-chart', defaultRoles: ['admin', 'giam_sat'] },
+  { key: 'reports.praise', label: 'Tuyên dương tuần', group: 'Báo cáo', path: '/workers/weekly-praise', defaultRoles: ['admin', 'giam_sat'] },
+  { key: 'reports.warning', label: 'Cảnh báo tuần', group: 'Báo cáo', path: '/workers/weekly-warning', defaultRoles: ['admin', 'giam_sat'] },
+  { key: 'system.locations', label: 'Địa điểm', group: 'Hệ thống', path: '/locations', defaultRoles: ['admin'] },
+  { key: 'system.supervisors', label: 'Giám sát', group: 'Hệ thống', path: '/supervisors', defaultRoles: ['admin'] },
+  { key: 'system.users', label: 'Tài khoản', group: 'Hệ thống', path: '/users', defaultRoles: ['admin'] },
+  { key: 'system.permissions', label: 'Phân chức năng', group: 'Hệ thống', path: '/account-permissions', defaultRoles: ['admin'] },
+  { key: 'system.audit-logs', label: 'Lịch sử thao tác', group: 'Hệ thống', path: '/audit-logs', defaultRoles: ['admin'] },
 ];
 
-export const getNavGroupsForRole = (role) =>
-  NAV_GROUPS.map((group) => ({
-    ...group,
-    items: group.items.filter((item) => item.roles.includes(role)),
-  })).filter((group) => group.items.length > 0);
+export const PERMISSION_KEYS = PERMISSION_CATALOG.map((item) => item.key);
 
-export const canAccessRoute = (path, role) => {
-  for (const group of NAV_GROUPS) {
-    const item = group.items.find((nav) => nav.path === path);
-    if (item) return item.roles.includes(role);
-  }
-  return true;
+export const NAV_GROUPS = [...new Set(PERMISSION_CATALOG.map((item) => item.group))].map((title) => ({
+  title,
+  items: PERMISSION_CATALOG
+    .filter((item) => item.group === title && item.path)
+    .map((item) => ({
+      label: item.label,
+      path: item.path,
+      permission: item.key,
+      roles: item.defaultRoles,
+    })),
+}));
+
+export const getDefaultPermissionsForRole = (role) =>
+  PERMISSION_CATALOG.filter((item) => item.defaultRoles.includes(role)).map((item) => item.key);
+
+export const usesCustomPermissions = (user) => Array.isArray(user?.permissions) && user.permissions.length > 0;
+
+export const getEffectivePermissions = (user) => {
+  if (!user) return [];
+  if (user.role === ROLES.ADMIN) return PERMISSION_KEYS;
+  if (usesCustomPermissions(user)) return user.permissions;
+  return getDefaultPermissionsForRole(user.role);
 };
+
+export const hasPermission = (user, permissionKey) => {
+  if (!user) return false;
+  if (user.role === ROLES.ADMIN) return true;
+  return getEffectivePermissions(user).includes(permissionKey);
+};
+
+export const getNavGroupsForUser = (user) => {
+  const allowed = new Set(getEffectivePermissions(user));
+
+  return NAV_GROUPS.map((group) => ({
+    ...group,
+    items: group.items.filter((item) => allowed.has(item.permission)),
+  })).filter((group) => group.items.length > 0);
+};
+
+export const getNavGroupsForRole = (role) =>
+  getNavGroupsForUser({ role, permissions: [] });
+
+export const getPermissionByPath = (path) =>
+  PERMISSION_CATALOG.find((item) => item.path === path);
+
+export const canAccessRoute = (path, userOrRole) => {
+  const user = typeof userOrRole === 'string'
+    ? { role: userOrRole, permissions: [] }
+    : userOrRole;
+
+  if (!user) return false;
+  if (user.role === ROLES.ADMIN) return true;
+
+  const permission = getPermissionByPath(path);
+  if (!permission) return true;
+  return hasPermission(user, permission.key);
+};
+
+export const getPermissionGroups = () =>
+  [...new Set(PERMISSION_CATALOG.map((item) => item.group))].map((group) => ({
+    group,
+    items: PERMISSION_CATALOG.filter((item) => item.group === group),
+  }));
 
 export const isAdmin = (role) => role === ROLES.ADMIN;
 export const isGiamSat = (role) => role === ROLES.GIAM_SAT;
 export const isKtv = (role) => role === ROLES.KTV;
 
-export const canManageCars = (role) => ['admin', 'giam_sat'].includes(role);
-export const canDeleteCars = (role) => role === ROLES.ADMIN;
+const resolveRole = (roleOrUser) =>
+  typeof roleOrUser === 'object' ? roleOrUser?.role : roleOrUser;
+
+export const canManageCars = (roleOrUser) => {
+  if (typeof roleOrUser === 'object') return hasPermission(roleOrUser, 'cars.manage');
+  return ['admin', 'giam_sat'].includes(roleOrUser);
+};
+
+export const canDeleteCars = (roleOrUser) => {
+  if (typeof roleOrUser === 'object') return hasPermission(roleOrUser, 'cars.delete');
+  return resolveRole(roleOrUser) === ROLES.ADMIN;
+};
+
+export const canHearOperationVoice = (roleOrUser) => {
+  if (typeof roleOrUser === 'object') return hasPermission(roleOrUser, 'cars.voice');
+  return ['admin', 'giam_sat'].includes(roleOrUser);
+};

@@ -32,6 +32,47 @@ const formatDateVN = (yyyymmdd) => {
   return `${s.slice(6, 8)}-${s.slice(4, 6)}-${s.slice(0, 4)}`;
 };
 
+const getExternalContext = (externalData) => {
+  const raw = externalData?.raw || {};
+  const bg = raw.baogiaGanNhat || {};
+  const header = bg.header || raw.header || {};
+  const loaiXe = raw.loaiXe || header.loaiXe || {};
+
+  const plateNumber = cleanText(
+    externalData?.plateNumber
+    || raw.soXeTimKiem
+    || raw.soXe
+    || header.soXe
+    || ''
+  );
+
+  const roCode =
+    header.soChungtu
+    || externalData?.selectedRO
+    || header.khoa
+    || raw.khoaBaoGiaGanNhat
+    || '';
+
+  const externalCarTypeName =
+    loaiXe.tenViet
+    || loaiXe.tenAnh
+    || loaiXe.ma
+    || '';
+
+  const chiTiet = (bg.chiTiet || raw.chiTiet || []).filter((x) => x.huy !== 1);
+
+  return {
+    raw,
+    bg,
+    header,
+    loaiXe,
+    plateNumber,
+    roCode,
+    externalCarTypeName,
+    chiTiet,
+  };
+};
+
 const AddCar = ({ onSuccess }) => {
   const navigate = useNavigate();
 
@@ -79,7 +120,7 @@ const AddCar = ({ onSuccess }) => {
     const cleanKeyword = cleanText(keyword);
     if (!cleanKeyword) return;
 
-    if (searchType === 'plate' && cleanKeyword.length < 8) return;
+    if (searchType === 'plate' && cleanKeyword.length < 7) return;
     if (searchType === 'ro' && cleanKeyword.length < 5) return;
 
     try {
@@ -93,46 +134,17 @@ const AddCar = ({ onSuccess }) => {
 
       setExternalData(data);
 
-      const raw = data.raw || {};
-      const bg = raw.baogiaGanNhat || {};
-      const header = bg.header || raw.header || {};
-
-      const apiPlate =
-        data.plateNumber ||
-        raw.soXeTimKiem ||
-        raw.soXe ||
-        header.soXe ||
-        '';
-
-      const roCode =
-        header.soChungtu ||
-        data.selectedRO ||
-        header.khoa ||
-        raw.khoaBaoGiaGanNhat ||
-        '';
-
-      const externalCarType =
-        raw.loaiXe?.tenViet ||
-        raw.loaiXe?.tenAnh ||
-        raw.loaiXe?.ma ||
-        '';
+      const ctx = getExternalContext(data);
 
       setFormData((prev) => ({
         ...prev,
-
-        plateNumber: apiPlate
-          ? String(apiPlate).replace(/\s/g, '')
-          : prev.plateNumber,
-
-        roCode: roCode || prev.roCode,
-
-
-        deliveryDate: header.ngayDuKienHoanThanh
-          ? dayjs(formatDateVN(header.ngayDuKienHoanThanh), 'DD-MM-YYYY')
+        plateNumber: ctx.plateNumber || prev.plateNumber,
+        roCode: ctx.roCode || prev.roCode,
+        deliveryDate: ctx.header.ngayDuKienHoanThanh
+          ? dayjs(formatDateVN(ctx.header.ngayDuKienHoanThanh), 'DD-MM-YYYY')
           : prev.deliveryDate,
-
-        deliveryHour: header.gioDuKienHoanThanh
-          ? Number(header.gioDuKienHoanThanh.split(':')[0])
+        deliveryHour: ctx.header.gioDuKienHoanThanh
+          ? Number(ctx.header.gioDuKienHoanThanh.split(':')[0])
           : prev.deliveryHour,
       }));
     } catch (err) {
@@ -148,9 +160,7 @@ const AddCar = ({ onSuccess }) => {
   };
 
   const buildRepairItems = () => {
-    const raw = externalData?.raw || {};
-    const bg = raw.baogiaGanNhat || {};
-    const chiTiet = (bg.chiTiet || raw.chiTiet || []).filter((x) => x.huy !== 1);
+    const { chiTiet } = getExternalContext(externalData);
 
     return chiTiet.map((item) => ({
       groupName: item.khoanMucSuaChua || 'Khác',
@@ -173,7 +183,9 @@ const AddCar = ({ onSuccess }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!externalData?.raw?.loaiXe?.tenViet) {
+    const ctx = getExternalContext(externalData);
+
+    if (!ctx.externalCarTypeName) {
       alert('Chưa có loại xe từ dữ liệu API. Vui lòng tra biển số/RO trước.');
       return;
     }
@@ -194,9 +206,7 @@ const AddCar = ({ onSuccess }) => {
       }
     });
 
-    const raw = externalData?.raw || {};
-    const bg = raw.baogiaGanNhat || {};
-    const header = bg.header || raw.header || {};
+    const { header } = ctx;
 
     let deliveryTime = null;
 
@@ -212,16 +222,16 @@ const AddCar = ({ onSuccess }) => {
     }
 
     const carToCreate = {
-      plateNumber: formData.plateNumber,
+      plateNumber: formData.plateNumber || ctx.plateNumber,
       supervisor: formData.supervisor?._id || null,
       location: formData.location?._id || null,
       deliveryTime,
       condition: formData.condition || null,
       workers,
-    
+
       roCode: header.khoa || externalData?.selectedRO || '',
-      roNumber: header.soChungtu || formData.roCode || '',
-      externalCarTypeName: raw.loaiXe?.tenViet || '',
+      roNumber: header.soChungtu || formData.roCode || ctx.roCode || '',
+      externalCarTypeName: ctx.externalCarTypeName,
       advisorName: header.coVanDichVu1 || '',
     
       repairItems: buildRepairItems(),
@@ -256,10 +266,8 @@ const AddCar = ({ onSuccess }) => {
   const ExternalInfoBox = () => {
     if (!externalData) return null;
 
-    const raw = externalData.raw || {};
-    const bg = raw.baogiaGanNhat || {};
-    const header = bg.header || raw.header || {};
-    const chiTiet = (bg.chiTiet || raw.chiTiet || []).filter((x) => x.huy !== 1);
+    const ctx = getExternalContext(externalData);
+    const { raw, header, chiTiet } = ctx;
 
     const grouped = chiTiet.reduce((acc, item) => {
       const key = item.khoanMucSuaChua || 'Khác';
@@ -283,13 +291,13 @@ const AddCar = ({ onSuccess }) => {
         </Typography>
 
         <Box sx={{ display: 'grid', gap: 0.8, fontSize: 14 }}>
-          <div><b>Biển số:</b> {raw.soXe || header.soXe || externalData.plateNumber}</div>
-          <div><b>Số RO:</b> {header.soChungtu || formData.roCode || ''}</div>
-          <div><b>Hãng:</b> {raw.hangSanXuat?.tenViet || ''}</div>
-          <div><b>Loại xe API:</b> {raw.loaiXe?.tenViet || ''}</div>
-          <div><b>Đời xe:</b> {raw.doiXe || ''}</div>
-          <div><b>Model:</b> {raw.model || ''}</div>
-          <div><b>Màu sơn:</b> {raw.mauSon || ''}</div>
+          <div><b>Biển số:</b> {raw.soXe || header.soXe || ctx.plateNumber}</div>
+          <div><b>Số RO:</b> {header.soChungtu || formData.roCode || ctx.roCode || ''}</div>
+          <div><b>Hãng:</b> {raw.hangSanXuat?.tenViet || header.hangSanXuat?.tenViet || ''}</div>
+          <div><b>Loại xe API:</b> {ctx.externalCarTypeName}</div>
+          <div><b>Đời xe:</b> {raw.doiXe || header.doiXe || ''}</div>
+          <div><b>Model:</b> {raw.model || header.model || ''}</div>
+          <div><b>Màu sơn:</b> {raw.mauSon || header.mauSon || ''}</div>
           <div><b>Số KM:</b> {(raw.soKmHienTai || header.soKmHienTai)?.toLocaleString?.('vi-VN') || ''}</div>
           <div><b>Tài xế:</b> {raw.tenTaiXe || header.tenTaiXe || ''}</div>
           <div><b>SĐT:</b> {raw.dienThoaiTaiXe || header.dienThoaiTaiXe || ''}</div>
@@ -426,7 +434,7 @@ const AddCar = ({ onSuccess }) => {
             }}
             required
             fullWidth
-            helperText="VD: 50LD06707"
+            helperText="VD: 50Z6699, 51G18419"
           />
 
           <TextField

@@ -22,7 +22,7 @@ import MenuIcon from '@mui/icons-material/Menu';
 import LogoutIcon from '@mui/icons-material/Logout';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { getNavGroupsForRole, ROLE_LABELS } from '../../utils/permissions';
+import { getNavGroupsForUser, ROLE_LABELS } from '../../utils/permissions';
 
 const AppBarComponent = () => {
   const [openDrawer, setOpenDrawer] = useState(false);
@@ -31,7 +31,7 @@ const AppBarComponent = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
-  const navGroups = getNavGroupsForRole(user?.role);
+  const navGroups = getNavGroupsForUser(user);
 
   const handleNavigate = (path) => {
     navigate(path);

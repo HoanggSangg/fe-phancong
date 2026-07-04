@@ -12,7 +12,6 @@ import AddCarPage from './components/pages/AddCar';
 import ManageCarsPage from './components/pages/ManageCars';
 import AvailableWorkersPage from './components/pages/AvailableWorkersPage';
 import LocationManager from './components/pages/LocationManager';
-import CarWorkerHistoryPage from './components/pages/CarWorkerHistoryPage';
 import WokerAssignment from './components/pages/WokerAssignment';
 import RepairHistoryPage from './components/pages/RepairHistoryPage';
 import WorkerRevenueChart from './components/pages/WorkerRevenueChart';
@@ -21,7 +20,9 @@ import WeeklyPraiseForm from './components/pages/WeeklyPraiseForm';
 import WeeklyWarningForm from './components/pages/WeeklyWarningForm';
 import TeamManagement from './components/pages/TeamManagement';
 import UserManagement from './components/pages/UserManagement';
+import AccountPermissionsPage from './components/pages/AccountPermissionsPage';
 import OperationHistoryPage from './components/pages/OperationHistoryPage';
+import { hasPermission } from './utils/permissions';
 
 const RequireAuth = ({ children }) => {
   const { isAuthenticated, loading } = useAuth();
@@ -42,10 +43,10 @@ const RequireAuth = ({ children }) => {
   return children;
 };
 
-const RoleRoute = ({ roles, children }) => {
+const PermissionRoute = ({ permission, children }) => {
   const { user } = useAuth();
 
-  if (roles && user && !roles.includes(user.role)) {
+  if (!user || !hasPermission(user, permission)) {
     return <Navigate to="/cars" replace />;
   }
 
@@ -58,23 +59,23 @@ const AppLayout = () => (
     <Box sx={{ minHeight: '100vh', backgroundColor: '#f5f5f5' }}>
       <Routes>
         <Route path="/" element={<Navigate to="/cars" />} />
-        <Route path="/cars" element={<CarsTodayPage />} />
-        <Route path="/cars/add" element={<RoleRoute roles={['admin', 'giam_sat']}><AddCarPage /></RoleRoute>} />
-        <Route path="/cars/manage" element={<RoleRoute roles={['admin', 'giam_sat', 'ktv']}><ManageCarsPage /></RoleRoute>} />
-        <Route path="/cars/:id/history" element={<RoleRoute roles={['admin', 'giam_sat']}><CarWorkerHistoryPage /></RoleRoute>} />
-        <Route path="/workers/main" element={<RoleRoute roles={['admin', 'giam_sat']}><MainWorkersPage /></RoleRoute>} />
-        <Route path="/workers/available" element={<RoleRoute roles={['admin', 'giam_sat', 'ktv']}><AvailableWorkersPage /></RoleRoute>} />
-        <Route path="/workers/kpi" element={<RoleRoute roles={['admin', 'giam_sat', 'ktv']}><WorkerKpiPage /></RoleRoute>} />
-        <Route path="/workers/revenue-chart" element={<RoleRoute roles={['admin', 'giam_sat']}><WorkerRevenueChart /></RoleRoute>} />
-        <Route path="/workers/weekly-praise" element={<RoleRoute roles={['admin', 'giam_sat']}><WeeklyPraiseForm /></RoleRoute>} />
-        <Route path="/workers/weekly-warning" element={<RoleRoute roles={['admin', 'giam_sat']}><WeeklyWarningForm /></RoleRoute>} />
-        <Route path="/woker" element={<RoleRoute roles={['admin', 'giam_sat', 'ktv']}><WokerAssignment /></RoleRoute>} />
-        <Route path="/repair-history" element={<RoleRoute roles={['admin', 'giam_sat', 'ktv']}><RepairHistoryPage /></RoleRoute>} />
-        <Route path="/locations" element={<RoleRoute roles={['admin']}><LocationManager /></RoleRoute>} />
-        <Route path="/supervisors" element={<RoleRoute roles={['admin']}><SupervisorsPage /></RoleRoute>} />
-        <Route path="/teams" element={<RoleRoute roles={['admin', 'giam_sat']}><TeamManagement /></RoleRoute>} />
-        <Route path="/users" element={<RoleRoute roles={['admin']}><UserManagement /></RoleRoute>} />
-        <Route path="/audit-logs" element={<RoleRoute roles={['admin']}><OperationHistoryPage /></RoleRoute>} />
+        <Route path="/cars" element={<PermissionRoute permission="cars.today"><CarsTodayPage /></PermissionRoute>} />
+        <Route path="/cars/add" element={<PermissionRoute permission="cars.add"><AddCarPage /></PermissionRoute>} />
+        <Route path="/cars/manage" element={<PermissionRoute permission="cars.manage"><ManageCarsPage /></PermissionRoute>} />
+        <Route path="/workers/main" element={<PermissionRoute permission="workers.main"><MainWorkersPage /></PermissionRoute>} />
+        <Route path="/workers/available" element={<PermissionRoute permission="workers.available"><AvailableWorkersPage /></PermissionRoute>} />
+        <Route path="/workers/kpi" element={<PermissionRoute permission="workers.kpi"><WorkerKpiPage /></PermissionRoute>} />
+        <Route path="/workers/revenue-chart" element={<PermissionRoute permission="reports.revenue"><WorkerRevenueChart /></PermissionRoute>} />
+        <Route path="/workers/weekly-praise" element={<PermissionRoute permission="reports.praise"><WeeklyPraiseForm /></PermissionRoute>} />
+        <Route path="/workers/weekly-warning" element={<PermissionRoute permission="reports.warning"><WeeklyWarningForm /></PermissionRoute>} />
+        <Route path="/woker" element={<PermissionRoute permission="workers.woker"><WokerAssignment /></PermissionRoute>} />
+        <Route path="/repair-history" element={<PermissionRoute permission="workers.repair-history"><RepairHistoryPage /></PermissionRoute>} />
+        <Route path="/locations" element={<PermissionRoute permission="system.locations"><LocationManager /></PermissionRoute>} />
+        <Route path="/supervisors" element={<PermissionRoute permission="system.supervisors"><SupervisorsPage /></PermissionRoute>} />
+        <Route path="/teams" element={<PermissionRoute permission="teams.manage"><TeamManagement /></PermissionRoute>} />
+        <Route path="/users" element={<PermissionRoute permission="system.users"><UserManagement /></PermissionRoute>} />
+        <Route path="/account-permissions" element={<PermissionRoute permission="system.permissions"><AccountPermissionsPage /></PermissionRoute>} />
+        <Route path="/audit-logs" element={<PermissionRoute permission="system.audit-logs"><OperationHistoryPage /></PermissionRoute>} />
         <Route path="*" element={<Navigate to="/cars" />} />
       </Routes>
     </Box>
