@@ -22,7 +22,7 @@ import TeamManagement from './components/pages/TeamManagement';
 import UserManagement from './components/pages/UserManagement';
 import AccountPermissionsPage from './components/pages/AccountPermissionsPage';
 import OperationHistoryPage from './components/pages/OperationHistoryPage';
-import { hasPermission } from './utils/permissions';
+import { hasPermission, getFirstAllowedPath } from './utils/permissions';
 
 const RequireAuth = ({ children }) => {
   const { isAuthenticated, loading } = useAuth();
@@ -47,7 +47,7 @@ const PermissionRoute = ({ permission, children }) => {
   const { user } = useAuth();
 
   if (!user || !hasPermission(user, permission)) {
-    return <Navigate to="/cars" replace />;
+    return <Navigate to={getFirstAllowedPath(user)} replace />;
   }
 
   return children;
@@ -56,7 +56,7 @@ const PermissionRoute = ({ permission, children }) => {
 const AppLayout = () => (
   <>
     <AppBarComponent />
-    <Box sx={{ minHeight: '100vh', backgroundColor: '#f5f5f5' }}>
+    <Box component="main">
       <Routes>
         <Route path="/" element={<Navigate to="/cars" />} />
         <Route path="/cars" element={<PermissionRoute permission="cars.today"><CarsTodayPage /></PermissionRoute>} />

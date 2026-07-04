@@ -27,6 +27,8 @@ import {
 import { Edit, Delete, Save, Close } from '@mui/icons-material';
 import LocationOnIcon from '@mui/icons-material/LocationOn';
 import LockIcon from '@mui/icons-material/Lock';
+import PageLayout from '../common/PageLayout';
+import PageHeader from '../common/PageHeader';
 
 const LocationManager = () => {
   const [locations, setLocations] = useState([]);
@@ -110,14 +112,11 @@ const LocationManager = () => {
   };
 
   return (
-    <Box sx={{ maxWidth: 500, mx: 'auto', p: 6 }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2, justifyContent: 'center' }}>
-        <LocationOnIcon color="primary" sx={{ fontSize: 36 }} />
-        <Typography variant="h5" fontWeight="bold" color="primary">
-          Quản lý địa điểm
-        </Typography>
-      </Box>
-      <Divider sx={{ mb: 3 }} />
+    <PageLayout maxWidth="narrow">
+      <PageHeader
+        icon={<LocationOnIcon />}
+        title="Quản lý địa điểm"
+      />
 
       <Paper elevation={3} sx={{ p: 2, mb: 3, borderRadius: 3, boxShadow: 2 }}>
         <Box
@@ -250,7 +249,7 @@ const LocationManager = () => {
           </Button>
         </DialogActions>
       </Dialog>
-    </Box>
+    </PageLayout>
   );
 };
 

@@ -29,8 +29,11 @@ import usePeriodFilter from '../../hooks/usePeriodFilter';
 import PeriodFilterToolbar from '../common/PeriodFilterToolbar';
 import OperationVoiceControls from '../common/OperationVoiceControls';
 import useOperationVoiceMonitor from '../../hooks/useOperationVoiceMonitor';
+import PageLayout from '../common/PageLayout';
+import PageHeader from '../common/PageHeader';
+import FilterPanel from '../common/FilterPanel';
 
-const POLL_INTERVAL_MS = 8000;
+const POLL_INTERVAL_MS = 15_000;
 
 const MODULE_LABELS = {
   auth: 'Xác thực',
@@ -252,23 +255,24 @@ const OperationHistoryPage = () => {
   );
 
   return (
-    <Box sx={{ p: { xs: 2, md: 3 }, maxWidth: 1400, mx: 'auto' }}>
-      <Stack direction="row" spacing={1} alignItems="center" mb={2} flexWrap="wrap" useFlexGap>
-        <HistoryIcon color="primary" />
-        <Typography variant="h5" fontWeight="bold">
-          Lịch sử thao tác
-        </Typography>
-        <Chip size="small" label="Chỉ Admin" color="error" variant="outlined" />
-        <Chip size="small" label="Tự động cập nhật" color="success" variant="outlined" />
-        <Box sx={{ flex: 1, minWidth: 8 }} />
-        <OperationVoiceControls
-          voiceEnabled={voiceEnabled}
-          onToggle={toggleVoice}
-          onTest={testVoice}
-        />
-      </Stack>
+    <PageLayout maxWidth="wide">
+      <PageHeader
+        icon={<HistoryIcon />}
+        title="Lịch sử thao tác"
+        actions={
+          <>
+            <Chip size="small" label="Chỉ Admin" color="error" variant="outlined" />
+            <Chip size="small" label="Tự động cập nhật" color="success" variant="outlined" />
+            <OperationVoiceControls
+              voiceEnabled={voiceEnabled}
+              onToggle={toggleVoice}
+              onTest={testVoice}
+            />
+          </>
+        }
+      />
 
-      <Paper sx={{ p: 2, mb: 2, borderRadius: 2 }}>
+      <FilterPanel title="Bộ lọc">
         <PeriodFilterToolbar
           period={period}
           onPeriodChange={setPeriod}
@@ -330,7 +334,7 @@ const OperationHistoryPage = () => {
             </Button>
           </Stack>
         </PeriodFilterToolbar>
-      </Paper>
+      </FilterPanel>
 
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
@@ -387,7 +391,7 @@ const OperationHistoryPage = () => {
           />
         </Paper>
       )}
-    </Box>
+    </PageLayout>
   );
 };
 

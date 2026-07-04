@@ -1,5 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
   Alert,
   Box,
   Button,
@@ -18,12 +21,16 @@ import {
 } from '@mui/material';
 import {
   AdminPanelSettings,
+  ArrowBack,
+  ExpandMore,
   RestartAlt,
   Save,
   Search,
   Security,
 } from '@mui/icons-material';
 import { getUsers, updateUser } from '../apis';
+import { useAuth } from '../../context/AuthContext';
+import useIsMobile from '../../hooks/useIsMobile';
 import {
   getDefaultPermissionsForRole,
   getEffectivePermissions,
@@ -32,6 +39,9 @@ import {
   ROLE_LABELS,
   usesCustomPermissions,
 } from '../../utils/permissions';
+import PageLayout from '../common/PageLayout';
+import PageHeader from '../common/PageHeader';
+import FilterPanel from '../common/FilterPanel';
 
 const roleColor = {
   admin: 'error',
@@ -40,6 +50,8 @@ const roleColor = {
 };
 
 const AccountPermissionsPage = () => {
+  const { user: currentUser, refreshUser } = useAuth();
+  const isMobile = useIsMobile();
   const [users, setUsers] = useState([]);
   const [selectedUserId, setSelectedUserId] = useState('');
   const [draftPermissions, setDraftPermissions] = useState([]);
@@ -47,8 +59,15 @@ const AccountPermissionsPage = () => {
   const [search, setSearch] = useState('');
   const [message, setMessage] = useState({ type: '', text: '' });
   const [saving, setSaving] = useState(false);
+  const [expandedGroups, setExpandedGroups] = useState({});
 
   const permissionGroups = useMemo(() => getPermissionGroups(), []);
+
+  useEffect(() => {
+    setExpandedGroups(
+      permissionGroups.reduce((acc, group) => ({ ...acc, [group.group]: false }), {})
+    );
+  }, [permissionGroups]);
 
   const loadUsers = async () => {
     const res = await getUsers();
@@ -117,6 +136,9 @@ const AccountPermissionsPage = () => {
       await updateUser(selectedUser._id, {
         permissions: useCustom ? draftPermissions : [],
       });
+      if (currentUser?._id === selectedUser._id) {
+        await refreshUser();
+      }
       setMessage({
         type: 'success',
         text: `Đã lưu phân quyền cho ${selectedUser.fullName}`,
@@ -132,30 +154,42 @@ const AccountPermissionsPage = () => {
     }
   };
 
+  const handleSelectUser = (userId) => {
+    setSelectedUserId((prev) => (prev === userId ? '' : userId));
+  };
+
+  const handleAccordionChange = (groupName) => (_, expanded) => {
+    setExpandedGroups((prev) => ({ ...prev, [groupName]: expanded }));
+  };
+
+  const collapsePermissionForm = () => {
+    setSelectedUserId('');
+  };
+
+  const showUserList = !isMobile || !selectedUserId;
+  const showPermissionForm = !isMobile || !!selectedUserId;
+
   const enabledCount = draftPermissions.length;
   const totalCount = PERMISSION_CATALOG.length;
 
+  const getGroupEnabledCount = (group) =>
+    group.items.filter((item) => draftPermissions.includes(item.key)).length;
+
   return (
-    <Box sx={{ p: { xs: 2, sm: 3 }, maxWidth: 1400, mx: 'auto' }}>
-      <Paper sx={{ p: { xs: 2, sm: 3 }, mb: 3, borderRadius: 3 }}>
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} justifyContent="space-between">
-          <Box>
-            <Stack direction="row" spacing={1} alignItems="center">
-              <Security color="primary" />
-              <Typography variant="h5" fontWeight="bold">Phân chức năng tài khoản</Typography>
-            </Stack>
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-              Gán quyền truy cập từng chức năng cho từng tài khoản. Mặc định theo vai trò, có thể tùy chỉnh riêng.
-            </Typography>
-          </Box>
+    <PageLayout maxWidth="wide">
+      <PageHeader
+        icon={<Security />}
+        title="Phân chức năng tài khoản"
+        subtitle="Gán quyền truy cập từng chức năng cho từng tài khoản. Mặc định theo vai trò, có thể tùy chỉnh riêng."
+        actions={
           <Chip
             icon={<AdminPanelSettings />}
             label="Chỉ Admin quản lý trang này"
             color="error"
             variant="outlined"
           />
-        </Stack>
-      </Paper>
+        }
+      />
 
       {message.text && (
         <Alert severity={message.type || 'info'} sx={{ mb: 2 }} onClose={() => setMessage({ type: '', text: '' })}>
@@ -163,27 +197,30 @@ const AccountPermissionsPage = () => {
         </Alert>
       )}
 
+      <FilterPanel title="Tìm kiếm">
+        <TextField
+          fullWidth
+          size="small"
+          placeholder="Tìm theo tên hoặc username..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <Search fontSize="small" />
+              </InputAdornment>
+            ),
+          }}
+        />
+      </FilterPanel>
+
       <Grid container spacing={2}>
-        <Grid item xs={12} md={4}>
+        {showUserList && (
+        <Grid size={{ xs: 12, md: 4 }}>
           <Paper sx={{ p: 2, borderRadius: 3, height: '100%' }}>
             <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 1.5 }}>
               Chọn tài khoản
             </Typography>
-            <TextField
-              fullWidth
-              size="small"
-              placeholder="Tìm theo tên hoặc username..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              sx={{ mb: 2 }}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <Search fontSize="small" />
-                  </InputAdornment>
-                ),
-              }}
-            />
 
             <Stack spacing={1}>
               {filteredUsers.map((user) => {
@@ -198,7 +235,7 @@ const AccountPermissionsPage = () => {
                       borderColor: active ? 'primary.main' : 'divider',
                       bgcolor: active ? 'action.selected' : 'background.paper',
                     }}
-                    onClick={() => setSelectedUserId(user._id)}
+                    onClick={() => handleSelectUser(user._id)}
                   >
                     <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
                       <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={1}>
@@ -223,8 +260,10 @@ const AccountPermissionsPage = () => {
             </Stack>
           </Paper>
         </Grid>
+        )}
 
-        <Grid item xs={12} md={8}>
+        {showPermissionForm && (
+        <Grid size={{ xs: 12, md: 8 }}>
           <Paper sx={{ p: 2, borderRadius: 3 }}>
             {!selectedUser ? (
               <Box sx={{ py: 8, textAlign: 'center' }}>
@@ -235,6 +274,17 @@ const AccountPermissionsPage = () => {
               </Box>
             ) : (
               <>
+                {isMobile && (
+                  <Button
+                    size="small"
+                    startIcon={<ArrowBack />}
+                    onClick={collapsePermissionForm}
+                    sx={{ mb: 1.5 }}
+                  >
+                    Quay lại danh sách
+                  </Button>
+                )}
+
                 <Stack
                   direction={{ xs: 'column', sm: 'row' }}
                   spacing={1}
@@ -251,6 +301,9 @@ const AccountPermissionsPage = () => {
                     </Typography>
                   </Box>
                   <Stack direction="row" spacing={1} flexWrap="wrap">
+                    <Button size="small" variant="text" onClick={collapsePermissionForm}>
+                      Thu gọn
+                    </Button>
                     <Button size="small" variant="outlined" onClick={resetToRoleDefault} startIcon={<RestartAlt />}>
                       Theo vai trò
                     </Button>
@@ -291,44 +344,73 @@ const AccountPermissionsPage = () => {
 
                 <Divider sx={{ my: 2 }} />
 
-                {permissionGroups.map((group) => (
-                  <Box key={group.group} sx={{ mb: 2.5 }}>
-                    <Typography variant="subtitle1" fontWeight="bold" color="primary" sx={{ mb: 1 }}>
-                      {group.group}
-                    </Typography>
-                    <Grid container spacing={1}>
-                      {group.items.map((item) => (
-                        <Grid item xs={12} sm={6} key={item.key}>
-                          <FormControlLabel
-                            control={
-                              <Checkbox
-                                checked={draftPermissions.includes(item.key)}
-                                onChange={() => togglePermission(item.key)}
-                                disabled={!useCustom}
-                              />
-                            }
-                            label={(
-                              <Box>
-                                <Typography variant="body2">{item.label}</Typography>
-                                {item.path && (
-                                  <Typography variant="caption" color="text.secondary">
-                                    {item.path}
-                                  </Typography>
-                                )}
-                              </Box>
-                            )}
+                {permissionGroups.map((group) => {
+                  const groupEnabled = getGroupEnabledCount(group);
+                  return (
+                    <Accordion
+                      key={group.group}
+                      expanded={!!expandedGroups[group.group]}
+                      onChange={handleAccordionChange(group.group)}
+                      disableGutters
+                      elevation={0}
+                      sx={{
+                        mb: 1,
+                        border: '1px solid',
+                        borderColor: 'divider',
+                        borderRadius: '8px !important',
+                        '&:before': { display: 'none' },
+                      }}
+                    >
+                      <AccordionSummary expandIcon={<ExpandMore />}>
+                        <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+                          <Typography variant="subtitle1" fontWeight="bold" color="primary">
+                            {group.group}
+                          </Typography>
+                          <Chip
+                            size="small"
+                            label={`${groupEnabled}/${group.items.length}`}
+                            color={groupEnabled > 0 ? 'primary' : 'default'}
+                            variant="outlined"
                           />
+                        </Stack>
+                      </AccordionSummary>
+                      <AccordionDetails sx={{ pt: 0 }}>
+                        <Grid container spacing={1}>
+                          {group.items.map((item) => (
+                            <Grid size={{ xs: 12, sm: 6 }} key={item.key}>
+                              <FormControlLabel
+                                control={
+                                  <Checkbox
+                                    checked={draftPermissions.includes(item.key)}
+                                    onChange={() => togglePermission(item.key)}
+                                    disabled={!useCustom}
+                                  />
+                                }
+                                label={(
+                                  <Box>
+                                    <Typography variant="body2">{item.label}</Typography>
+                                    {item.path && (
+                                      <Typography variant="caption" color="text.secondary">
+                                        {item.path}
+                                      </Typography>
+                                    )}
+                                  </Box>
+                                )}
+                              />
+                            </Grid>
+                          ))}
                         </Grid>
-                      ))}
-                    </Grid>
-                  </Box>
-                ))}
+                      </AccordionDetails>
+                    </Accordion>
+                  );
+                })}
               </>
             )}
           </Paper>
         </Grid>
+        )}
       </Grid>
-    </Box>
+    </PageLayout>
   );
 };
 

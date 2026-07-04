@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Box,
   Button,
@@ -10,8 +10,9 @@ import {
   Divider,
   CircularProgress,
   Alert,
-} from '@mui/material';
-import BarChartIcon from '@mui/icons-material/BarChart';
+  useMediaQuery,
+  useTheme,
+} from '@mui/material';import BarChartIcon from '@mui/icons-material/BarChart';
 import FullscreenIcon from '@mui/icons-material/Fullscreen';
 import {
   BarChart,
@@ -33,6 +34,9 @@ import {
 import usePeriodFilter from '../../hooks/usePeriodFilter';
 import PeriodFilterToolbar from '../common/PeriodFilterToolbar';
 import FullscreenDialog from '../common/FullscreenDialog';
+import PageLayout from '../common/PageLayout';
+import PageHeader from '../common/PageHeader';
+import FilterPanel from '../common/FilterPanel';
 
 const formatMillion = (value) => {
   const number = Number(value || 0);
@@ -121,12 +125,31 @@ const getChartLayout = (count, maxNameLength, fullscreen = false) => {
   };
 };
 
-const RevenueBarChart = ({ chartData, fullscreen = false, height = '100%' }) => {
+const RevenueBarChart = ({ chartData, fullscreen = false, height = 400 }) => {
+  const containerRef = useRef(null);
+  const [size, setSize] = useState({ width: 0, height: 0 });
   const maxNameLength = getMaxNameLength(chartData);
   const layout = getChartLayout(chartData.length, maxNameLength, fullscreen);
 
-  const renderXAxisTick = ({ x, y, payload }) => (
-    <text
+  useEffect(() => {
+    const node = containerRef.current;
+    if (!node) return undefined;
+
+    const updateSize = () => {
+      const { width, height: measuredHeight } = node.getBoundingClientRect();
+      setSize({
+        width: Math.max(0, Math.floor(width)),
+        height: Math.max(0, Math.floor(measuredHeight)),
+      });
+    };
+
+    updateSize();
+    const observer = new ResizeObserver(updateSize);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [fullscreen, height, chartData.length]);
+
+  const renderXAxisTick = ({ x, y, payload }) => (    <text
       x={x}
       y={y}
       dy={layout.tickDy}
@@ -141,58 +164,61 @@ const RevenueBarChart = ({ chartData, fullscreen = false, height = '100%' }) => 
 
   return (
     <Box
+      ref={containerRef}
       sx={{
         width: '100%',
+        minWidth: 0,
         height: fullscreen ? '100%' : height,
-        minHeight: fullscreen ? 0 : undefined,
+        minHeight: fullscreen ? 280 : height,
         flex: fullscreen ? 1 : undefined,
-        display: 'flex',
-        flexDirection: 'column',
       }}
     >
-      <ResponsiveContainer width="100%" height="100%">
-        <BarChart
-          data={chartData}
-          margin={layout.margin}
-          barCategoryGap={layout.barCategoryGap}
-        >
-          <CartesianGrid strokeDasharray="3 3" vertical={false} />
-          <XAxis
-            dataKey="name"
-            interval={0}
-            height={layout.xHeight}
-            tick={renderXAxisTick}
-          />
-          <YAxis tickFormatter={formatMillion} width={52} tick={{ fontSize: 12 }} />
-          <Tooltip
-            formatter={(value) => formatMoney(value)}
-            labelFormatter={(label, payload) => payload?.[0]?.payload?.name || label}
-          />
-          <Bar
-            dataKey="totalRevenue"
-            name="Doanh thu"
-            fill="#b71c1c"
-            radius={[4, 4, 0, 0]}
-            maxBarSize={layout.maxBarSize}
+      {size.width > 0 && size.height > 0 ? (
+        <ResponsiveContainer width={size.width} height={size.height}>
+          <BarChart
+            data={chartData}
+            margin={layout.margin}
+            barCategoryGap={layout.barCategoryGap}
           >
-            {layout.showLabels && (
-              <LabelList
-                dataKey="totalRevenue"
-                position="top"
-                style={{ fontSize: layout.tickFontSize + 1, fontWeight: 600 }}
-                formatter={(value) => (Number(value || 0) > 0 ? formatMillion(value) : '')}
-              />
-            )}
-          </Bar>
-        </BarChart>
-      </ResponsiveContainer>
+            <CartesianGrid strokeDasharray="3 3" vertical={false} />
+            <XAxis
+              dataKey="name"
+              interval={0}
+              height={layout.xHeight}
+              tick={renderXAxisTick}
+            />
+            <YAxis tickFormatter={formatMillion} width={52} tick={{ fontSize: 12 }} />
+            <Tooltip
+              formatter={(value) => formatMoney(value)}
+              labelFormatter={(label, payload) => payload?.[0]?.payload?.name || label}
+            />
+            <Bar
+              dataKey="totalRevenue"
+              name="Doanh thu"
+              fill="#1976d2"
+              radius={[4, 4, 0, 0]}
+              maxBarSize={layout.maxBarSize}
+            >
+              {layout.showLabels && (
+                <LabelList
+                  dataKey="totalRevenue"
+                  position="top"
+                  style={{ fontSize: layout.tickFontSize + 1, fontWeight: 600 }}
+                  formatter={(value) => (Number(value || 0) > 0 ? formatMillion(value) : '')}
+                />
+              )}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      ) : null}
     </Box>
   );
 };
-
 const WorkerRevenueChart = () => {
-  const { period, setPeriod, fromDate, setFromDate, toDate, setToDate } = usePeriodFilter('today');
-  const [data, setData] = useState([]);
+  const theme = useTheme();
+  const isMdUp = useMediaQuery(theme.breakpoints.up('md'));
+  const isSmUp = useMediaQuery(theme.breakpoints.up('sm'));
+  const { period, setPeriod, fromDate, setFromDate, toDate, setToDate } = usePeriodFilter('today');  const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [weeklySummary, setWeeklySummary] = useState(null);
   const [weeklyLoading, setWeeklyLoading] = useState(false);
@@ -253,34 +279,21 @@ const WorkerRevenueChart = () => {
   );
 
   const canShowChart = !loading && chartData.length > 0;
-  const chartBoxHeight = chartData.length > 25 ? { xs: 420, sm: 480, md: 540 } : { xs: 380, sm: 440, md: 500 };
-
+  const chartHeight = useMemo(() => {
+    const tall = chartData.length > 25;
+    if (isMdUp) return tall ? 540 : 500;
+    if (isSmUp) return tall ? 480 : 440;
+    return tall ? 420 : 380;
+  }, [chartData.length, isMdUp, isSmUp]);
   return (
-    <Box sx={{ width: '100%', py: { xs: 2, sm: 3 } }}>
-      <Box
-        sx={{
-          background: '#f5f5f5',
-          borderRadius: 2,
-          px: { xs: 2, sm: 3 },
-          py: { xs: 2, sm: 2.5 },
-          mb: 3,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 2,
-        }}
-      >
-        <BarChartIcon color="primary" sx={{ fontSize: 40 }} />
-        <Box>
-          <Typography variant="h5" fontWeight="bold" color="primary">
-            Biểu đồ doanh thu thợ
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Doanh thu theo hạng mục sửa chữa đã phân công cho từng thợ
-          </Typography>
-        </Box>
-      </Box>
+    <PageLayout>
+      <PageHeader
+        icon={<BarChartIcon />}
+        title="Biểu đồ doanh thu thợ"
+        subtitle="Doanh thu theo hạng mục sửa chữa đã phân công cho từng thợ"
+      />
 
-      <Paper sx={{ p: { xs: 2, sm: 3 }, mb: 3, borderRadius: 3, width: '100%' }}>
+      <FilterPanel title="Khoảng thời gian">
         <PeriodFilterToolbar
           period={period}
           onPeriodChange={setPeriod}
@@ -331,11 +344,11 @@ const WorkerRevenueChart = () => {
             />
           )}
         </Stack>
-      </Paper>
+      </FilterPanel>
 
       {weeklySummary && (
         <Grid container spacing={2} sx={{ mb: 3, width: '100%' }}>
-          <Grid item xs={12} md={6}>
+          <Grid size={{ xs: 12, md: 6 }}>
             <Paper
               elevation={0}
               sx={{
@@ -357,7 +370,7 @@ const WorkerRevenueChart = () => {
               </Typography>
             </Paper>
           </Grid>
-          <Grid item xs={12} md={6}>
+          <Grid size={{ xs: 12, md: 6 }}>
             <Paper
               elevation={0}
               sx={{
@@ -415,7 +428,7 @@ const WorkerRevenueChart = () => {
           </Button>
         </Box>
 
-        <Box sx={{ width: '100%', height: chartBoxHeight, p: { xs: 1, sm: 2 } }}>
+        <Box sx={{ width: '100%', minWidth: 0, height: chartHeight, p: { xs: 1, sm: 2 } }}>
           {loading ? (
             <Box sx={{ height: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
               <CircularProgress />
@@ -425,10 +438,9 @@ const WorkerRevenueChart = () => {
               Chưa có dữ liệu doanh thu cho ngày đã chọn.
             </Alert>
           ) : (
-            <RevenueBarChart chartData={chartData} />
+            <RevenueBarChart chartData={chartData} height={chartHeight} />
           )}
-        </Box>
-      </Paper>
+        </Box>      </Paper>
 
       <FullscreenDialog
         open={chartFullscreen}
@@ -437,16 +449,15 @@ const WorkerRevenueChart = () => {
         bgcolor="#fff"
         fillContent
       >
-        <Box sx={{ flex: 1, minHeight: 0, width: '100%', p: { xs: 1, sm: 2 } }}>
+        <Box sx={{ flex: 1, minHeight: 0, minWidth: 0, width: '100%', p: { xs: 1, sm: 2 } }}>
           <RevenueBarChart chartData={chartData} fullscreen />
-        </Box>
-      </FullscreenDialog>
+        </Box>      </FullscreenDialog>
 
       <Divider sx={{ my: 2 }} />
       <Typography variant="caption" color="text.secondary" display="block" textAlign="right">
         Doanh thu = thành tiền hạng mục × % thực hiện × 75%
       </Typography>
-    </Box>
+    </PageLayout>
   );
 };
 

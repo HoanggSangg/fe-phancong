@@ -14,17 +14,18 @@ const FullscreenDialog = ({
     <Box sx={{ height: '100dvh', display: 'flex', flexDirection: 'column', bgcolor }}>
       <Box
         sx={{
-          px: 2,
-          py: 1.5,
+          px: 1.5,
+          py: 1,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          borderBottom: '1px solid #eee',
-          bgcolor: '#fff',
+          borderBottom: 1,
+          borderColor: 'divider',
+          bgcolor: 'background.paper',
           flexShrink: 0,
         }}
       >
-        <Typography fontWeight="bold">{title}</Typography>
+        <Typography variant="subtitle1" fontWeight={700}>{title}</Typography>
         <IconButton onClick={onClose} aria-label="Đóng">
           <CloseIcon />
         </IconButton>
@@ -34,7 +35,7 @@ const FullscreenDialog = ({
           flex: 1,
           minHeight: 0,
           overflow: fillContent ? 'hidden' : 'auto',
-          p: fillContent ? 0 : { xs: 2, sm: 3 },
+          p: fillContent ? 0 : { xs: 1.5, sm: 2 },
           display: 'flex',
           flexDirection: 'column',
         }}

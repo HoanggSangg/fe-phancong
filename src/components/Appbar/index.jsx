@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import {
   AppBar,
   Toolbar,
@@ -16,13 +16,14 @@ import {
   useMediaQuery,
   GlobalStyles,
   Button,
-  Chip,
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import LogoutIcon from '@mui/icons-material/Logout';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { getNavGroupsForUser, ROLE_LABELS } from '../../utils/permissions';
+import { LAYOUT } from '../../constants/layout';
+import useOverdueCarsMarquee, { formatOverdueMarqueeLabel } from '../../hooks/queries/useOverdueCarsMarquee';
 
 const AppBarComponent = () => {
   const [openDrawer, setOpenDrawer] = useState(false);
@@ -30,6 +31,10 @@ const AppBarComponent = () => {
   const { user, logout } = useAuth();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+
+  const { data: overdueCars = [] } = useOverdueCarsMarquee(!isMobile && !!user);
+  const marqueeText = formatOverdueMarqueeLabel(overdueCars);
+  const marqueeDuration = Math.max(12, Math.min(40, overdueCars.length * 4 + 8));
 
   const navGroups = getNavGroupsForUser(user);
 
@@ -55,20 +60,22 @@ const AppBarComponent = () => {
         }}
       />
 
-      <AppBar
-        position="fixed"
-        sx={{
-          backgroundColor: '#b71c1c',
-          zIndex: (theme) => theme.zIndex.drawer + 1,
-        }}
-      >
-        <Toolbar sx={{ display: 'flex', justifyContent: 'space-between', position: 'relative', minHeight: '64px' }}>
+      <AppBar position="fixed" elevation={1} sx={{ backgroundColor: '#b71c1c' }}>
+        <Toolbar
+          sx={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            position: 'relative',
+            minHeight: 48,
+            px: { xs: 1, sm: 2 },
+          }}
+        >
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <Box
               component="img"
               src="https://res.cloudinary.com/drbjrsm0s/image/upload/v1745463450/logo_ulbaie.png"
               alt="Bá Thành Logo"
-              sx={{ height: 40, width: 80, cursor: 'pointer' }}
+              sx={{ height: 34, width: 68, cursor: 'pointer' }}
               onClick={() => navigate('/cars')}
             />
           </Box>
@@ -80,27 +87,31 @@ const AppBarComponent = () => {
                 top: '50%',
                 left: '50%',
                 transform: 'translate(-50%, -50%)',
-                width: '80%',
+                width: '72%',
                 overflow: 'hidden',
                 pointerEvents: 'none',
               }}
             >
               <Typography
                 variant="body2"
+                component="div"
                 sx={{
                   whiteSpace: 'nowrap',
                   display: 'inline-block',
-                  animation: 'marquee 10s linear infinite',
+                  animation: `marquee ${marqueeDuration}s linear infinite`,
                   backgroundColor: '#ffeb3b',
                   color: '#000',
-                  px: 2,
-                  py: 0.5,
+                  px: 1.5,
+                  py: 0.25,
                   borderRadius: 1,
-                  fontWeight: 500,
-                  fontSize: '1.5rem',
+                  fontWeight: 600,
+                  fontSize: '0.9rem',
                 }}
               >
-                🚨 <strong>THÔNG BÁO:</strong> PHẦN MỀM ĐÃ TRỞ LẠI 🚗🛠️
+                <Box component="span" sx={{ color: '#b71c1c', fontWeight: 800, mr: 1 }}>
+                  ⏰ TRỄ HẸN:
+                </Box>
+                {marqueeText}
               </Typography>
             </Box>
           )}
@@ -111,37 +122,7 @@ const AppBarComponent = () => {
         </Toolbar>
       </AppBar>
 
-      <Toolbar sx={{ minHeight: isMobile ? '85px' : '64px' }} />
-
-      {isMobile && (
-        <Box
-          sx={{
-            position: 'fixed',
-            top: '64px',
-            left: 0,
-            right: 0,
-            backgroundColor: '#ffeb3b',
-            overflow: 'hidden',
-            py: 0.5,
-            zIndex: theme.zIndex.drawer + 1,
-          }}
-        >
-          <Typography
-            variant="body2"
-            sx={{
-              whiteSpace: 'nowrap',
-              display: 'inline-block',
-              animation: 'marquee 10s linear infinite',
-              color: '#000',
-              px: 2,
-              fontWeight: 500,
-              fontSize: '1rem',
-            }}
-          >
-            🚨 <strong>THÔNG BÁO:</strong> Phần mềm đã quay trở lại 🚗🛠️
-          </Typography>
-        </Box>
-      )}
+      <Toolbar sx={{ minHeight: LAYOUT.appBarHeight }} />
 
       <Drawer
         anchor="right"
@@ -150,8 +131,8 @@ const AppBarComponent = () => {
         PaperProps={{
           sx: {
             width: { xs: '85vw', sm: 280 },
-            height: 'calc(100% - 64px)',
-            top: '64px',
+            height: `calc(100% - ${LAYOUT.appBarHeight}px)`,
+            top: LAYOUT.appBarHeight,
           },
         }}
       >
@@ -159,7 +140,9 @@ const AppBarComponent = () => {
           {user && (
             <Box sx={{ p: 2, bgcolor: '#fafafa' }}>
               <Typography fontWeight="bold">{user.fullName}</Typography>
-              <Typography variant="body2" color="text.secondary">{ROLE_LABELS[user.role]}</Typography>
+              <Typography variant="body2" color="text.secondary">
+                {ROLE_LABELS[user.role]}
+              </Typography>
             </Box>
           )}
 
@@ -185,10 +168,7 @@ const AppBarComponent = () => {
                 {group.items.map((item) => (
                   <ListItem key={item.path} disablePadding>
                     <ListItemButton onClick={() => handleNavigate(item.path)} sx={{ py: 0.8, pl: 3 }}>
-                      <ListItemText
-                        primary={item.label}
-                        primaryTypographyProps={{ fontSize: '0.92rem' }}
-                      />
+                      <ListItemText primary={item.label} primaryTypographyProps={{ fontSize: '0.92rem' }} />
                     </ListItemButton>
                   </ListItem>
                 ))}

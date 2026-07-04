@@ -13,7 +13,7 @@ import {
   unlockOperationAudio,
 } from '../utils/operationAlertSound';
 
-const POLL_INTERVAL_MS = 8000;
+const POLL_INTERVAL_MS = 15_000;
 
 const useOperationVoiceMonitor = ({ poll = true } = {}) => {
   const [voiceEnabled, setVoiceEnabled] = useState(() => initOperationVoiceSetting());

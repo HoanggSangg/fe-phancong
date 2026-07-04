@@ -11,6 +11,7 @@ import { PERIOD_OPTIONS, getDateRangeForPeriod, formatMoney, getTodayDate } from
 import AddWorkerForm from './AddWorkerForm';
 import { parseWorkersFromExcelFile } from '../../utils/workerExcel';
 import { useAuth } from '../../context/AuthContext';
+import { hasPermission } from '../../utils/permissions';
 import {
   Typography,
   IconButton,
@@ -34,23 +35,230 @@ import {
   FormControlLabel,
   ToggleButton,
   ToggleButtonGroup,
+  Stack,
 } from '@mui/material';
 import { Edit, Delete, TrendingUp, Person, Phone, UploadFile, MonetizationOn, MoneyOff } from '@mui/icons-material';
 import { filterWorkersByKeyword } from '../../utils/workerSearch';
+import PageLayout from '../common/PageLayout';
+import PageHeader from '../common/PageHeader';
+import useIsMobile from '../../hooks/useIsMobile';
+
+const WorkerMobileRow = ({
+  worker,
+  canManageRevenue,
+  togglingRevenueId,
+  onToggleCountRevenue,
+  onEdit,
+  onDelete,
+  onViewPerformance,
+}) => (
+  <Paper sx={{ px: 1, py: 0.75 }}>
+    <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
+      <Avatar
+        src={worker.avatar || ''}
+        alt={worker.name}
+        sx={{ width: 36, height: 36, bgcolor: 'primary.main', flexShrink: 0, mt: 0.25 }}
+      >
+        {!worker.avatar && <Person sx={{ fontSize: 20 }} />}
+      </Avatar>
+
+      <Box sx={{ flex: 1, minWidth: 0 }}>
+        <Typography variant="caption" fontWeight={700} noWrap sx={{ display: 'block', fontSize: 12 }}>
+          {worker.name}
+        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap', mt: 0.25 }}>
+          {worker.soBaoDanh && (
+            <Typography variant="caption" color="text.secondary" sx={{ fontSize: 11 }}>
+              MNV {worker.soBaoDanh}
+            </Typography>
+          )}
+          {worker.countRevenue === false && (
+            <Chip label="Không DT" size="small" color="warning" sx={{ height: 18, fontSize: 10 }} />
+          )}
+        </Box>
+        {canManageRevenue && (
+          <FormControlLabel
+            sx={{ m: 0, mt: 0.5, '& .MuiFormControlLabel-label': { fontSize: 11 } }}
+            control={
+              <Switch
+                size="small"
+                checked={worker.countRevenue !== false}
+                onChange={() => onToggleCountRevenue(worker)}
+                disabled={togglingRevenueId === worker._id}
+                color="success"
+              />
+            }
+            label="Tính DT"
+          />
+        )}
+      </Box>
+
+      <Box sx={{ display: 'flex', flexShrink: 0, gap: 0.25 }}>
+        <IconButton size="small" onClick={() => onEdit(worker)} aria-label="Sửa">
+          <Edit sx={{ fontSize: 18 }} />
+        </IconButton>
+        <IconButton size="small" onClick={() => onDelete(worker._id)} aria-label="Xóa" color="error">
+          <Delete sx={{ fontSize: 18 }} />
+        </IconButton>
+        <IconButton size="small" onClick={() => onViewPerformance(worker)} aria-label="KPI" color="success">
+          <TrendingUp sx={{ fontSize: 18 }} />
+        </IconButton>
+      </Box>
+    </Box>
+  </Paper>
+);
+
+const WorkerDesktopCard = ({
+  worker,
+  canManageRevenue,
+  togglingRevenueId,
+  onToggleCountRevenue,
+  onEdit,
+  onDelete,
+  onViewPerformance,
+}) => (
+  <Card
+    elevation={2}
+    sx={{
+      width: { xs: '100%', sm: 200 },
+      minHeight: 220,
+      borderRadius: 3,
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      py: 2,
+    }}
+  >
+    <CardContent sx={{ p: 0, width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+      <Avatar
+        src={worker.avatar || ''}
+        alt={worker.name}
+        sx={{
+          bgcolor: '#3b82f6',
+          width: 56,
+          height: 56,
+          mb: 1.5,
+          border: '2px solid #dbeafe',
+          boxShadow: '0 4px 12px rgba(59,130,246,0.25)',
+        }}
+      >
+        {!worker.avatar && <Person fontSize="large" />}
+      </Avatar>
+      <Typography
+        variant="h6"
+        fontWeight="bold"
+        sx={{ color: '#1e293b', fontSize: 18, textAlign: 'center', mb: 0.5 }}
+      >
+        {worker.name}
+      </Typography>
+      {worker.soBaoDanh && (
+        <Chip label={`SBD: ${worker.soBaoDanh}`} size="small" sx={{ mb: 1, fontWeight: 600 }} />
+      )}
+      {worker.countRevenue === false && (
+        <Chip label="Không tính DT" size="small" color="warning" sx={{ mb: 1, fontWeight: 600 }} />
+      )}
+      {worker.phone && (
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 2 }}>
+          <Phone sx={{ fontSize: 16, color: '#64748b', mr: 1 }} />
+          <Typography sx={{ color: '#64748b', fontSize: 14 }}>{worker.phone}</Typography>
+        </Box>
+      )}
+      <Box sx={{ width: '100%', mt: 2 }}>
+        {canManageRevenue && (
+          <Box sx={{ display: 'flex', justifyContent: 'center', mb: 1 }}>
+            <Tooltip
+              title={
+                worker.countRevenue === false
+                  ? 'Bật tính doanh thu cho thợ này'
+                  : 'Tắt tính doanh thu cho thợ này'
+              }
+            >
+              <FormControlLabel
+                sx={{ m: 0, gap: 0.5 }}
+                control={
+                  <Switch
+                    size="small"
+                    checked={worker.countRevenue !== false}
+                    onChange={() => onToggleCountRevenue(worker)}
+                    disabled={togglingRevenueId === worker._id}
+                    color="success"
+                  />
+                }
+                label={
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    {worker.countRevenue === false ? (
+                      <MoneyOff sx={{ fontSize: 16, color: '#f59e0b' }} />
+                    ) : (
+                      <MonetizationOn sx={{ fontSize: 16, color: '#10b981' }} />
+                    )}
+                    <Typography variant="caption" sx={{ fontWeight: 700, color: '#475569' }}>
+                      Tính DT
+                    </Typography>
+                  </Box>
+                }
+              />
+            </Tooltip>
+          </Box>
+        )}
+        <Box sx={{ display: 'flex', justifyContent: 'center', gap: 1, mb: 1 }}>
+          <Tooltip title="Chỉnh sửa">
+            <IconButton
+              size="small"
+              onClick={() => onEdit(worker)}
+              sx={{ bgcolor: '#f1f5f9', '&:hover': { bgcolor: '#e2e8f0' } }}
+            >
+              <Edit fontSize="small" />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Xóa">
+            <IconButton
+              size="small"
+              onClick={() => onDelete(worker._id)}
+              sx={{ bgcolor: '#fef2f2', '&:hover': { bgcolor: '#fee2e2' } }}
+            >
+              <Delete fontSize="small" sx={{ color: '#dc2626' }} />
+            </IconButton>
+          </Tooltip>
+        </Box>
+        <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+          <Button
+            size="small"
+            variant="contained"
+            startIcon={<TrendingUp />}
+            onClick={() => onViewPerformance(worker)}
+            sx={{
+              bgcolor: '#10b981',
+              '&:hover': { bgcolor: '#059669' },
+              fontSize: 12,
+              px: 2,
+              boxShadow: 'none',
+              borderRadius: 2,
+              minWidth: 0,
+              height: 32,
+            }}
+          >
+            Hiệu suất
+          </Button>
+        </Box>
+      </Box>
+    </CardContent>
+  </Card>
+);
 
 const WorkersPage = () => {
+  const isMobile = useIsMobile();
   const { user } = useAuth();
-  const canImportExcel = user?.role === 'admin' || user?.role === 'giam_sat';
+  const canImportExcel = hasPermission(user, 'workers.main');
   const canManageRevenue = canImportExcel;
   const [workers, setWorkers] = useState([]);
-  const [searchName, setSearchName] = useState('');
   const [filterKeyword, setFilterKeyword] = useState('');
   const [importing, setImporting] = useState(false);
   const [importMessage, setImportMessage] = useState('');
   const [importError, setImportError] = useState('');
   const [togglingRevenueId, setTogglingRevenueId] = useState(null);
   const [editOpen, setEditOpen] = useState(false);
-  const [editData, setEditData] = useState({ id: '', name: '', phone: '' });
+  const [editData, setEditData] = useState({ id: '', name: '' });
 
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
   const [password, setPassword] = useState('');
@@ -111,7 +319,6 @@ const WorkersPage = () => {
     setEditData({
       id: worker._id,
       name: worker.name,
-      phone: worker.phone || '',
     });
     setEditOpen(true);
   };
@@ -120,7 +327,6 @@ const WorkersPage = () => {
     try {
       await updateWorker(editData.id, {
         name: editData.name,
-        phone: editData.phone,
       });
       setEditOpen(false);
       fetchWorkers();
@@ -223,55 +429,28 @@ const WorkersPage = () => {
   };
 
   return (
-    <Box
-      sx={{
-        p: { xs: 1.5, sm: 3 },
-        width: '100%',
-        maxWidth: '100%',
-        backgroundColor: '#f8fafc',
-        minHeight: '100vh',
-        borderRadius: 0,
-        boxSizing: 'border-box',
-        px: { xs: 1.5, sm: 2 },
-      }}
-    >
-      <Box
-        sx={{
-          background: '#f5f5f5',
-          borderRadius: 2,
-          px: { xs: 2, sm: 4 },
-          py: { xs: 2, sm: 3 },
-          mb: 3,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 2,
-          justifyContent: 'center',
-        }}
-      >
-        <Box sx={{ display: 'flex', alignItems: 'center', mr: 2 }}>
-          <span role="img" aria-label="worker" style={{ fontSize: 40 }}>🛠️</span>
-        </Box>
-        <Box>
-          <Typography variant="h5" fontWeight="bold" color="primary">
-            Quản lý thợ
-          </Typography>
-          <Typography variant="body2" color="textSecondary">
-            Thêm mới, chỉnh sửa, tìm kiếm và theo dõi hiệu suất thợ tại đây.
-          </Typography>
-        </Box>
-      </Box>
-      <Divider sx={{ mb: 2 }} />
+    <PageLayout>
+      <PageHeader
+        emoji="🛠️"
+        title="Quản lý thợ"
+        subtitle={
+          isMobile
+            ? `${filteredWorkers.length} thợ`
+            : 'Thêm mới, chỉnh sửa, tìm kiếm và theo dõi hiệu suất thợ tại đây.'
+        }
+      />
 
       <Box
         sx={{
           display: 'flex',
           flexDirection: { xs: 'column', md: 'row' },
           alignItems: { xs: 'stretch', md: 'center' },
-          gap: { xs: 2, md: 0 },
-          background: '#fff',
-          borderRadius: 3,
-          boxShadow: '0 2px 12px rgba(0,0,0,0.06)',
-          p: { xs: 2, sm: 2.5 },
+          gap: { xs: 1.5, md: 0 },
+          bgcolor: 'background.paper',
+          borderRadius: 2,
+          border: 1,
+          borderColor: 'divider',
+          p: { xs: 1.5, sm: 2.5 },
           mb: importMessage || importError ? 1 : 2,
           width: '100%',
         }}
@@ -280,21 +459,21 @@ const WorkersPage = () => {
           sx={{
             display: 'flex',
             alignItems: 'center',
-            justifyContent: { xs: 'center', md: 'flex-start' },
-            gap: 2,
+            justifyContent: { xs: 'space-between', md: 'flex-start' },
+            gap: 1.5,
             flexShrink: 0,
             pr: { md: 2.5 },
             mr: { md: 2.5 },
-            pb: { xs: 2, md: 0 },
+            pb: { xs: 1.5, md: 0 },
             borderRight: { md: '1px solid #e2e8f0' },
             borderBottom: { xs: '1px solid #e2e8f0', md: 'none' },
           }}
         >
-          <Box sx={{ textAlign: 'center', minWidth: 72 }}>
-            <Typography sx={{ fontWeight: 700, fontSize: 14, color: '#2563eb', mb: 0.25, lineHeight: 1.2 }}>
-              Tổng số thợ
+          <Box sx={{ textAlign: { xs: 'left', md: 'center' }, minWidth: 56 }}>
+            <Typography sx={{ fontWeight: 700, fontSize: { xs: 11, sm: 14 }, color: 'primary.main', mb: 0.25, lineHeight: 1.2 }}>
+              Tổng thợ
             </Typography>
-            <Typography sx={{ fontWeight: 800, fontSize: 28, color: '#1e293b', lineHeight: 1 }}>
+            <Typography sx={{ fontWeight: 800, fontSize: { xs: 22, sm: 28 }, color: '#1e293b', lineHeight: 1 }}>
               {filteredWorkers.length}
             </Typography>
           </Box>
@@ -333,18 +512,13 @@ const WorkersPage = () => {
         <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
           <TextField
             size="small"
-            label="Tìm kiếm thợ theo tên"
-            placeholder="Nhập tên, SBD..."
+            label={isMobile ? 'Tìm thợ' : 'Tìm kiếm thợ theo tên'}
+            placeholder="Tên, SBD..."
             value={filterKeyword}
             onChange={(e) => setFilterKeyword(e.target.value)}
             fullWidth
           />
-          <AddWorkerForm
-            embedded
-            onSuccess={fetchWorkers}
-            searchName={searchName}
-            setSearchName={setSearchName}
-          />
+          <AddWorkerForm embedded onSuccess={fetchWorkers} />
         </Box>
       </Box>
 
@@ -359,164 +533,38 @@ const WorkersPage = () => {
         </Box>
       )}
 
-      <Grid container spacing={2} sx={{ mt: 3, width: '100%', mx: 0 }} justifyContent="center">
-        {filteredWorkers.map((w) => (
-          <Grid item xs={12} sm={6} md={2} key={w._id} sx={{ display: 'flex', justifyContent: 'center' }}>
-            <Card
-              elevation={2}
-              sx={{
-                width: { xs: '100%', sm: 200 },
-                minHeight: 220,
-                borderRadius: 3,
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                py: 2,
-              }}
-            >
-              <CardContent sx={{ p: 0, width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                <Avatar
-  src={w.avatar || ''}
-  alt={w.name}
-  sx={{
-    bgcolor: '#3b82f6',
-    width: 56,
-    height: 56,
-    mb: 1.5,
-    border: '2px solid #dbeafe',
-    boxShadow: '0 4px 12px rgba(59,130,246,0.25)'
-  }}
->
-  {!w.avatar && <Person fontSize="large" />}
-</Avatar>
-                <Typography
-                  variant="h6"
-                  fontWeight="bold"
-                  sx={{ color: '#1e293b', fontSize: 18, textAlign: 'center', mb: 0.5 }}
-                >
-                  {w.name}
-                </Typography>
-                {w.soBaoDanh && (
-                  <Chip
-                    label={`SBD: ${w.soBaoDanh}`}
-                    size="small"
-                    sx={{ mb: 1, fontWeight: 600 }}
-                  />
-                )}
-                {w.countRevenue === false && (
-                  <Chip
-                    label="Không tính DT"
-                    size="small"
-                    color="warning"
-                    sx={{ mb: 1, fontWeight: 600 }}
-                  />
-                )}
-                {w.phone && (
-                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 2 }}>
-                    <Phone sx={{ fontSize: 16, color: '#64748b', mr: 1 }} />
-                    <Typography sx={{ color: '#64748b', fontSize: 14 }}>
-                      {w.phone}
-                    </Typography>
-                  </Box>
-                )}
-                <Box sx={{ width: '100%', mt: 2 }}>
-                  {canManageRevenue && (
-                    <Box sx={{ display: 'flex', justifyContent: 'center', mb: 1 }}>
-                      <Tooltip
-                        title={
-                          w.countRevenue === false
-                            ? 'Bật tính doanh thu cho thợ này'
-                            : 'Tắt tính doanh thu cho thợ này'
-                        }
-                      >
-                        <FormControlLabel
-                          sx={{ m: 0, gap: 0.5 }}
-                          control={
-                            <Switch
-                              size="small"
-                              checked={w.countRevenue !== false}
-                              onChange={() => handleToggleCountRevenue(w)}
-                              disabled={togglingRevenueId === w._id}
-                              color="success"
-                            />
-                          }
-                          label={
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                              {w.countRevenue === false ? (
-                                <MoneyOff sx={{ fontSize: 16, color: '#f59e0b' }} />
-                              ) : (
-                                <MonetizationOn sx={{ fontSize: 16, color: '#10b981' }} />
-                              )}
-                              <Typography variant="caption" sx={{ fontWeight: 700, color: '#475569' }}>
-                                Tính DT
-                              </Typography>
-                            </Box>
-                          }
-                        />
-                      </Tooltip>
-                    </Box>
-                  )}
-                  <Box sx={{ display: 'flex', justifyContent: 'center', gap: 1, mb: 1 }}>
-                    <Tooltip title="Chỉnh sửa">
-                      <IconButton
-                        size="small"
-                        onClick={() => handleEditClick(w)}
-                        sx={{
-                          bgcolor: '#f1f5f9',
-                          '&:hover': { bgcolor: '#e2e8f0' }
-                        }}
-                      >
-                        <Edit fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip title="Xóa">
-                      <IconButton
-                        size="small"
-                        onClick={() => handleDelete(w._id)}
-                        sx={{
-                          bgcolor: '#fef2f2',
-                          '&:hover': { bgcolor: '#fee2e2' }
-                        }}
-                      >
-                        <Delete fontSize="small" sx={{ color: '#dc2626' }} />
-                      </IconButton>
-                    </Tooltip>
-                  </Box>
-                  <Box sx={{ display: 'flex', justifyContent: 'center' }}>
-                    <Button
-                      size="small"
-                      variant="contained"
-                      startIcon={<TrendingUp />}
-                      onClick={() => handleViewPerformance(w)}
-                      sx={{
-                        bgcolor: '#10b981',
-                        '&:hover': { bgcolor: '#059669' },
-                        fontSize: 12,
-                        px: 2,
-                        boxShadow: 'none',
-                        borderRadius: 2,
-                        minWidth: 0,
-                        height: 32
-                      }}
-                    >
-                      Hiệu suất
-                    </Button>
-                  </Box>
-                </Box>
-              </CardContent>
-            </Card>
-          </Grid>
-        ))}
-        {/* Add empty placeholders if needed to always show 6 columns */}
-        {Array.from({ length: filteredWorkers.length % 6 === 0 ? 0 : 6 - (filteredWorkers.length % 6) }).map((_, idx) => (
-          <Grid item xs={12} sm={6} md={2} key={`empty-${idx}`} sx={{ display: 'flex', justifyContent: 'center' }}>
-            <Box sx={{ visibility: 'hidden', maxWidth: 200, width: '100%' }}>
-              <Card />
-            </Box>
-          </Grid>
-        ))}
-      </Grid>
+      {isMobile ? (
+        <Stack spacing={0.75} sx={{ mt: 1.5 }}>
+          {filteredWorkers.map((w) => (
+            <WorkerMobileRow
+              key={w._id}
+              worker={w}
+              canManageRevenue={canManageRevenue}
+              togglingRevenueId={togglingRevenueId}
+              onToggleCountRevenue={handleToggleCountRevenue}
+              onEdit={handleEditClick}
+              onDelete={handleDelete}
+              onViewPerformance={handleViewPerformance}
+            />
+          ))}
+        </Stack>
+      ) : (
+        <Grid container spacing={2} sx={{ mt: 3, width: '100%', mx: 0 }} justifyContent="center">
+          {filteredWorkers.map((w) => (
+            <Grid size={{ sm: 6, md: 2 }} key={w._id} sx={{ display: 'flex', justifyContent: 'center' }}>
+              <WorkerDesktopCard
+                worker={w}
+                canManageRevenue={canManageRevenue}
+                togglingRevenueId={togglingRevenueId}
+                onToggleCountRevenue={handleToggleCountRevenue}
+                onEdit={handleEditClick}
+                onDelete={handleDelete}
+                onViewPerformance={handleViewPerformance}
+              />
+            </Grid>
+          ))}
+        </Grid>
+      )}
 
       {/* Dialog chỉnh sửa */}
       <Dialog open={editOpen} onClose={() => setEditOpen(false)} maxWidth="sm" fullWidth>
@@ -667,7 +715,7 @@ const WorkersPage = () => {
                   Khoảng: {kpiFromDate} → {kpiToDate} · Tính từ thợ thực hiện hạng mục
                 </Typography>
                 <Grid container spacing={2}>
-                  <Grid item xs={6} sm={4}>
+                  <Grid size={{ xs: 6, sm: 4 }}>
                     <Card sx={{ bgcolor: '#f0f9ff', border: '1px solid #0ea5e9' }}>
                       <CardContent sx={{ p: 2 }}>
                         <Typography variant="h6" color="#0c4a6e" fontWeight="bold">
@@ -677,7 +725,7 @@ const WorkersPage = () => {
                       </CardContent>
                     </Card>
                   </Grid>
-                  <Grid item xs={6} sm={4}>
+                  <Grid size={{ xs: 6, sm: 4 }}>
                     <Card sx={{ bgcolor: '#e0f2fe', border: '1px solid #38bdf8' }}>
                       <CardContent sx={{ p: 2 }}>
                         <Typography variant="h6" color="#0c4a6e" fontWeight="bold">
@@ -687,7 +735,7 @@ const WorkersPage = () => {
                       </CardContent>
                     </Card>
                   </Grid>
-                  <Grid item xs={6} sm={4}>
+                  <Grid size={{ xs: 6, sm: 4 }}>
                     <Card sx={{ bgcolor: '#faf5ff', border: '1px solid #a78bfa' }}>
                       <CardContent sx={{ p: 2 }}>
                         <Typography variant="h6" color="#5b21b6" fontWeight="bold">
@@ -697,7 +745,7 @@ const WorkersPage = () => {
                       </CardContent>
                     </Card>
                   </Grid>
-                  <Grid item xs={6} sm={4}>
+                  <Grid size={{ xs: 6, sm: 4 }}>
                     <Card sx={{ bgcolor: '#f0fdf4', border: '1px solid #22c55e' }}>
                       <CardContent sx={{ p: 2 }}>
                         <Typography variant="h6" color="#166534" fontWeight="bold">
@@ -707,7 +755,7 @@ const WorkersPage = () => {
                       </CardContent>
                     </Card>
                   </Grid>
-                  <Grid item xs={6} sm={4}>
+                  <Grid size={{ xs: 6, sm: 4 }}>
                     <Card sx={{ bgcolor: '#ecfdf5', border: '1px solid #34d399' }}>
                       <CardContent sx={{ p: 2 }}>
                         <Typography variant="h6" color="#065f46" fontWeight="bold">
@@ -717,7 +765,7 @@ const WorkersPage = () => {
                       </CardContent>
                     </Card>
                   </Grid>
-                  <Grid item xs={6} sm={4}>
+                  <Grid size={{ xs: 6, sm: 4 }}>
                     <Card sx={{ bgcolor: '#fef2f2', border: '1px solid #f87171' }}>
                       <CardContent sx={{ p: 2 }}>
                         <Typography variant="h6" color="#991b1b" fontWeight="bold">
@@ -727,7 +775,7 @@ const WorkersPage = () => {
                       </CardContent>
                     </Card>
                   </Grid>
-                  <Grid item xs={6} sm={4}>
+                  <Grid size={{ xs: 6, sm: 4 }}>
                     <Card sx={{ bgcolor: '#fef3c7', border: '1px solid #f59e0b' }}>
                       <CardContent sx={{ p: 2 }}>
                         <Typography variant="h5" color="#92400e" fontWeight="bold" textAlign="center">
@@ -756,7 +804,7 @@ const WorkersPage = () => {
           </Button>
         </DialogActions>
       </Dialog>
-    </Box>
+    </PageLayout>
   );
 };
 

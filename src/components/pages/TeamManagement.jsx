@@ -1,5 +1,25 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
+  Avatar,
+  Box,
+  Button,
+  Divider,
+  FormControl,
+  Grid,
+  InputLabel,
+  List,
+  ListItem,
+  ListItemAvatar,
+  ListItemText,
+  MenuItem,
+  Paper,
+  Select,
+  Stack,
+  TextField,
+  Typography,
+} from '@mui/material';
+import GroupsIcon from '@mui/icons-material/Groups';
+import {
   getAllTeams,
   getTeamById,
   createTeam,
@@ -9,6 +29,9 @@ import {
   removeWorkerFromTeam,
   getAllWorkers,
 } from '../apis/index';
+import PageLayout from '../common/PageLayout';
+import PageHeader from '../common/PageHeader';
+import { WORKER_SELECT_SX } from '../../constants/layout';
 
 const TeamManagement = () => {
   const [teams, setTeams] = useState([]);
@@ -201,409 +224,222 @@ const TeamManagement = () => {
   };
 
   return (
-    <>
-      <style>{`
-        .team-page {
-          padding: 24px;
-          background: #f5f6fa;
-          min-height: 100vh;
-          font-family: Arial, sans-serif;
-        }
+    <PageLayout maxWidth="wide" sx={{ bgcolor: 'grey.50', minHeight: '100vh' }}>
+      <PageHeader
+        icon={<GroupsIcon />}
+        title="Quản lý tổ thợ"
+        subtitle="Tạo tổ, sửa tổ, thêm thợ vào tổ và xóa thợ khỏi tổ."
+      />
 
-        .team-header {
-          margin-bottom: 20px;
-        }
+      <Grid container spacing={2.5}>
+        <Grid size={{ xs: 12, md: 5 }}>
+          <Paper sx={{ p: { xs: 2, sm: 2.5 } }}>
+            <Typography variant="h6" gutterBottom>
+              {editingTeamId ? 'Sửa tổ' : 'Thêm tổ mới'}
+            </Typography>
 
-        .team-header h2 {
-          margin: 0;
-          font-size: 28px;
-          color: #222;
-        }
-
-        .team-header p {
-          margin-top: 6px;
-          color: #666;
-        }
-
-        .team-layout {
-          display: grid;
-          grid-template-columns: 420px 1fr;
-          gap: 20px;
-        }
-
-        .team-card {
-          background: #fff;
-          border-radius: 14px;
-          padding: 20px;
-          box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
-        }
-
-        .team-card h3 {
-          margin-top: 0;
-          margin-bottom: 14px;
-        }
-
-        .team-form {
-          margin-bottom: 28px;
-        }
-
-        .team-input,
-        .team-select {
-          width: 100%;
-          padding: 12px 14px;
-          border: 1px solid #ddd;
-          border-radius: 10px;
-          font-size: 15px;
-          outline: none;
-          box-sizing: border-box;
-        }
-
-        .team-input:focus,
-        .team-select:focus {
-          border-color: #1677ff;
-        }
-
-        .team-form-actions {
-          display: flex;
-          gap: 10px;
-          margin-top: 12px;
-        }
-
-        .team-btn {
-          border: none;
-          background: #1677ff;
-          color: white;
-          padding: 10px 14px;
-          border-radius: 10px;
-          cursor: pointer;
-          font-size: 14px;
-          white-space: nowrap;
-        }
-
-        .team-btn:hover {
-          opacity: 0.9;
-        }
-
-        .team-btn:disabled {
-          opacity: 0.6;
-          cursor: not-allowed;
-        }
-
-        .btn-cancel {
-          background: #777;
-        }
-
-        .btn-danger {
-          background: #e53935;
-        }
-
-        .team-list {
-          display: flex;
-          flex-direction: column;
-          gap: 10px;
-        }
-
-        .team-item {
-          border: 1px solid #eee;
-          border-radius: 12px;
-          padding: 12px;
-          display: flex;
-          justify-content: space-between;
-          gap: 10px;
-          align-items: center;
-          background: #fafafa;
-        }
-
-        .team-item.active {
-          border-color: #1677ff;
-          background: #eef5ff;
-        }
-
-        .team-info {
-          flex: 1;
-          cursor: pointer;
-          display: flex;
-          flex-direction: column;
-          gap: 4px;
-        }
-
-        .team-info strong {
-          color: #222;
-        }
-
-        .team-info span {
-          color: #666;
-          font-size: 14px;
-        }
-
-        .team-actions {
-          display: flex;
-          gap: 8px;
-        }
-
-        .selected-team-box {
-          background: #f0f7ff;
-          padding: 16px;
-          border-radius: 12px;
-          margin-bottom: 16px;
-        }
-
-        .selected-team-box h2 {
-          margin: 0;
-          color: #111;
-        }
-
-        .selected-team-box p {
-          margin: 6px 0 0;
-          color: #555;
-        }
-
-        .add-worker-box {
-          display: grid;
-          grid-template-columns: 1fr 120px;
-          gap: 10px;
-          margin-bottom: 18px;
-        }
-
-        .worker-list {
-          display: flex;
-          flex-direction: column;
-          gap: 12px;
-        }
-
-        .worker-item {
-          border: 1px solid #eee;
-          border-radius: 12px;
-          padding: 12px;
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          background: #fff;
-          gap: 12px;
-        }
-
-        .worker-left {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-        }
-
-        .worker-left img,
-        .avatar-placeholder {
-          width: 48px;
-          height: 48px;
-          border-radius: 50%;
-          flex-shrink: 0;
-        }
-
-        .worker-left img {
-          object-fit: cover;
-        }
-
-        .avatar-placeholder {
-          background: #1677ff;
-          color: white;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-weight: 700;
-        }
-
-        .worker-detail {
-          display: flex;
-          flex-direction: column;
-          gap: 3px;
-        }
-
-        .worker-detail strong {
-          color: #222;
-        }
-
-        .worker-detail span {
-          color: #666;
-          font-size: 14px;
-        }
-
-        .empty-text,
-        .empty-box {
-          color: #777;
-          padding: 16px;
-          background: #fafafa;
-          border-radius: 12px;
-          text-align: center;
-        }
-
-        @media (max-width: 900px) {
-          .team-layout {
-            grid-template-columns: 1fr;
-          }
-
-          .add-worker-box {
-            grid-template-columns: 1fr;
-          }
-
-          .team-item,
-          .worker-item {
-            flex-direction: column;
-            align-items: stretch;
-          }
-
-          .team-actions {
-            justify-content: flex-end;
-          }
-        }
-      `}</style>
-
-      <div className="team-page">
-        <div className="team-header">
-          <h2>Quản lý tổ thợ</h2>
-          <p>Tạo tổ, sửa tổ, thêm thợ vào tổ và xóa thợ khỏi tổ.</p>
-        </div>
-
-        <div className="team-layout">
-          <div className="team-card">
-            <h3>{editingTeamId ? 'Sửa tổ' : 'Thêm tổ mới'}</h3>
-
-            <form onSubmit={handleSubmitTeam} className="team-form">
-              <input
-                className="team-input"
-                type="text"
+            <Box component="form" onSubmit={handleSubmitTeam} sx={{ mb: 3 }}>
+              <TextField
+                fullWidth
+                size="small"
                 placeholder="Nhập tên tổ, ví dụ: Tổ 1"
                 value={teamName}
                 onChange={(e) => setTeamName(e.target.value)}
+                sx={{ mb: 1.5 }}
               />
 
-              <div className="team-form-actions">
-                <button className="team-btn" type="submit" disabled={loading}>
+              <Stack direction="row" spacing={1}>
+                <Button type="submit" variant="contained" disabled={loading}>
                   {loading ? 'Đang lưu...' : editingTeamId ? 'Cập nhật' : 'Thêm tổ'}
-                </button>
+                </Button>
 
                 {editingTeamId && (
-                  <button
-                    className="team-btn btn-cancel"
-                    type="button"
-                    onClick={resetForm}
-                  >
+                  <Button type="button" variant="outlined" color="inherit" onClick={resetForm}>
                     Hủy
-                  </button>
+                  </Button>
                 )}
-              </div>
-            </form>
+              </Stack>
+            </Box>
 
-            <h3>Danh sách tổ</h3>
+            <Divider sx={{ mb: 2 }} />
 
-            <div className="team-list">
-              {teams.length === 0 ? (
-                <div className="empty-text">Chưa có tổ nào</div>
-              ) : (
-                teams.map((team) => (
-                  <div
-                    key={team._id}
-                    className={`team-item ${
-                      selectedTeam?._id === team._id ? 'active' : ''
-                    }`}
-                  >
-                    <div
-                      className="team-info"
-                      onClick={() => handleSelectTeam(team._id)}
+            <Typography variant="h6" gutterBottom>
+              Danh sách tổ
+            </Typography>
+
+            {teams.length === 0 ? (
+              <Paper variant="outlined" sx={{ p: 2, textAlign: 'center', bgcolor: 'grey.50' }}>
+                <Typography color="text.secondary">Chưa có tổ nào</Typography>
+              </Paper>
+            ) : (
+              <List disablePadding>
+                {teams.map((team) => {
+                  const isActive = selectedTeam?._id === team._id;
+
+                  return (
+                    <ListItem
+                      key={team._id}
+                      disablePadding
+                      sx={{
+                        mb: 1,
+                        border: 1,
+                        borderColor: isActive ? 'primary.main' : 'divider',
+                        borderRadius: 2,
+                        bgcolor: isActive ? 'primary.50' : 'grey.50',
+                        flexDirection: { xs: 'column', sm: 'row' },
+                        alignItems: { xs: 'stretch', sm: 'center' },
+                        gap: 1,
+                        p: 1,
+                      }}
+                      secondaryAction={
+                        <Stack direction="row" spacing={0.75} sx={{ alignSelf: { xs: 'flex-end', sm: 'center' } }}>
+                          <Button size="small" variant="contained" onClick={() => handleEditTeam(team)}>
+                            Sửa
+                          </Button>
+                          <Button
+                            size="small"
+                            variant="contained"
+                            color="error"
+                            onClick={() => handleDeleteTeam(team._id)}
+                          >
+                            Xóa
+                          </Button>
+                        </Stack>
+                      }
                     >
-                      <strong>{team.name}</strong>
-                      <span>{team.workers?.length || 0} thợ</span>
-                    </div>
+                      <ListItemText
+                        primary={team.name}
+                        secondary={`${team.workers?.length || 0} thợ`}
+                        onClick={() => handleSelectTeam(team._id)}
+                        sx={{ cursor: 'pointer', m: 0, pr: { sm: 14 } }}
+                        primaryTypographyProps={{ fontWeight: 600 }}
+                      />
+                    </ListItem>
+                  );
+                })}
+              </List>
+            )}
+          </Paper>
+        </Grid>
 
-                    <div className="team-actions">
-                      <button
-                        className="team-btn"
-                        onClick={() => handleEditTeam(team)}
-                      >
-                        Sửa
-                      </button>
-
-                      <button
-                        className="team-btn btn-danger"
-                        onClick={() => handleDeleteTeam(team._id)}
-                      >
-                        Xóa
-                      </button>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-
-          <div className="team-card">
-            <h3>Chi tiết tổ</h3>
+        <Grid size={{ xs: 12, md: 7 }}>
+          <Paper sx={{ p: { xs: 2, sm: 2.5 } }}>
+            <Typography variant="h6" gutterBottom>
+              Chi tiết tổ
+            </Typography>
 
             {!selectedTeam ? (
-              <div className="empty-box">
-                Chọn một tổ bên trái để xem danh sách thợ
-              </div>
+              <Paper variant="outlined" sx={{ p: 3, textAlign: 'center', bgcolor: 'grey.50' }}>
+                <Typography color="text.secondary">
+                  Chọn một tổ bên trái để xem danh sách thợ
+                </Typography>
+              </Paper>
             ) : (
               <>
-                <div className="selected-team-box">
-                  <h2>{selectedTeam.name}</h2>
-                  <p>Số thợ trong tổ: {selectedTeam.workers?.length || 0}</p>
-                </div>
+                <Paper
+                  variant="outlined"
+                  sx={{ p: 2, mb: 2, bgcolor: 'primary.50', borderColor: 'primary.light' }}
+                >
+                  <Typography variant="h5">{selectedTeam.name}</Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                    Số thợ trong tổ: {selectedTeam.workers?.length || 0}
+                  </Typography>
+                </Paper>
 
-                <div className="add-worker-box">
-                  <select
-                    className="team-select"
-                    value={selectedWorkerId}
-                    onChange={(e) => setSelectedWorkerId(e.target.value)}
+                <Stack
+                  direction={{ xs: 'column', sm: 'row' }}
+                  spacing={1}
+                  sx={{ mb: 2 }}
+                >
+                  <FormControl size="small" sx={{ ...WORKER_SELECT_SX, flex: '1 1 280px' }}>
+                    <InputLabel id="add-worker-select-label">Chọn thợ</InputLabel>
+                    <Select
+                      labelId="add-worker-select-label"
+                      label="Chọn thợ"
+                      value={selectedWorkerId}
+                      onChange={(e) => setSelectedWorkerId(e.target.value)}
+                      sx={{ minWidth: 280 }}
+                    >
+                      <MenuItem value="">
+                        <em>-- Chọn thợ để thêm vào tổ --</em>
+                      </MenuItem>
+                      {availableWorkersToAdd.map((worker) => (
+                        <MenuItem key={worker._id} value={worker._id}>
+                          {worker.name} - SBD: {worker.soBaoDanh}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+
+                  <Button
+                    variant="contained"
+                    onClick={handleAddWorkerToTeam}
+                    sx={{ flexShrink: 0, minWidth: { sm: 120 } }}
                   >
-                    <option value="">-- Chọn thợ để thêm vào tổ --</option>
-
-                    {availableWorkersToAdd.map((worker) => (
-                      <option key={worker._id} value={worker._id}>
-                        {worker.name} - SBD: {worker.soBaoDanh}
-                      </option>
-                    ))}
-                  </select>
-
-                  <button className="team-btn" onClick={handleAddWorkerToTeam}>
                     Thêm thợ
-                  </button>
-                </div>
+                  </Button>
+                </Stack>
 
-                <div className="worker-list">
-                  {selectedTeam.workers?.length === 0 ? (
-                    <div className="empty-text">Tổ này chưa có thợ</div>
-                  ) : (
-                    selectedTeam.workers?.map((worker) => (
-                      <div key={worker._id} className="worker-item">
-                        <div className="worker-left">
-                          {worker.avatar ? (
-                            <img src={worker.avatar} alt={worker.name} />
-                          ) : (
-                            <div className="avatar-placeholder">
-                              {worker.name?.charAt(0)?.toUpperCase()}
-                            </div>
-                          )}
-
-                          <div className="worker-detail">
-                            <strong>{worker.name}</strong>
-                            <span>MNV: {worker.soBaoDanh}</span>
-                            <span>Trạng thái: {worker.status}</span>
-                          </div>
-                        </div>
-
-                        <button
-                          className="team-btn btn-danger"
-                          onClick={() => handleRemoveWorkerFromTeam(worker._id)}
-                        >
-                          Xóa khỏi tổ
-                        </button>
-                      </div>
-                    ))
-                  )}
-                </div>
+                {selectedTeam.workers?.length === 0 ? (
+                  <Paper variant="outlined" sx={{ p: 2, textAlign: 'center', bgcolor: 'grey.50' }}>
+                    <Typography color="text.secondary">Tổ này chưa có thợ</Typography>
+                  </Paper>
+                ) : (
+                  <List disablePadding>
+                    {selectedTeam.workers?.map((worker) => (
+                      <ListItem
+                        key={worker._id}
+                        disablePadding
+                        sx={{
+                          mb: 1,
+                          border: 1,
+                          borderColor: 'divider',
+                          borderRadius: 2,
+                          bgcolor: 'background.paper',
+                          flexDirection: { xs: 'column', sm: 'row' },
+                          alignItems: { xs: 'stretch', sm: 'center' },
+                          gap: 1,
+                          p: 1,
+                        }}
+                        secondaryAction={
+                          <Button
+                            size="small"
+                            variant="contained"
+                            color="error"
+                            onClick={() => handleRemoveWorkerFromTeam(worker._id)}
+                            sx={{ alignSelf: { xs: 'flex-end', sm: 'center' } }}
+                          >
+                            Xóa khỏi tổ
+                          </Button>
+                        }
+                      >
+                        <ListItemAvatar>
+                          <Avatar src={worker.avatar || undefined} alt={worker.name}>
+                            {worker.name?.charAt(0)?.toUpperCase()}
+                          </Avatar>
+                        </ListItemAvatar>
+                        <ListItemText
+                          primary={worker.name}
+                          secondary={
+                            <>
+                              MNV: {worker.soBaoDanh}
+                              <br />
+                              Trạng thái: {worker.status}
+                            </>
+                          }
+                          sx={{ m: 0, pr: { sm: 14 } }}
+                          primaryTypographyProps={{ fontWeight: 600 }}
+                        />
+                      </ListItem>
+                    ))}
+                  </List>
+                )}
               </>
             )}
-          </div>
-        </div>
-      </div>
-    </>
+          </Paper>
+        </Grid>
+      </Grid>
+    </PageLayout>
   );
 };
 

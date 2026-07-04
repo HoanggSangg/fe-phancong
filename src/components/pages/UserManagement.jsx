@@ -38,6 +38,9 @@ import {
   getAllWorkers,
 } from '../apis';
 import { ROLE_LABELS, ROLE_DESCRIPTIONS } from '../../utils/permissions';
+import PageLayout from '../common/PageLayout';
+import PageHeader from '../common/PageHeader';
+import FilterPanel from '../common/FilterPanel';
 
 const roleColor = {
   admin: 'error',
@@ -224,23 +227,17 @@ const UserManagement = () => {
   );
 
   return (
-    <Box sx={{ p: { xs: 2, sm: 3 }, maxWidth: 1200, mx: 'auto' }}>
-      <Paper sx={{ p: { xs: 2, sm: 3 }, mb: 3, borderRadius: 3 }}>
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ sm: 'center' }} justifyContent="space-between">
-          <Box>
-            <Stack direction="row" spacing={1} alignItems="center">
-              <AdminPanelSettings color="error" />
-              <Typography variant="h5" fontWeight="bold">Quản lý tài khoản & phân quyền</Typography>
-            </Stack>
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-              Admin có thể gán vai trò, khóa/mở tài khoản và liên kết KTV với thợ
-            </Typography>
-          </Box>
+    <PageLayout maxWidth="medium">
+      <PageHeader
+        icon={<AdminPanelSettings color="error" />}
+        title="Quản lý tài khoản & phân quyền"
+        subtitle="Admin có thể gán vai trò, khóa/mở tài khoản và liên kết KTV với thợ"
+        actions={
           <Button variant="contained" startIcon={<Add />} onClick={openCreate}>
             Thêm tài khoản
           </Button>
-        </Stack>
-      </Paper>
+        }
+      />
 
       {message.text && (
         <Alert severity={message.type || 'info'} sx={{ mb: 2 }} onClose={() => setMessage({ type: '', text: '' })}>
@@ -248,9 +245,9 @@ const UserManagement = () => {
         </Alert>
       )}
 
-      <Paper sx={{ p: 2, mb: 2, borderRadius: 3 }}>
+      <FilterPanel title="Tìm kiếm">
         <Grid container spacing={2}>
-          <Grid item xs={12} sm={8}>
+          <Grid size={{ xs: 12, sm: 8 }}>
             <TextField
               fullWidth
               size="small"
@@ -266,7 +263,7 @@ const UserManagement = () => {
               }}
             />
           </Grid>
-          <Grid item xs={12} sm={4}>
+          <Grid size={{ xs: 12, sm: 4 }}>
             <TextField
               select
               fullWidth
@@ -282,7 +279,7 @@ const UserManagement = () => {
             </TextField>
           </Grid>
         </Grid>
-      </Paper>
+      </FilterPanel>
 
       {isMobile ? (
         filteredUsers.map(renderUserCard)
@@ -383,7 +380,7 @@ const UserManagement = () => {
           <Button variant="contained" onClick={handleSave}>Lưu</Button>
         </DialogActions>
       </Dialog>
-    </Box>
+    </PageLayout>
   );
 };
 

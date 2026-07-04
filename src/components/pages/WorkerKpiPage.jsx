@@ -13,13 +13,16 @@ import {
 import AssessmentIcon from '@mui/icons-material/Assessment';
 import { getWorkerKpi, getAllWorkers, getAllWorkersKpi } from '../apis/index';
 import { useAuth } from '../../context/AuthContext';
-import { isKtv } from '../../utils/permissions';
+import { hasPermission } from '../../utils/permissions';
 import WorkerSearchSelect from '../common/WorkerSearchSelect';
 import {
   formatMoney,
 } from '../../utils/dateFilters';
 import usePeriodFilter from '../../hooks/usePeriodFilter';
 import PeriodFilterToolbar from '../common/PeriodFilterToolbar';
+import PageLayout from '../common/PageLayout';
+import PageHeader from '../common/PageHeader';
+import FilterPanel from '../common/FilterPanel';
 
 const KpiCard = ({ label, value, color = '#1e293b', sub }) => (
   <Card sx={{ height: '100%', border: '1px solid #e2e8f0' }}>
@@ -41,7 +44,7 @@ const KpiCard = ({ label, value, color = '#1e293b', sub }) => (
 
 const WorkerKpiPage = () => {
   const { user } = useAuth();
-  const ktvUser = isKtv(user?.role);
+  const canViewAllWorkersKpi = hasPermission(user, 'workers.main');
 
   const { period, setPeriod, fromDate, setFromDate, toDate, setToDate } = usePeriodFilter('today');
   const [workerId, setWorkerId] = useState('');
@@ -52,12 +55,12 @@ const WorkerKpiPage = () => {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    if (!ktvUser) {
+    if (canViewAllWorkersKpi) {
       getAllWorkers()
         .then((res) => setWorkers(res.data.workers || res.data || []))
         .catch(() => setWorkers([]));
     }
-  }, [ktvUser]);
+  }, [canViewAllWorkersKpi]);
 
   const fetchKpi = useCallback(async () => {
     setLoading(true);
@@ -68,11 +71,11 @@ const WorkerKpiPage = () => {
         params.from = fromDate;
         params.to = toDate;
       }
-      if (!ktvUser && workerId) {
+      if (canViewAllWorkersKpi && workerId) {
         params.workerId = workerId;
       }
 
-      if (ktvUser || workerId) {
+      if (!canViewAllWorkersKpi || workerId) {
         const res = await getWorkerKpi(params);
         setKpi(res.data?.data || null);
         setAllKpi([]);
@@ -88,7 +91,7 @@ const WorkerKpiPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [period, fromDate, toDate, workerId, ktvUser]);
+  }, [period, fromDate, toDate, workerId, canViewAllWorkersKpi]);
 
   useEffect(() => {
     fetchKpi();
@@ -96,37 +99,37 @@ const WorkerKpiPage = () => {
 
   const renderKpiGrid = (data) => (
     <Grid container spacing={2}>
-      <Grid item xs={6} sm={4} md={2}>
+      <Grid size={{ xs: 6, sm: 4, md: 2 }}>
         <KpiCard label="Số xe đã làm" value={data.carsDone ?? 0} color="#2563eb" />
       </Grid>
-      <Grid item xs={6} sm={4} md={2}>
+      <Grid size={{ xs: 6, sm: 4, md: 2 }}>
         <KpiCard
           label="Hạng mục thực hiện"
           value={data.totalRepairItems ?? 0}
           color="#0ea5e9"
         />
       </Grid>
-      <Grid item xs={6} sm={4} md={2}>
+      <Grid size={{ xs: 6, sm: 4, md: 2 }}>
         <KpiCard
           label="DT trước hoa hồng"
           value={formatMoney(data.revenueBeforeCommission)}
           color="#7c3aed"
         />
       </Grid>
-      <Grid item xs={6} sm={4} md={2}>
+      <Grid size={{ xs: 6, sm: 4, md: 2 }}>
         <KpiCard
           label="DT sau trừ 25%"
           value={formatMoney(data.revenueAfterCommission)}
           color="#059669"
         />
       </Grid>
-      <Grid item xs={6} sm={4} md={2}>
+      <Grid size={{ xs: 6, sm: 4, md: 2 }}>
         <KpiCard label="Xe đúng hạn" value={data.carsOnTime ?? 0} color="#16a34a" />
       </Grid>
-      <Grid item xs={6} sm={4} md={2}>
+      <Grid size={{ xs: 6, sm: 4, md: 2 }}>
         <KpiCard label="Xe trễ" value={data.carsLate ?? 0} color="#dc2626" />
       </Grid>
-      <Grid item xs={6} sm={4} md={2}>
+      <Grid size={{ xs: 6, sm: 4, md: 2 }}>
         <KpiCard
           label="Hiệu suất"
           value={`${data.performancePercentage ?? 0}%`}
@@ -138,33 +141,18 @@ const WorkerKpiPage = () => {
   );
 
   return (
-    <Box sx={{ p: { xs: 2, sm: 3 } }}>
-      <Box
-        sx={{
-          background: '#f5f5f5',
-          borderRadius: 2,
-          px: 3,
-          py: 2.5,
-          mb: 3,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 2,
-        }}
-      >
-        <AssessmentIcon color="primary" sx={{ fontSize: 40 }} />
-        <Box>
-          <Typography variant="h5" fontWeight="bold" color="primary">
-            KPI thợ
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            {ktvUser
-              ? 'Chỉ số tính từ hạng mục sửa chữa đã gán thợ thực hiện'
-              : 'Theo dõi KPI từng thợ — dựa trên thợ thực hiện hạng mục sửa chữa'}
-          </Typography>
-        </Box>
-      </Box>
+    <PageLayout>
+      <PageHeader
+        icon={<AssessmentIcon />}
+        title="KPI thợ"
+        subtitle={
+          !canViewAllWorkersKpi
+            ? 'Chỉ số tính từ hạng mục sửa chữa đã gán thợ thực hiện'
+            : 'Theo dõi KPI từng thợ — dựa trên thợ thực hiện hạng mục sửa chữa'
+        }
+      />
 
-      <Paper sx={{ p: 2, mb: 3, borderRadius: 3 }}>
+      <FilterPanel title="Khoảng thời gian">
         <PeriodFilterToolbar
           period={period}
           onPeriodChange={setPeriod}
@@ -173,7 +161,7 @@ const WorkerKpiPage = () => {
           onFromDateChange={setFromDate}
           onToDateChange={setToDate}
         >
-          {!ktvUser && (
+          {canViewAllWorkersKpi && (
             <WorkerSearchSelect
               workers={workers}
               value={workerId}
@@ -184,7 +172,7 @@ const WorkerKpiPage = () => {
             />
           )}
         </PeriodFilterToolbar>
-      </Paper>
+      </FilterPanel>
 
       {error && (
         <Alert severity="error" sx={{ mb: 2 }}>
@@ -217,7 +205,7 @@ const WorkerKpiPage = () => {
       ) : (
         <Alert severity="info">Chưa có dữ liệu KPI trong khoảng thời gian đã chọn.</Alert>
       )}
-    </Box>
+    </PageLayout>
   );
 };
 

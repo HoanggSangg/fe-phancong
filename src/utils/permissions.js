@@ -98,23 +98,11 @@ export const getNavGroupsForUser = (user) => {
   })).filter((group) => group.items.length > 0);
 };
 
-export const getNavGroupsForRole = (role) =>
-  getNavGroupsForUser({ role, permissions: [] });
-
-export const getPermissionByPath = (path) =>
-  PERMISSION_CATALOG.find((item) => item.path === path);
-
-export const canAccessRoute = (path, userOrRole) => {
-  const user = typeof userOrRole === 'string'
-    ? { role: userOrRole, permissions: [] }
-    : userOrRole;
-
-  if (!user) return false;
-  if (user.role === ROLES.ADMIN) return true;
-
-  const permission = getPermissionByPath(path);
-  if (!permission) return true;
-  return hasPermission(user, permission.key);
+export const getFirstAllowedPath = (user) => {
+  if (!user) return '/login';
+  const groups = getNavGroupsForUser(user);
+  const firstItem = groups[0]?.items?.[0];
+  return firstItem?.path || '/cars';
 };
 
 export const getPermissionGroups = () =>
@@ -123,8 +111,6 @@ export const getPermissionGroups = () =>
     items: PERMISSION_CATALOG.filter((item) => item.group === group),
   }));
 
-export const isAdmin = (role) => role === ROLES.ADMIN;
-export const isGiamSat = (role) => role === ROLES.GIAM_SAT;
 export const isKtv = (role) => role === ROLES.KTV;
 
 const resolveRole = (roleOrUser) =>
@@ -132,7 +118,7 @@ const resolveRole = (roleOrUser) =>
 
 export const canManageCars = (roleOrUser) => {
   if (typeof roleOrUser === 'object') return hasPermission(roleOrUser, 'cars.manage');
-  return ['admin', 'giam_sat'].includes(roleOrUser);
+  return ['admin', 'giam_sat', 'ktv'].includes(roleOrUser);
 };
 
 export const canDeleteCars = (roleOrUser) => {

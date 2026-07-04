@@ -1,9 +1,9 @@
 import * as XLSX from 'xlsx';
 import { CAR_STATUS_LABELS } from './permissions';
 
-export const getCarKey = (item) => `${item.plateNumber || ''}__${item.carDate || ''}`;
+const getCarKey = (item) => `${item.plateNumber || ''}__${item.carDate || ''}`;
 
-export const sumItemRevenue = (item) =>
+const sumItemRevenue = (item) =>
   (item.assignments || []).reduce((sum, a) => sum + Number(a.revenue || 0), 0);
 
 export const sumAssignmentsRevenue = (assignments = []) =>

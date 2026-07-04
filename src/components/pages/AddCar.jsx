@@ -6,7 +6,6 @@ import {
   Typography,
   Paper,
   Autocomplete,
-  Divider,
 } from '@mui/material';
 import {
   createCar,
@@ -19,6 +18,8 @@ import { useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
 import customParseFormat from 'dayjs/plugin/customParseFormat';
 import DirectionsCarIcon from '@mui/icons-material/DirectionsCar';
+import PageLayout from '../common/PageLayout';
+import PageHeader from '../common/PageHeader';
 
 dayjs.extend(customParseFormat);
 
@@ -363,40 +364,12 @@ const AddCar = ({ onSuccess }) => {
   };
 
   return (
-    <Paper
-      elevation={3}
-      sx={{
-        p: { xs: 2, sm: 4 },
-        mb: 4,
-        borderRadius: 4,
-        boxShadow: '0 4px 24px rgba(37,99,235,0.10)',
-      }}
-    >
-      <Box
-        sx={{
-          background: '#f5f5f5',
-          borderRadius: 2,
-          px: { xs: 2, sm: 4 },
-          py: { xs: 2, sm: 3 },
-          mb: 3,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 2,
-          justifyContent: 'center',
-        }}
-      >
-        <DirectionsCarIcon color="primary" sx={{ fontSize: 40 }} />
-        <Box>
-          <Typography variant="h5" fontWeight="bold" color="primary">
-            Thêm xe mới
-          </Typography>
-          <Typography variant="body2" color="textSecondary">
-            Nhập biển số hoặc RO để tải dữ liệu có sẵn.
-          </Typography>
-        </Box>
-      </Box>
-
-      <Divider sx={{ mb: 2 }} />
+    <PageLayout>
+      <PageHeader
+        icon={<DirectionsCarIcon color="primary" />}
+        title="Thêm xe mới"
+        subtitle="Nhập biển số hoặc RO để tải dữ liệu có sẵn."
+      />
 
       <Box
         component="form"
@@ -540,7 +513,7 @@ const AddCar = ({ onSuccess }) => {
           Thêm xe
         </Button>
       </Box>
-    </Paper>
+    </PageLayout>
   );
 };
 

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useState, useCallback } from 'react';
 import { getMe, login as loginApi, register as registerApi } from '../components/apis';
 
 const AuthContext = createContext(null);
@@ -80,14 +80,30 @@ export const AuthProvider = ({ children }) => {
     return res.data;
   };
 
+  const refreshUser = useCallback(async () => {
+    const storage = getActiveStorage();
+    if (!storage?.getItem('token')) return null;
+
+    try {
+      const res = await getMe();
+      setUser(res.data.user);
+      storage.setItem('user', JSON.stringify(res.data.user));
+      return res.data.user;
+    } catch {
+      clearAuthStorage();
+      setUser(null);
+      return null;
+    }
+  }, []);
+
   const logout = () => {
     clearAuthStorage();
     setUser(null);
   };
 
   const value = useMemo(
-    () => ({ user, loading, login, register, logout, isAuthenticated: !!user }),
-    [user, loading]
+    () => ({ user, loading, login, register, logout, refreshUser, isAuthenticated: !!user }),
+    [user, loading, refreshUser]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

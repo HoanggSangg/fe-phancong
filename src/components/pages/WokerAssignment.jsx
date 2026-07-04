@@ -1,56 +1,88 @@
-import React, { useEffect, useMemo, useState, useCallback } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router-dom";
-import { Box, Button, Typography } from "@mui/material";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  Box,
+  Button,
+  Card,
+  CardContent,
+  Chip,
+  Divider,
+  Paper,
+  Stack,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  TextField,
+  Typography,
+} from "@mui/material";
 import FullscreenIcon from "@mui/icons-material/Fullscreen";
+import SearchIcon from "@mui/icons-material/Search";
+import RestartAltIcon from "@mui/icons-material/RestartAlt";
+import AddIcon from "@mui/icons-material/Add";
+import DeleteIcon from "@mui/icons-material/Delete";
+import DirectionsCarIcon from "@mui/icons-material/DirectionsCar";
 import {
   getAllWorkers,
   getAllCars,
   addManualJobToWorker,
   removeManualJobFromWorker,
 } from "../apis/index";
+import { queryKeys } from "../../lib/queryKeys";
 import { useAuth } from "../../context/AuthContext";
-import { ACTIVE_CAR_STATUSES, CAR_STATUS_LABELS, isAdmin } from "../../utils/permissions";
+import { ACTIVE_CAR_STATUSES, CAR_STATUS_LABELS, hasPermission } from "../../utils/permissions";
 import { filterWorkersByKeyword } from "../../utils/workerSearch";
 import useIsMobile from "../../hooks/useIsMobile";
 import FullscreenDialog from "../common/FullscreenDialog";
+import PageLayout from "../common/PageLayout";
+import PageHeader from "../common/PageHeader";
+import FilterPanel from "../common/FilterPanel";
 
 const WokerAssignment = () => {
   const { user } = useAuth();
   const location = useLocation();
-  const [workers, setWorkers] = useState([]);
-  const [cars, setCars] = useState([]);
+  const queryClient = useQueryClient();
   const [date, setDate] = useState("");
   const [workerSearch, setWorkerSearch] = useState("");
   const [jobInputs, setJobInputs] = useState({});
   const [pageFullscreen, setPageFullscreen] = useState(false);
   const isMobile = useIsMobile();
 
-  const loadData = useCallback(async () => {
-    try {
+  const workersQuery = useQuery({
+    queryKey: queryKeys.workers.all,
+    queryFn: async () => {
       const res = await getAllWorkers();
-      const workerList = res?.data?.workers || res?.data || [];
+      return res?.data?.workers || res?.data || [];
+    },
+    staleTime: 60_000,
+  });
 
-      const carsRes = await getAllCars();
-      setWorkers(workerList);
-      setCars(carsRes?.data ?? []);
-    } catch (err) {
-      console.log(err);
-      setWorkers([]);
-      setCars([]);
-    }
-  }, []);
+  const carsQuery = useQuery({
+    queryKey: queryKeys.cars,
+    queryFn: async () => (await getAllCars()).data,
+    staleTime: 45_000,
+  });
+
+  const workers = workersQuery.data || [];
+  const cars = carsQuery.data || [];
+
+  const reloadWorkers = async () => {
+    await queryClient.invalidateQueries({ queryKey: queryKeys.workers.all });
+  };
+
+  const reloadAll = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: queryKeys.workers.all }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.cars }),
+    ]);
+  };
 
   useEffect(() => {
-    loadData();
-  }, [loadData, location.pathname]);
-
-  useEffect(() => {
-    const onVisible = () => {
-      if (document.visibilityState === "visible") loadData();
-    };
-    document.addEventListener("visibilitychange", onVisible);
-    return () => document.removeEventListener("visibilitychange", onVisible);
-  }, [loadData]);
+    reloadAll();
+  }, [location.pathname]);
 
   const formatDate = (value) => {
     if (!value) return "";
@@ -125,7 +157,7 @@ const WokerAssignment = () => {
       });
 
       setJobInputs((prev) => ({ ...prev, [worker._id]: "" }));
-      await loadData();
+      await reloadWorkers();
       alert("Đã giao việc cho thợ");
     } catch (err) {
       console.log(err);
@@ -138,7 +170,7 @@ const WokerAssignment = () => {
 
     try {
       await removeManualJobFromWorker(workerId, jobId);
-      await loadData();
+      await reloadWorkers();
       alert("Đã xóa công việc");
     } catch (err) {
       console.log(err);
@@ -152,64 +184,114 @@ const WokerAssignment = () => {
     return "Chưa có việc";
   };
 
-  const getStatusStyle = (isBusy) => ({
-    ...styles.status,
-    background: isBusy ? "#fee2e2" : "#dcfce7",
-    color: isBusy ? "#991b1b" : "#15803d",
-  });
+  const renderStatusChip = (row) => (
+    <Chip
+      label={getStatusText(row)}
+      size="small"
+      color={row.isBusy ? "error" : "success"}
+      sx={{ fontWeight: 700 }}
+    />
+  );
 
   const renderCars = (worker, currentCars) => {
     if (currentCars.length === 0) {
       return (
-        <span style={{ color: "#16a34a", fontWeight: "bold" }}>
+        <Typography variant="body2" color="success.main" fontWeight="bold">
           Chưa sửa xe nào
-        </span>
+        </Typography>
       );
     }
 
-    return currentCars.map((car) => (
-      <div key={car._id} style={styles.carBox}>
-        🚗 <b>{car.plateNumber}</b>
-        <br />
-        <small>Vai trò: {getWorkerRoleOnCar(car, worker._id)}</small>
-        <br />
-        <small>Trạng thái: {CAR_STATUS_LABELS[car.status] || car.status}</small>
-        <br />
-        <small>Hiệu xe: {car.externalCarTypeName || "—"}</small>
-      </div>
-    ));
+    return (
+      <Stack spacing={0.75}>
+        {currentCars.map((car) => (
+          <Paper
+            key={car._id}
+            variant="outlined"
+            sx={{
+              p: 1,
+              bgcolor: "info.50",
+              borderColor: "info.light",
+            }}
+          >
+            <Stack direction="row" alignItems="center" spacing={0.5}>
+              <DirectionsCarIcon sx={{ fontSize: 16, color: "info.dark" }} />
+              <Typography variant="body2" fontWeight="bold" color="info.dark">
+                {car.plateNumber}
+              </Typography>
+            </Stack>
+            <Typography variant="caption" display="block" color="info.dark">
+              Vai trò: {getWorkerRoleOnCar(car, worker._id)}
+            </Typography>
+            <Typography variant="caption" display="block" color="info.dark">
+              Trạng thái: {CAR_STATUS_LABELS[car.status] || car.status}
+            </Typography>
+            <Typography variant="caption" display="block" color="info.dark">
+              Hiệu xe: {car.externalCarTypeName || "—"}
+            </Typography>
+          </Paper>
+        ))}
+      </Stack>
+    );
   };
 
   const renderJobs = (worker, manualJobs) => {
     if (manualJobs.length === 0) {
-      return <span style={{ color: "#64748b" }}>Chưa có công việc ghi tay</span>;
-    }
-
-    return manualJobs.map((job) => (
-      <div key={job._id} style={styles.jobBox}>
-        📝 {job.content}
-        <br />
-        <small>Ngày: {formatDate(job.date)}</small>
-        <br />
-        <button
-          style={{ ...styles.btn, background: "#ef4444", color: "#fff", marginTop: 6 }}
-          onClick={() => handleDeleteJob(worker._id, job._id)}
-        >
-          Xóa việc
-        </button>
-      </div>
-    ));
-  };
-
-  const renderAddJob = (worker) => {
-    if (!isAdmin(user?.role) && user?.role !== "giam_sat") {
-      return <span style={{ color: "#64748b" }}>Chỉ giám sát/admin giao việc ghi tay</span>;
+      return (
+        <Typography variant="body2" color="text.secondary">
+          Chưa có công việc ghi tay
+        </Typography>
+      );
     }
 
     return (
-      <>
-        <input
-          style={styles.inputSmall}
+      <Stack spacing={0.75}>
+        {manualJobs.map((job) => (
+          <Paper
+            key={job._id}
+            variant="outlined"
+            sx={{
+              p: 1,
+              bgcolor: "warning.50",
+              borderColor: "warning.light",
+            }}
+          >
+            <Typography variant="body2" color="warning.dark">
+              {job.content}
+            </Typography>
+            <Typography variant="caption" display="block" color="warning.dark">
+              Ngày: {formatDate(job.date)}
+            </Typography>
+            <Button
+              size="small"
+              color="error"
+              variant="contained"
+              startIcon={<DeleteIcon />}
+              onClick={() => handleDeleteJob(worker._id, job._id)}
+              sx={{ mt: 0.75 }}
+            >
+              Xóa việc
+            </Button>
+          </Paper>
+        ))}
+      </Stack>
+    );
+  };
+
+  const renderAddJob = (worker) => {
+    if (!hasPermission(user, "workers.main")) {
+      return (
+        <Typography variant="body2" color="text.secondary">
+          Chỉ giám sát/admin giao việc ghi tay
+        </Typography>
+      );
+    }
+
+    return (
+      <Stack spacing={1}>
+        <TextField
+          size="small"
+          fullWidth
           placeholder="Nhập chi tiết công việc"
           value={jobInputs[worker._id] || ""}
           onChange={(e) =>
@@ -219,169 +301,214 @@ const WokerAssignment = () => {
             }))
           }
         />
-
-        <button
-          style={{ ...styles.btnPrimary, marginTop: 8, width: "100%" }}
+        <Button
+          variant="contained"
+          fullWidth
+          startIcon={<AddIcon />}
           onClick={() => handleAddJob(worker)}
         >
-          ➕ Giao việc
-        </button>
-      </>
+          Giao việc
+        </Button>
+      </Stack>
     );
   };
 
   const renderToolbar = () => (
-    <div style={styles.card}>
-      <div style={styles.formRow}>
-        <input
-          type="text"
-          style={styles.input}
+    <FilterPanel>
+      <Stack
+        direction={{ xs: "column", sm: "row" }}
+        spacing={1.5}
+        useFlexGap
+        flexWrap="wrap"
+        alignItems={{ sm: "center" }}
+      >
+        <TextField
+          size="small"
           placeholder="Tìm thợ theo tên, SBD..."
           value={workerSearch}
           onChange={(e) => setWorkerSearch(e.target.value)}
+          sx={{ flex: 1, minWidth: { xs: "100%", sm: 200 } }}
         />
-
-        <input
+        <TextField
+          size="small"
           type="date"
-          style={styles.input}
+          label="Ngày"
           value={date}
           onChange={(e) => setDate(e.target.value)}
+          InputLabelProps={{ shrink: true }}
+          sx={{ minWidth: { xs: "100%", sm: 160 } }}
         />
-
-        <button style={styles.btnPrimary} onClick={loadData}>
-          🔍 Tải lại
-        </button>
-
-        <button
-          style={styles.btn}
+        <Button
+          variant="contained"
+          startIcon={<SearchIcon />}
+          onClick={reloadAll}
+        >
+          Tải lại
+        </Button>
+        <Button
+          variant="outlined"
+          startIcon={<RestartAltIcon />}
           onClick={() => {
             setDate("");
-            setTimeout(loadData, 0);
+            reloadAll();
           }}
         >
           Reset hôm nay
-        </button>
-      </div>
+        </Button>
+      </Stack>
 
-      <div style={styles.dateText}>
-        Việc ghi tay theo ngày: <b>{selectedDate}</b>
+      <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5 }}>
+        Việc ghi tay theo ngày: <strong>{selectedDate}</strong>
         <br />
-        <small>Xe đang làm = xe được gán thợ (chưa giao)</small>
-      </div>
-    </div>
+        <Typography component="span" variant="caption">
+          Xe đang làm = xe được gán thợ (chưa giao)
+        </Typography>
+      </Typography>
+    </FilterPanel>
   );
+
+  const renderMobileCard = (row) => {
+    const { worker, currentCars, manualJobs } = row;
+
+    return (
+      <Card key={worker._id} variant="outlined">
+        <CardContent>
+          <Stack
+            direction="row"
+            justifyContent="space-between"
+            alignItems="flex-start"
+            spacing={1}
+            sx={{ mb: 1.5 }}
+          >
+            <Box>
+              <Typography variant="subtitle1" fontWeight={800}>
+                {worker.name}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                MNV: {worker.soBaoDanh || "—"}
+              </Typography>
+            </Box>
+            {renderStatusChip(row)}
+          </Stack>
+
+          <Divider sx={{ mb: 1.5 }} />
+
+          <Typography
+            variant="caption"
+            fontWeight={800}
+            color="text.secondary"
+            display="block"
+            sx={{ mb: 0.75, textTransform: "uppercase" }}
+          >
+            Xe đang làm
+          </Typography>
+          <Box sx={{ mb: 1.5 }}>{renderCars(worker, currentCars)}</Box>
+
+          <Typography
+            variant="caption"
+            fontWeight={800}
+            color="text.secondary"
+            display="block"
+            sx={{ mb: 0.75, textTransform: "uppercase" }}
+          >
+            Công việc ghi tay
+          </Typography>
+          <Box sx={{ mb: 1.5 }}>{renderJobs(worker, manualJobs)}</Box>
+
+          <Typography
+            variant="caption"
+            fontWeight={800}
+            color="text.secondary"
+            display="block"
+            sx={{ mb: 0.75, textTransform: "uppercase" }}
+          >
+            Thêm việc
+          </Typography>
+          {renderAddJob(worker)}
+        </CardContent>
+      </Card>
+    );
+  };
 
   const renderWorkerList = (hideSearch = false) => {
     const rows = hideSearch ? allWorkerRows : workerRows;
 
-    return isMobile ? (
-      <div style={styles.mobileList}>
-        {rows.length === 0 ? (
-          <div style={styles.empty}>Không có dữ liệu thợ</div>
-        ) : (
-          rows.map((row) => {
-            const { worker, currentCars, manualJobs, isBusy } = row;
+    if (rows.length === 0) {
+      return (
+        <Paper sx={{ p: 3, textAlign: "center" }}>
+          <Typography color="text.secondary">Không có dữ liệu thợ</Typography>
+        </Paper>
+      );
+    }
 
-            return (
-              <div key={worker._id} style={styles.mobileCard}>
-                <div style={styles.mobileHeader}>
-                  <div>
-                    <div style={styles.workerName}>{worker.name}</div>
-                    <div style={styles.workerCode}>MNV: {worker.soBaoDanh || "—"}</div>
-                  </div>
+    if (isMobile) {
+      return <Stack spacing={2}>{rows.map(renderMobileCard)}</Stack>;
+    }
 
-                  <span style={getStatusStyle(isBusy)}>
-                    {getStatusText(row)}
-                  </span>
-                </div>
+    return (
+      <TableContainer component={Paper}>
+        <Table size="small" sx={{ minWidth: 1000 }}>
+          <TableHead>
+            <TableRow sx={{ bgcolor: "grey.100" }}>
+              <TableCell sx={{ fontWeight: "bold" }}>Thợ</TableCell>
+              <TableCell sx={{ fontWeight: "bold" }}>MNV</TableCell>
+              <TableCell sx={{ fontWeight: "bold" }}>Trạng thái</TableCell>
+              <TableCell sx={{ fontWeight: "bold" }}>Xe đang làm</TableCell>
+              <TableCell sx={{ fontWeight: "bold" }}>Công việc ghi tay</TableCell>
+              <TableCell sx={{ fontWeight: "bold" }}>Thêm việc</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {rows.map((row) => {
+              const { worker, currentCars, manualJobs } = row;
 
-                <div style={styles.mobileSection}>
-                  <div style={styles.label}>Xe đang làm</div>
-                  {renderCars(worker, currentCars)}
-                </div>
-
-                <div style={styles.mobileSection}>
-                  <div style={styles.label}>Công việc ghi tay</div>
-                  {renderJobs(worker, manualJobs)}
-                </div>
-
-                <div style={styles.mobileSection}>
-                  <div style={styles.label}>Thêm việc</div>
-                  {renderAddJob(worker)}
-                </div>
-              </div>
-            );
-          })
-        )}
-      </div>
-    ) : (
-      <div style={styles.tableWrapper}>
-        <table style={styles.table}>
-          <thead>
-            <tr style={styles.theadRow}>
-              <th style={styles.th}>Thợ</th>
-              <th style={styles.th}>MNV</th>
-              <th style={styles.th}>Trạng thái</th>
-              <th style={styles.th}>Xe đang làm</th>
-              <th style={styles.th}>Công việc ghi tay</th>
-              <th style={styles.th}>Thêm việc</th>
-            </tr>
-          </thead>
-
-          <tbody>
-            {rows.length === 0 ? (
-              <tr>
-                <td colSpan="6" style={styles.empty}>
-                  Không có dữ liệu thợ
-                </td>
-              </tr>
-            ) : (
-              rows.map((row) => {
-                const { worker, currentCars, manualJobs, isBusy } = row;
-
-                return (
-                  <tr key={worker._id}>
-                    <td style={styles.td}>
-                      <b>{worker.name}</b>
-                    </td>
-
-                    <td style={styles.td}>{worker.soBaoDanh || "—"}</td>
-
-                    <td style={styles.td}>
-                      <span style={getStatusStyle(isBusy)}>
-                        {getStatusText(row)}
-                      </span>
-                    </td>
-
-                    <td style={styles.td}>{renderCars(worker, currentCars)}</td>
-
-                    <td style={styles.td}>{renderJobs(worker, manualJobs)}</td>
-
-                    <td style={styles.td}>{renderAddJob(worker)}</td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
+              return (
+                <TableRow key={worker._id} hover>
+                  <TableCell sx={{ verticalAlign: "top" }}>
+                    <Typography fontWeight="bold">{worker.name}</Typography>
+                  </TableCell>
+                  <TableCell sx={{ verticalAlign: "top" }}>
+                    {worker.soBaoDanh || "—"}
+                  </TableCell>
+                  <TableCell sx={{ verticalAlign: "top" }}>
+                    {renderStatusChip(row)}
+                  </TableCell>
+                  <TableCell sx={{ verticalAlign: "top" }}>
+                    {renderCars(worker, currentCars)}
+                  </TableCell>
+                  <TableCell sx={{ verticalAlign: "top" }}>
+                    {renderJobs(worker, manualJobs)}
+                  </TableCell>
+                  <TableCell sx={{ verticalAlign: "top", minWidth: 200 }}>
+                    {renderAddJob(worker)}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </TableContainer>
     );
   };
 
   return (
-    <div style={styles.container}>
-      <div style={styles.titleRow}>
-        <h2 style={styles.title}>📋 Phân công công việc theo thợ</h2>
-        <Button
-          variant="outlined"
-          size="small"
-          startIcon={<FullscreenIcon />}
-          onClick={() => setPageFullscreen(true)}
-          sx={{ flexShrink: 0, bgcolor: '#fff' }}
-        >
-          {isMobile ? 'Full' : 'Xem full màn hình'}
-        </Button>
-      </div>
+    <PageLayout sx={{ bgcolor: "grey.50", minHeight: "100vh" }}>
+      <PageHeader
+        emoji="📋"
+        title="Phân công công việc theo thợ"
+        subtitle="Giao việc ghi tay theo ngày và theo dõi xe đang được gán cho từng thợ"
+        actions={
+          <Button
+            variant="outlined"
+            size="small"
+            startIcon={<FullscreenIcon />}
+            onClick={() => setPageFullscreen(true)}
+            sx={{ flexShrink: 0, bgcolor: "background.paper" }}
+          >
+            {isMobile ? "Full" : "Xem full màn hình"}
+          </Button>
+        }
+      />
 
       {renderToolbar()}
       {renderWorkerList()}
@@ -394,200 +521,8 @@ const WokerAssignment = () => {
       >
         {renderWorkerList(true)}
       </FullscreenDialog>
-    </div>
+    </PageLayout>
   );
 };
 
 export default WokerAssignment;
-
-const styles = {
-  container: {
-    padding: "16px",
-    background: "#f4f6f8",
-    minHeight: "100vh",
-    fontFamily: "Arial",
-    boxSizing: "border-box",
-  },
-
-  title: {
-    marginBottom: 0,
-    fontSize: "clamp(20px, 5vw, 28px)",
-  },
-
-  titleRow: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12,
-    marginBottom: 15,
-    flexWrap: "wrap",
-  },
-
-  card: {
-    background: "#fff",
-    padding: 15,
-    borderRadius: 14,
-    marginBottom: 15,
-    boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
-  },
-
-  formRow: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: 10,
-  },
-
-  input: {
-    flex: 1,
-    minWidth: 160,
-    padding: 12,
-    borderRadius: 8,
-    border: "1px solid #ddd",
-    fontSize: 15,
-    boxSizing: "border-box",
-  },
-
-  inputSmall: {
-    width: "100%",
-    padding: 11,
-    borderRadius: 8,
-    border: "1px solid #ddd",
-    boxSizing: "border-box",
-    fontSize: 15,
-  },
-
-  btn: {
-    padding: "11px 15px",
-    border: "none",
-    borderRadius: 8,
-    background: "#ddd",
-    cursor: "pointer",
-    fontSize: 14,
-  },
-
-  btnPrimary: {
-    padding: "11px 15px",
-    border: "none",
-    borderRadius: 8,
-    background: "#1976d2",
-    color: "#fff",
-    cursor: "pointer",
-    fontSize: 14,
-  },
-
-  dateText: {
-    marginTop: 10,
-    color: "#64748b",
-    fontSize: 14,
-  },
-
-  tableWrapper: {
-    overflowX: "auto",
-    background: "#fff",
-    borderRadius: 12,
-    padding: 10,
-  },
-
-  table: {
-    width: "100%",
-    borderCollapse: "collapse",
-    minWidth: 1000,
-  },
-
-  theadRow: {
-    background: "#f1f5f9",
-  },
-
-  th: {
-    textAlign: "left",
-    padding: "12px",
-    borderBottom: "1px solid #ddd",
-    fontWeight: "bold",
-  },
-
-  td: {
-    padding: "12px",
-    borderBottom: "1px solid #eee",
-    verticalAlign: "top",
-  },
-
-  empty: {
-    textAlign: "center",
-    padding: 20,
-    color: "#64748b",
-  },
-
-  status: {
-    padding: "6px 10px",
-    borderRadius: 999,
-    fontSize: 12,
-    fontWeight: "bold",
-    display: "inline-block",
-    whiteSpace: "nowrap",
-  },
-
-  carBox: {
-    background: "#eff6ff",
-    border: "1px solid #bfdbfe",
-    borderRadius: 10,
-    padding: 9,
-    marginBottom: 6,
-    color: "#1e3a8a",
-  },
-
-  jobBox: {
-    background: "#fff7ed",
-    border: "1px solid #fed7aa",
-    borderRadius: 10,
-    padding: 9,
-    marginBottom: 6,
-    color: "#9a3412",
-  },
-
-  mobileList: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 14,
-  },
-
-  mobileCard: {
-    background: "#fff",
-    borderRadius: 16,
-    padding: 14,
-    boxShadow: "0 4px 18px rgba(15,23,42,0.08)",
-  },
-
-  mobileHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    gap: 10,
-    marginBottom: 12,
-  },
-
-  workerName: {
-    fontSize: 18,
-    fontWeight: 800,
-    color: "#0f172a",
-  },
-
-  workerCode: {
-    fontSize: 13,
-    color: "#64748b",
-    marginTop: 3,
-  },
-
-  mobileSection: {
-    borderTop: "1px solid #e5e7eb",
-    paddingTop: 10,
-    marginTop: 10,
-  },
-
-  label: {
-    fontSize: 13,
-    fontWeight: 800,
-    color: "#334155",
-    marginBottom: 6,
-    textTransform: "uppercase",
-  },
-};

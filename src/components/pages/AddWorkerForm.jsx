@@ -1,27 +1,27 @@
-import React from 'react';
+import { useState } from 'react';
 import { createWorker } from '../apis/index';
 import { TextField, Button, Box } from '@mui/material';
 import imageCompression from 'browser-image-compression';
 
-const AddWorkerForm = ({ onSuccess, searchName, setSearchName, embedded = false }) => {
-  const [soBaoDanh, setSoBaoDanh] = React.useState('');
-  const [loading, setLoading] = React.useState(false);
-  const [avatarFile, setAvatarFile] = React.useState(null);
-  const [avatarPreview, setAvatarPreview] = React.useState('');
+const AddWorkerForm = ({ onSuccess, embedded = false }) => {
+  const [workerName, setWorkerName] = useState('');
+  const [soBaoDanh, setSoBaoDanh] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [avatarFile, setAvatarFile] = useState(null);
+  const [avatarPreview, setAvatarPreview] = useState('');
 
-  const fileToBase64 = (file) => {
-    return new Promise((resolve, reject) => {
+  const fileToBase64 = (file) =>
+    new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.readAsDataURL(file);
       reader.onload = () => resolve(reader.result);
       reader.onerror = (error) => reject(error);
     });
-  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!searchName.trim()) {
+    if (!workerName.trim()) {
       alert('Vui lòng nhập tên thợ');
       return;
     }
@@ -32,25 +32,21 @@ const AddWorkerForm = ({ onSuccess, searchName, setSearchName, embedded = false 
     }
 
     let avatarBase64 = '';
-
     if (avatarFile) {
       avatarBase64 = await fileToBase64(avatarFile);
     }
 
-    const data = {
-      name: searchName.trim(),
-      soBaoDanh: soBaoDanh.trim(),
-      avatar: avatarBase64,
-      countRevenue: true,
-    };
-
     try {
       setLoading(true);
-      await createWorker(data);
+      await createWorker({
+        name: workerName.trim(),
+        soBaoDanh: soBaoDanh.trim(),
+        avatar: avatarBase64,
+        countRevenue: true,
+      });
 
-      onSuccess && onSuccess();
-
-      setSearchName('');
+      onSuccess?.();
+      setWorkerName('');
       setSoBaoDanh('');
       setAvatarFile(null);
       setAvatarPreview('');
@@ -63,13 +59,7 @@ const AddWorkerForm = ({ onSuccess, searchName, setSearchName, embedded = false 
   };
 
   return (
-    <Box
-      sx={
-        embedded
-          ? { width: '100%' }
-          : { mt: 2, mb: 3, maxWidth: { xs: '95vw', sm: 600 }, mx: 'auto' }
-      }
-    >
+    <Box sx={embedded ? { width: '100%' } : { mt: 2, mb: 3, maxWidth: { xs: '95vw', sm: 600 }, mx: 'auto' }}>
       <Box
         component="form"
         onSubmit={handleSubmit}
@@ -82,20 +72,20 @@ const AddWorkerForm = ({ onSuccess, searchName, setSearchName, embedded = false 
           ...(embedded
             ? {}
             : {
-                background: '#fff',
-                borderRadius: 3,
-                boxShadow: '0 2px 12px rgba(0,0,0,0.06)',
-                p: { xs: 1.5, sm: 2.5 },
+                bgcolor: 'background.paper',
+                borderRadius: 2,
+                border: 1,
+                borderColor: 'divider',
+                p: { xs: 1.5, sm: 2 },
               }),
         }}
       >
         <TextField
           label="Tên thợ"
-          value={searchName}
-          onChange={(e) => setSearchName(e.target.value)}
+          value={workerName}
+          onChange={(e) => setWorkerName(e.target.value)}
           required
           fullWidth
-          size={embedded ? 'small' : 'medium'}
           sx={embedded ? { flex: { lg: '2 1 180px' }, minWidth: 140 } : undefined}
         />
 
@@ -105,22 +95,10 @@ const AddWorkerForm = ({ onSuccess, searchName, setSearchName, embedded = false 
           onChange={(e) => setSoBaoDanh(e.target.value)}
           required
           fullWidth
-          size={embedded ? 'small' : 'medium'}
           sx={embedded ? { flex: { lg: '1 1 120px' }, minWidth: 110 } : undefined}
         />
 
-        <Button
-          variant="outlined"
-          component="label"
-          size={embedded ? 'small' : 'medium'}
-          sx={{
-            borderRadius: 2,
-            py: embedded ? 0.85 : 1.2,
-            flexShrink: 0,
-            whiteSpace: 'nowrap',
-            textTransform: 'none',
-          }}
-        >
+        <Button variant="outlined" component="label" sx={{ flexShrink: 0, whiteSpace: 'nowrap', textTransform: 'none' }}>
           Chọn ảnh
           <input
             type="file"
@@ -163,17 +141,7 @@ const AddWorkerForm = ({ onSuccess, searchName, setSearchName, embedded = false 
           variant="contained"
           disabled={loading}
           fullWidth={!embedded}
-          size={embedded ? 'small' : 'medium'}
-          sx={{
-            fontSize: embedded ? 14 : 16,
-            py: embedded ? 0.85 : 1.5,
-            px: embedded ? 2.5 : undefined,
-            borderRadius: 2,
-            bgcolor: '#2563eb',
-            flexShrink: 0,
-            whiteSpace: 'nowrap',
-            '&:hover': { bgcolor: '#1d4ed8' },
-          }}
+          sx={{ flexShrink: 0, whiteSpace: 'nowrap', textTransform: 'none' }}
         >
           {loading ? 'Đang thêm...' : 'Thêm thợ'}
         </Button>

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import {
   Typography,
   Paper,
@@ -8,7 +8,6 @@ import {
   TableRow,
   TableCell,
   TableBody,
-  Divider,
   useTheme,
   useMediaQuery,
   Stack,
@@ -16,13 +15,8 @@ import {
   FormControl,
   Select,
   InputLabel,
+  CircularProgress,
 } from '@mui/material';
-import {
-  getWorkingAndPendingCars,
-  getCarStats,
-  getOverdueCars,
-  getAllLocations,
-} from '../apis/index';
 import DirectionsCarIcon from '@mui/icons-material/DirectionsCar';
 import QueryBuilderIcon from '@mui/icons-material/QueryBuilder';
 import BuildIcon from '@mui/icons-material/Build';
@@ -33,36 +27,30 @@ import InventoryIcon from '@mui/icons-material/Inventory';
 import ReplayIcon from '@mui/icons-material/Replay';
 import ErrorIcon from '@mui/icons-material/Error';
 import LocationOnIcon from '@mui/icons-material/LocationOn';
-import PersonIcon from '@mui/icons-material/Person';
-import GroupIcon from '@mui/icons-material/Group';
-import SupervisorAccountIcon from '@mui/icons-material/SupervisorAccount';
-import FilterListIcon from '@mui/icons-material/FilterList';
 import Chip from '@mui/material/Chip';
 import Grid from '@mui/material/Grid';
+import { getSupervisorsFromCars } from '../../utils/carListHelpers';
+import useHomeDashboard from '../../hooks/queries/useHomeDashboard';
+import PageLayout from '../common/PageLayout';
+import PageHeader from '../common/PageHeader';
+import FilterPanel from '../common/FilterPanel';
 
 const Home = () => {
-  const [carsToday, setCarsToday] = useState([]);
-  const [overdueCars, setOverdueCars] = useState([]);
-  const [carsByStatus, setCarsByStatus] = useState({});
-  const [locations, setLocations] = useState([]);
   const [selectedLocation, setSelectedLocation] = useState('');
   const [selectedSectionKey, setSelectedSectionKey] = useState('');
   const [selectedSupervisor, setSelectedSupervisor] = useState('');
-  const [stats, setStats] = useState({
-    pending: 0,
-    working: 0,
-    done: 0,
-    waiting_wash: 0,
-    waiting_handover: 0,
-    delivered: 0,
-    additional_repair: 0,
-  });
+
+  const { data, isLoading } = useHomeDashboard();
+
+  const carsToday = data?.carsToday || [];
+  const overdueCars = data?.overdueCars || [];
+  const carsByStatus = data?.carsByStatus || {};
+  const locations = data?.locations || [];
+  const todayISO = data?.todayISO || new Date().toISOString().slice(0, 10);
+  const todayDisplay = new Date().toLocaleDateString('vi-VN');
 
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-
-  const todayISO = new Date().toISOString().slice(0, 10);
-  const todayDisplay = new Date().toLocaleDateString('vi-VN');
 
   const getColor = (car) => {
     if (car.isLate || ['warranty', 'rescue'].includes(car.condition)) return '#d32f2f';
@@ -111,57 +99,6 @@ const Home = () => {
     return result;
   };
 
-  const fetchData = async () => {
-    try {
-      const [resWorkingPending, resStats, resOverdue, resLocations] = await Promise.all([
-        getWorkingAndPendingCars(),
-        getCarStats(),
-        getOverdueCars(),
-        getAllLocations().catch(() => ({ data: [] })),
-      ]);
-
-      const carStatusData = resWorkingPending.data || {};
-      const overdueRaw = resOverdue.data.cars || [];
-
-      const todayCars = [];
-
-      Object.values(carStatusData).forEach((cars) => {
-        (cars || []).forEach((car) => {
-          if (car.currentDate === todayISO) {
-            todayCars.push(car);
-          }
-        });
-      });
-
-      // Gắn cờ isLate cho xe hôm nay
-      const overdueIds = new Set(overdueRaw.map((car) => car._id));
-      const todayCarsWithLateFlag = todayCars.map((car) => ({
-        ...car,
-        isLate: overdueIds.has(car._id),
-      }));
-
-      // Gắn cờ isLate cho tất cả xe trễ hẹn (overdueRaw)
-      const overdueCarsWithLateFlag = overdueRaw.map((car) => ({
-        ...car,
-        isLate: true,
-      }));
-
-      setCarsToday(todayCarsWithLateFlag);
-      setOverdueCars(overdueCarsWithLateFlag); // Sửa ở đây: luôn in ra tất cả xe trễ hẹn
-      setCarsByStatus(carStatusData);
-      setStats(resStats.data);
-      setLocations(resLocations.data || []);
-    } catch (err) {
-      console.error('Lỗi khi tải dữ liệu:', err);
-    }
-  };
-
-  useEffect(() => {
-    fetchData();
-    const interval = setInterval(fetchData, 1000);
-    return () => clearInterval(interval);
-  }, []);
-
   const getWorkersByRole = (workers = []) => {
     const formatWorkers = (role) =>
       workers
@@ -180,18 +117,23 @@ const Home = () => {
     const { mainWorkers, subWorkers } = getWorkersByRole(car.workers);
     const color = getColor(car);
     return (
-      <Paper key={car._id} elevation={4} sx={{ p: 3, borderRadius: 3, border: color !== 'inherit' ? `2px solid ${color}` : undefined, boxShadow: 3 }}>
-        <Stack direction="row" alignItems="center" spacing={2} mb={2}>
-          <DirectionsCarIcon fontSize="large" color={color === '#d32f2f' ? 'error' : color === 'green' ? 'success' : 'primary'} />
-          <Typography fontSize={24} fontWeight="bold" gutterBottom sx={{ color }}>{car.plateNumber}</Typography>
+      <Paper key={car._id} sx={{ p: 1.5, borderRadius: 2, border: color !== 'inherit' ? `2px solid ${color}` : undefined }}>
+        <Stack direction="row" alignItems="center" spacing={1} mb={1}>
+          <DirectionsCarIcon fontSize="small" color={color === '#d32f2f' ? 'error' : color === 'green' ? 'success' : 'primary'} />
+          <Typography variant="subtitle1" fontWeight="bold" sx={{ color }}>{car.plateNumber}</Typography>
         </Stack>
-        <Stack spacing={1}>
-          <Stack direction="row" alignItems="center" spacing={1}><LocationOnIcon fontSize="small" /><Typography fontSize={18}>{car.location?.name || '---'}</Typography></Stack>
-          <Stack direction="row" alignItems="center" spacing={1}><DirectionsCarIcon fontSize="small" /><Typography fontSize={18}>{car.externalCarTypeName || '---'}</Typography></Stack>
-          <Stack direction="row" alignItems="center" spacing={1}><QueryBuilderIcon fontSize="small" /><Typography fontSize={18}>{car.currentTime}</Typography></Stack>
-          <Stack direction="row" alignItems="center" spacing={1}><PersonIcon fontSize="small" /><Typography fontSize={18}>Thợ chính:</Typography> {mainWorkers ? <Chip label={mainWorkers} color="primary" size="small" /> : <Chip label="Trống" color="error" size="small" />}</Stack>
-          <Stack direction="row" alignItems="center" spacing={1}><GroupIcon fontSize="small" /><Typography fontSize={18}>Thợ phụ:</Typography> {subWorkers ? <Chip label={subWorkers} color="secondary" size="small" /> : <Chip label="Trống" color="error" size="small" />}</Stack>
-          <Stack direction="row" alignItems="center" spacing={1}><SupervisorAccountIcon fontSize="small" /><Typography fontSize={18}>Giám sát:</Typography> <Typography fontSize={18}>{car.supervisor?.name || '---'}</Typography></Stack>
+        <Stack spacing={0.5}>
+          <Typography variant="body2"><LocationOnIcon sx={{ fontSize: 14, mr: 0.5, verticalAlign: 'text-bottom' }} />{car.location?.name || '---'}</Typography>
+          <Typography variant="body2">{car.externalCarTypeName || '---'} · {car.currentTime}</Typography>
+          <Stack direction="row" alignItems="center" spacing={0.5} flexWrap="wrap">
+            <Typography variant="caption">Thợ chính:</Typography>
+            {mainWorkers ? <Chip label={mainWorkers} color="primary" /> : <Chip label="Trống" color="error" />}
+          </Stack>
+          <Stack direction="row" alignItems="center" spacing={0.5} flexWrap="wrap">
+            <Typography variant="caption">Thợ phụ:</Typography>
+            {subWorkers ? <Chip label={subWorkers} color="secondary" /> : <Chip label="Trống" color="error" />}
+          </Stack>
+          <Typography variant="caption" color="text.secondary">GS: {car.supervisor?.name || '---'}</Typography>
         </Stack>
       </Paper>
     );
@@ -203,8 +145,8 @@ const Home = () => {
         <TableHead>
           <TableRow>
             {['STT', 'Biển số', 'Địa điểm', 'Loại xe', 'Nhận', 'Thợ chính', 'Thợ phụ', 'Giám sát'].map((title, idx) => (
-              <TableCell key={title} align={idx === 0 ? 'center' : 'left'} sx={{ background: '#f5f5f5' }}>
-                <Typography fontWeight="bold" fontSize={20}>{title}</Typography>
+              <TableCell key={title} align={idx === 0 ? 'center' : 'left'} sx={{ bgcolor: 'grey.100', fontWeight: 600, py: 1 }}>
+                {title}
               </TableCell>
             ))}
           </TableRow>
@@ -215,14 +157,14 @@ const Home = () => {
             const color = getColor(car);
             return (
               <TableRow key={car._id} sx={{ backgroundColor: index % 2 === 0 ? '#fafafa' : '#fff', transition: 'background 0.2s', '&:hover': { backgroundColor: '#e3f2fd' } }}>
-                <TableCell align="center"><Typography fontSize={19} sx={{ color }}>{index + 1}</Typography></TableCell>
-                <TableCell><Typography fontSize={19} sx={{ color }}>{car.plateNumber}</Typography></TableCell>
-                <TableCell><Typography fontSize={19} sx={{ color }}>{car.location?.name || '---'}</Typography></TableCell>
-                <TableCell><Typography fontSize={19} sx={{ color }}>{car.externalCarTypeName || '---'}</Typography></TableCell>
-                <TableCell><Typography fontSize={19} sx={{ color }}>{car.currentTime}</Typography></TableCell>
-                <TableCell>{mainWorkers ? <Chip label={mainWorkers} color="primary" size="small" /> : <Chip label="Trống" color="error" size="small" />}</TableCell>
-                <TableCell>{subWorkers ? <Chip label={subWorkers} color="primary" size="small" /> : <Chip label="Trống" color="error" size="small" />}</TableCell>
-                <TableCell><Typography fontSize={19} sx={{ color }}>{car.supervisor?.name || '---'}</Typography></TableCell>
+                <TableCell align="center"><Typography variant="body2" sx={{ color }}>{index + 1}</Typography></TableCell>
+                <TableCell><Typography variant="body2" fontWeight={600} sx={{ color }}>{car.plateNumber}</Typography></TableCell>
+                <TableCell><Typography variant="body2">{car.location?.name || '---'}</Typography></TableCell>
+                <TableCell><Typography variant="body2">{car.externalCarTypeName || '---'}</Typography></TableCell>
+                <TableCell><Typography variant="body2">{car.currentTime}</Typography></TableCell>
+                <TableCell>{mainWorkers ? <Chip label={mainWorkers} color="primary" /> : <Chip label="Trống" color="error" />}</TableCell>
+                <TableCell>{subWorkers ? <Chip label={subWorkers} color="primary" /> : <Chip label="Trống" color="error" />}</TableCell>
+                <TableCell><Typography variant="body2">{car.supervisor?.name || '---'}</Typography></TableCell>
               </TableRow>
             );
           })}
@@ -231,19 +173,11 @@ const Home = () => {
     </Box>
   );
 
-  // Lấy danh sách giám sát viên duy nhất từ tất cả xe
-  const getAllSupervisors = () => {
-    const allCars = [
-      ...carsToday,
-      ...overdueCars,
-      ...Object.values(carsByStatus).flat()
-    ];
-    const supervisors = allCars
-      .map(car => car.supervisor)
-      .filter(Boolean)
-      .filter((v, i, a) => v && a.findIndex(t => t?._id === v._id) === i);
-    return supervisors;
-  };
+  const allSupervisors = getSupervisorsFromCars([
+    ...carsToday,
+    ...overdueCars,
+    ...Object.values(carsByStatus).flat(),
+  ]);
 
   // Lọc theo địa điểm và giám sát viên
   const filterCars = (cars) => {
@@ -258,41 +192,26 @@ const Home = () => {
   };
 
   return (
-    <Box sx={{ width: '100%', mt: 0, px: { xs: 1, sm: 2, md: 4 }, py: 2, backgroundColor: '#f9f9f9', minHeight: '100vh' }}>
-      <Typography variant={isMobile ? 'h5' : 'h4'} fontWeight="bold" gutterBottom>
-        Danh sách xe trong ngày (
-        <Box component="span" sx={{ color: '#d32f2f', fontWeight: 'bold', display: 'inline' }}>{todayDisplay}</Box>)
-      </Typography>
+    <PageLayout>
+      {isLoading && (
+        <Box display="flex" justifyContent="center" py={3}>
+          <CircularProgress size={28} />
+        </Box>
+      )}
 
-      <Paper elevation={2} sx={{ p: 2, mb: 3, borderRadius: 2 }}>
-        <Stack direction="row" alignItems="center" spacing={1} mb={2}>
-          <FilterListIcon color="primary" />
-          <Typography variant="h6" fontWeight="bold">Bộ lọc</Typography>
-        </Stack>
-        <Divider sx={{ mb: 2 }} />
-        <Box
-          sx={theme => ({
-            display: 'flex',
-            flexWrap: 'wrap',
-            gap: { xs: 0, sm: 2 },
-            mb: 1,
-            flexDirection: { xs: 'column', sm: 'row' },
-          })}
-        >
-          <FormControl
-            sx={{
-              maxWidth: { xs: '100%', sm: 300 },
-              minWidth: { xs: 0, sm: 200 },
-              width: '100%',
-              flexGrow: 1,
-              flexShrink: 0,
-              mb: { xs: 2, sm: 0 },
-            }}
-          >
-            <InputLabel><LocationOnIcon fontSize="small" sx={{ mr: 1 }} />Chọn địa điểm</InputLabel>
+      <PageHeader
+        icon={<DirectionsCarIcon color="primary" />}
+        title={`Xe trong ngày (${todayDisplay})`}
+        subtitle="Theo dõi trạng thái, lọc theo địa điểm và giám sát"
+      />
+
+      <FilterPanel>
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} useFlexGap flexWrap="wrap">
+          <FormControl sx={{ minWidth: { xs: '100%', sm: 200 }, flex: 1 }}>
+            <InputLabel>Địa điểm</InputLabel>
             <Select
               value={selectedLocation}
-              label={<><LocationOnIcon fontSize="small" sx={{ mr: 1 }} />Chọn địa điểm</>}
+              label="Địa điểm"
               onChange={(e) => setSelectedLocation(e.target.value)}
             >
               <MenuItem value="">Tất cả địa điểm</MenuItem>
@@ -302,109 +221,86 @@ const Home = () => {
             </Select>
           </FormControl>
 
-          <FormControl
-            sx={{
-              maxWidth: { xs: '100%', sm: 300 },
-              minWidth: { xs: 0, sm: 200 },
-              width: '100%',
-              flexGrow: 1,
-              flexShrink: 0,
-              mb: { xs: 2, sm: 0 },
-            }}
-          >
-            <InputLabel><SupervisorAccountIcon fontSize="small" sx={{ mr: 1 }} />Chọn giám sát</InputLabel>
+          <FormControl sx={{ minWidth: { xs: '100%', sm: 200 }, flex: 1 }}>
+            <InputLabel>Giám sát</InputLabel>
             <Select
               value={selectedSupervisor}
-              label={<><SupervisorAccountIcon fontSize="small" sx={{ mr: 1 }} />Chọn giám sát</>}
+              label="Giám sát"
               onChange={(e) => setSelectedSupervisor(e.target.value)}
             >
               <MenuItem value="">Tất cả giám sát</MenuItem>
-              {getAllSupervisors().map((sup) => (
+              {allSupervisors.map((sup) => (
                 <MenuItem key={sup._id} value={sup._id}>{sup.name}</MenuItem>
               ))}
             </Select>
           </FormControl>
 
-          <FormControl
-            sx={{
-              maxWidth: { xs: '100%', sm: 300 },
-              minWidth: { xs: 0, sm: 200 },
-              width: '100%',
-              flexGrow: 1,
-              flexShrink: 0,
-              mb: { xs: 2, sm: 0 },
-            }}
-          >
-            <InputLabel><DirectionsCarIcon fontSize="small" sx={{ mr: 1 }} />Chọn mục hiển thị</InputLabel>
+          <FormControl sx={{ minWidth: { xs: '100%', sm: 200 }, flex: 1 }}>
+            <InputLabel>Mục hiển thị</InputLabel>
             <Select
               value={selectedSectionKey}
-              label={<><DirectionsCarIcon fontSize="small" sx={{ mr: 1 }} />Chọn mục hiển thị</>}
+              label="Mục hiển thị"
               onChange={(e) => setSelectedSectionKey(e.target.value)}
             >
               <MenuItem value="">Tất cả mục</MenuItem>
-              <MenuItem value="today">🗓️ Xe hôm nay</MenuItem>
-              <MenuItem value="late">⏰ Xe trễ hẹn</MenuItem>
+              <MenuItem value="today">Xe hôm nay</MenuItem>
+              <MenuItem value="late">Xe trễ hẹn</MenuItem>
               {carSections.map((section) => (
                 <MenuItem key={section.key} value={section.key}>{section.label}</MenuItem>
               ))}
             </Select>
           </FormControl>
-        </Box>
-      </Paper>
+        </Stack>
+      </FilterPanel>
 
-      <Paper elevation={1} sx={{ p: 2, mb: 3, borderRadius: 2 }}>
-        <Typography variant="h6" fontWeight="bold" gutterBottom>📊 Thống kê xe:</Typography>
-        <Grid container spacing={2} sx={{ width: '100%' }}>
-          {statsConfig.map((stat, idx) => (
-            <Grid item xs={6} sm={4} md={2} key={stat.key}>
-              <Paper
-                elevation={3}
+      <Paper sx={{ p: 1.5, mb: 2 }}>
+        <Typography variant="subtitle2" gutterBottom>Thống kê</Typography>
+        <Grid container spacing={1}>
+          {statsConfig.map((stat) => (
+            <Grid size={{ xs: 4, sm: 3, md: 1.5 }} key={stat.key}>
+              <Box
                 sx={{
-                  p: 2,
-                  borderRadius: 2,
-                  minHeight: 100,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  background: stat.key === 'late' ? '#fff3e0' : '#f5f5f5',
+                  p: 1,
+                  borderRadius: 1.5,
+                  textAlign: 'center',
+                  bgcolor: stat.key === 'late' ? '#fff3e0' : 'grey.50',
+                  border: '1px solid',
+                  borderColor: 'divider',
                 }}
               >
-                {stat.icon}
-                <Typography fontWeight="bold" fontSize={18}>{stat.label}</Typography>
-                <Typography fontSize={20} color={stat.key === 'late' ? 'error' : 'primary'}>
+                <Box sx={{ '& .MuiSvgIcon-root': { fontSize: 18 } }}>{stat.icon}</Box>
+                <Typography variant="caption" display="block" fontWeight={600}>{stat.label}</Typography>
+                <Typography variant="subtitle2" color={stat.key === 'late' ? 'error' : 'primary'}>
                   {stat.key === 'late' ? filterCars(overdueCars).length : getFilteredStats()[stat.key]}
                 </Typography>
-              </Paper>
+              </Box>
             </Grid>
           ))}
         </Grid>
       </Paper>
 
-      <Divider sx={{ mb: 3 }} />
-
       {(!selectedSectionKey || selectedSectionKey === 'today') && (
-        <Box sx={{ mt: 4 }}>
-          <Typography variant="h6" fontWeight="bold" gutterBottom>🗓️ Xe hôm nay:</Typography>
+        <Box sx={{ mb: 2 }}>
+          <Typography variant="subtitle2" fontWeight={700} gutterBottom>Xe hôm nay</Typography>
           {filterCars(carsToday).length === 0 ? (
-            <Typography>Không có xe nào.</Typography>
+            <Typography variant="body2" color="text.secondary">Không có xe nào.</Typography>
           ) : isMobile ? (
-            <Stack spacing={2}>{filterCars(carsToday).map(renderCarCard)}</Stack>
+            <Stack spacing={1.5}>{filterCars(carsToday).map(renderCarCard)}</Stack>
           ) : (
-            <Paper elevation={2} sx={{ p: 2, overflowX: 'auto' }}>{renderCarTable(filterCars(carsToday))}</Paper>
+            <Paper sx={{ overflowX: 'auto' }}>{renderCarTable(filterCars(carsToday))}</Paper>
           )}
         </Box>
       )}
 
       {(!selectedSectionKey || selectedSectionKey === 'late') && (
-        <Box sx={{ mt: 4 }}>
-          <Typography variant="h6" fontWeight="bold" gutterBottom>⏰ Xe trễ hẹn:</Typography>
+        <Box sx={{ mb: 2 }}>
+          <Typography variant="subtitle2" fontWeight={700} gutterBottom>Xe trễ hẹn</Typography>
           {filterCars(overdueCars).length === 0 ? (
-            <Typography>Không có xe nào.</Typography>
+            <Typography variant="body2" color="text.secondary">Không có xe nào.</Typography>
           ) : isMobile ? (
-            <Stack spacing={2}>{filterCars(overdueCars).map(renderCarCard)}</Stack>
+            <Stack spacing={1.5}>{filterCars(overdueCars).map(renderCarCard)}</Stack>
           ) : (
-            <Paper elevation={2} sx={{ p: 2, overflowX: 'auto' }}>{renderCarTable(filterCars(overdueCars))}</Paper>
+            <Paper sx={{ overflowX: 'auto' }}>{renderCarTable(filterCars(overdueCars))}</Paper>
           )}
         </Box>
       )}
@@ -416,19 +312,19 @@ const Home = () => {
           const carsTodayOnly = cars.filter((car) => car.currentDate === todayISO);
           const filtered = filterCars(carsTodayOnly);
           return (
-            <Box key={key} sx={{ mt: 4 }}>
-              <Typography variant="h6" fontWeight="bold" gutterBottom>{label}</Typography>
+            <Box key={key} sx={{ mb: 2 }}>
+              <Typography variant="subtitle2" fontWeight={700} gutterBottom>{label}</Typography>
               {filtered.length === 0 ? (
-                <Typography>Không có xe nào.</Typography>
+                <Typography variant="body2" color="text.secondary">Không có xe nào.</Typography>
               ) : isMobile ? (
-                <Stack spacing={2}>{filtered.map(renderCarCard)}</Stack>
+                <Stack spacing={1.5}>{filtered.map(renderCarCard)}</Stack>
               ) : (
-                <Paper elevation={2} sx={{ p: 2, overflowX: 'auto' }}>{renderCarTable(filtered)}</Paper>
+                <Paper sx={{ overflowX: 'auto' }}>{renderCarTable(filtered)}</Paper>
               )}
             </Box>
           );
         })}
-    </Box>
+    </PageLayout>
   );
 };
 

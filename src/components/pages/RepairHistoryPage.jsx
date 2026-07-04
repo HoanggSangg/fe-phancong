@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Box,
   Typography,
@@ -18,15 +18,15 @@ import {
   Button,
   FormControlLabel,
   Checkbox,
+  TablePagination,
 } from '@mui/material';
 import HistoryIcon from '@mui/icons-material/History';
 import DirectionsCarIcon from '@mui/icons-material/DirectionsCar';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
-import { getRepairHistory, getAllWorkers } from '../apis/index';
 import { useAuth } from '../../context/AuthContext';
-import { CAR_STATUS_LABELS, isKtv } from '../../utils/permissions';
+import { CAR_STATUS_LABELS, isKtv, hasPermission } from '../../utils/permissions';
 import WorkerSearchSelect from '../common/WorkerSearchSelect';
 import { formatMoney } from '../../utils/dateFilters';
 import usePeriodFilter from '../../hooks/usePeriodFilter';
@@ -36,24 +36,21 @@ import {
   exportRepairHistoryToExcel,
   sumAssignmentsRevenue,
 } from '../../utils/repairHistoryExcel';
+import useRepairHistory, { fetchRepairHistoryData } from '../../hooks/queries/useRepairHistory';
+import useWorkers from '../../hooks/queries/useWorkers';
+import { REPAIR_HISTORY_PAGE_SIZE } from '../../utils/repairHistory';
+import PageLayout from '../common/PageLayout';
+import PageHeader from '../common/PageHeader';
+import FilterPanel from '../common/FilterPanel';
 
 const isDeliveredCar = (car) => car.carStatus === 'delivered';
 
 const RepairHistoryPage = () => {
   const { user } = useAuth();
   const isKtvUser = isKtv(user?.role);
+  const canViewRevenue = hasPermission(user, 'reports.revenue');
 
-  const [items, setItems] = useState([]);
-  const [summary, setSummary] = useState({
-    totalRevenue: 0,
-    revenueBeforeCommission: 0,
-    revenueAfterCommission: 0,
-    totalItems: 0,
-    totalCars: 0,
-  });
-  const [workers, setWorkers] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [page, setPage] = useState(1);
   const [exportError, setExportError] = useState('');
   const [exporting, setExporting] = useState(false);
   const [includeDeliveredDetails, setIncludeDeliveredDetails] = useState(false);
@@ -61,80 +58,36 @@ const RepairHistoryPage = () => {
   const { period, setPeriod, fromDate, setFromDate, toDate, setToDate } = usePeriodFilter('today');
   const [workerFilter, setWorkerFilter] = useState('');
 
-  const parseHistoryResponse = (data) => {
-    if (Array.isArray(data)) {
-      return {
-        items: data,
-        summary: {
-          totalRevenue: 0,
-          revenueBeforeCommission: 0,
-          revenueAfterCommission: 0,
-          totalItems: data.length,
-          totalCars: new Set(data.map((item) => `${item.plateNumber}__${item.carDate}`)).size,
-        },
-      };
-    }
+  const workerIdParam = !isKtvUser && workerFilter ? workerFilter : undefined;
 
-    return {
-      items: data?.items || [],
-      summary: {
-        totalRevenue: Number(data?.totalRevenue || data?.revenueAfterCommission || 0),
-        revenueBeforeCommission: Number(data?.revenueBeforeCommission || 0),
-        revenueAfterCommission: Number(data?.revenueAfterCommission || data?.totalRevenue || 0),
-        totalItems: Number(data?.totalItems || data?.items?.length || 0),
-        totalCars: Number(data?.totalCars || 0),
-      },
-    };
-  };
+  const { data, isLoading, isFetching, error } = useRepairHistory({
+    from: fromDate,
+    to: toDate,
+    workerId: workerIdParam,
+    page,
+    enabled: Boolean(fromDate && toDate),
+  });
 
-  const fetchHistoryByRange = useCallback(
-    async (from, to, workerId = workerFilter) => {
-      const params = { from, to };
-      if (!isKtvUser && workerId) params.workerId = workerId;
-      const res = await getRepairHistory(params);
-      return parseHistoryResponse(res.data);
-    },
-    [isKtvUser, workerFilter]
-  );
-
-  const fetchHistory = async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const { items: nextItems, summary: nextSummary } = await fetchHistoryByRange(fromDate, toDate);
-      setItems(nextItems);
-      setSummary(nextSummary);
-      setExpandedDeliveredCars(new Set());
-    } catch (err) {
-      console.error(err);
-      setError(err.response?.data?.message || 'Không tải được lịch sử sửa chữa');
-      setItems([]);
-      setSummary({
-        totalRevenue: 0,
-        revenueBeforeCommission: 0,
-        revenueAfterCommission: 0,
-        totalItems: 0,
-        totalCars: 0,
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { data: workers = [] } = useWorkers(canViewRevenue);
 
   useEffect(() => {
-    if (!isKtvUser) {
-      getAllWorkers()
-        .then((res) => setWorkers(res.data || []))
-        .catch(() => setWorkers([]));
-    }
-  }, [isKtvUser]);
-
-  useEffect(() => {
-    fetchHistory();
+    setPage(1);
+    setExpandedDeliveredCars(new Set());
   }, [fromDate, toDate, workerFilter, isKtvUser]);
+
+  const items = data?.items || [];
+  const summary = data?.summary || {
+    totalRevenue: 0,
+    revenueBeforeCommission: 0,
+    revenueAfterCommission: 0,
+    totalItems: 0,
+    totalCars: 0,
+  };
+  const pagination = data?.pagination;
 
   const carGroups = useMemo(() => buildCarGroups(items), [items]);
   const totalRevenue = summary.revenueAfterCommission || summary.totalRevenue;
+  const errorMessage = error?.response?.data?.message || (error ? 'Không tải được lịch sử sửa chữa' : '');
 
   const isCarExpanded = (car) =>
     !isDeliveredCar(car) || expandedDeliveredCars.has(car.key);
@@ -152,17 +105,25 @@ const RepairHistoryPage = () => {
     setExportError('');
     setExporting(true);
     try {
-      if (carGroups.length === 0) {
+      const { items: exportItems } = await fetchRepairHistoryData({
+        from: fromDate,
+        to: toDate,
+        workerId: workerIdParam,
+        paginate: false,
+      });
+
+      const exportCarGroups = buildCarGroups(exportItems);
+      if (exportCarGroups.length === 0) {
         setExportError('Không có dữ liệu để xuất Excel trong khoảng đã chọn.');
         return;
       }
 
       exportRepairHistoryToExcel({
-        carGroups,
+        carGroups: exportCarGroups,
         fromDate,
         toDate,
         includeDeliveredDetails,
-        isKtvUser,
+        isKtvUser: !canViewRevenue,
       });
     } catch (err) {
       console.error(err);
@@ -186,7 +147,7 @@ const RepairHistoryPage = () => {
         {assignments.map((assignment, index) => (
           <Typography key={`${assignment.workerId}-${index}`} variant="body2">
             {assignment.workerName || '—'} ({assignment.percentage}%)
-            {!isKtvUser && <> · {formatMoney(assignment.revenue)}</>}
+            {canViewRevenue && <> · {formatMoney(assignment.revenue)}</>}
           </Typography>
         ))}
       </Stack>
@@ -213,7 +174,7 @@ const RepairHistoryPage = () => {
       <Typography variant="body2" color="text.secondary">
         Xe đã giao — đã gom {car.items.length} hạng mục. Bấm &quot;Xem hạng mục&quot; để mở chi tiết.
       </Typography>
-      {!isKtvUser && (
+      {canViewRevenue && (
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mt: 1 }}>
           <Typography variant="body2">
             Tổng thành tiền: <strong>{formatMoney(car.totalAmount)}</strong>
@@ -231,7 +192,7 @@ const RepairHistoryPage = () => {
       <TableRow key={item._id} hover>
         <TableCell>{item.groupName || 'Khác'}</TableCell>
         <TableCell sx={{ minWidth: 200 }}>{item.content}</TableCell>
-        {!isKtvUser && (
+        {canViewRevenue && (
           <>
             <TableCell align="right">{formatMoney(item.amount)}</TableCell>
             <TableCell>{renderWorkers(item.allAssignments || item.assignments)}</TableCell>
@@ -263,7 +224,7 @@ const RepairHistoryPage = () => {
           </Box>
           <Stack direction="row" spacing={1} alignItems="center">
             {renderDeliveredToggle(car)}
-            {!isKtvUser && (
+            {canViewRevenue && (
               <Box textAlign="right">
                 <Typography variant="body2" color="text.secondary">
                   Tổng thành tiền
@@ -296,7 +257,7 @@ const RepairHistoryPage = () => {
                   <Typography variant="body2" sx={{ mb: 0.5 }}>
                     {item.content}
                   </Typography>
-                  {!isKtvUser && (
+                  {canViewRevenue && (
                     <>
                       <Typography variant="body2">
                         Thành tiền: <strong>{formatMoney(item.amount)}</strong>
@@ -342,7 +303,7 @@ const RepairHistoryPage = () => {
           </Typography>
           {renderDeliveredToggle(car)}
         </Stack>
-        {!isKtvUser && (
+        {canViewRevenue && (
           <Stack direction="row" spacing={3} alignItems="center">
             <Box textAlign="right">
               <Typography variant="caption" color="text.secondary">
@@ -371,7 +332,7 @@ const RepairHistoryPage = () => {
               <TableRow>
                 <TableCell sx={{ fontWeight: 'bold' }}>Nhóm</TableCell>
                 <TableCell sx={{ fontWeight: 'bold' }}>Nội dung</TableCell>
-                {!isKtvUser && (
+                {canViewRevenue && (
                   <>
                     <TableCell sx={{ fontWeight: 'bold' }} align="right">
                       Thành tiền
@@ -393,34 +354,21 @@ const RepairHistoryPage = () => {
     </Paper>
   );
 
-  return (
-    <Box sx={{ p: { xs: 2, sm: 4 } }}>
-      <Box
-        sx={{
-          background: '#f5f5f5',
-          borderRadius: 2,
-          px: { xs: 2, sm: 4 },
-          py: { xs: 2, sm: 3 },
-          mb: 3,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 2,
-        }}
-      >
-        <HistoryIcon color="primary" sx={{ fontSize: 40 }} />
-        <Box>
-          <Typography variant="h5" fontWeight="bold" color="primary">
-            Lịch sử sửa chữa
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            {isKtvUser
-              ? 'Hạng mục sửa chữa được phân công cho bạn, gom theo từng xe'
-              : 'Hạng mục sửa chữa gom theo từng xe — xe đã giao mặc định thu gọn'}
-          </Typography>
-        </Box>
-      </Box>
+  const showPagination = pagination && pagination.totalPages > 1;
 
-      <Paper sx={{ p: 2, mb: 3, borderRadius: 3 }}>
+  return (
+    <PageLayout>
+      <PageHeader
+        icon={<HistoryIcon />}
+        title="Lịch sử sửa chữa"
+        subtitle={
+          isKtvUser
+            ? 'Hạng mục sửa chữa được phân công cho bạn, gom theo từng xe'
+            : 'Hạng mục sửa chữa gom theo từng xe — xe đã giao mặc định thu gọn'
+        }
+      />
+
+      <FilterPanel title="Khoảng thời gian">
         <PeriodFilterToolbar
           period={period}
           onPeriodChange={setPeriod}
@@ -433,7 +381,7 @@ const RepairHistoryPage = () => {
             variant="outlined"
             size="small"
             startIcon={exporting ? <CircularProgress size={16} /> : <FileDownloadIcon />}
-            disabled={exporting || loading || carGroups.length === 0}
+            disabled={exporting || isLoading || (summary.totalItems === 0 && items.length === 0)}
             onClick={handleExportExcel}
             sx={{ flexShrink: 0 }}
           >
@@ -450,7 +398,7 @@ const RepairHistoryPage = () => {
             }
             label="Kèm chi tiết xe đã giao"
           />
-          {!isKtvUser && (
+          {canViewRevenue && (
             <WorkerSearchSelect
               workers={workers}
               value={workerFilter}
@@ -461,13 +409,14 @@ const RepairHistoryPage = () => {
           )}
           <Typography variant="body2" color="text.secondary">
             {summary.totalCars || carGroups.length} xe · {summary.totalItems || items.length} hạng mục
+            {showPagination && ` · Trang ${page}/${pagination.totalPages}`}
           </Typography>
         </PeriodFilterToolbar>
-      </Paper>
+      </FilterPanel>
 
-      {error && (
+      {errorMessage && (
         <Alert severity="error" sx={{ mb: 2 }}>
-          {error}
+          {errorMessage}
         </Alert>
       )}
 
@@ -477,7 +426,7 @@ const RepairHistoryPage = () => {
         </Alert>
       )}
 
-      {loading ? (
+      {isLoading ? (
         <Box display="flex" justifyContent="center" py={6}>
           <CircularProgress />
         </Box>
@@ -494,7 +443,20 @@ const RepairHistoryPage = () => {
         </>
       )}
 
-      {!loading && carGroups.length > 0 && (
+      {showPagination && !isLoading && (
+        <TablePagination
+          component="div"
+          count={pagination.total}
+          page={page - 1}
+          onPageChange={(_, nextPage) => setPage(nextPage + 1)}
+          rowsPerPage={REPAIR_HISTORY_PAGE_SIZE}
+          rowsPerPageOptions={[REPAIR_HISTORY_PAGE_SIZE]}
+          labelDisplayedRows={({ from, to, count }) => `${from}–${to} / ${count} hạng mục`}
+          sx={{ mt: 1 }}
+        />
+      )}
+
+      {!isLoading && carGroups.length > 0 && (
         <>
           <Divider sx={{ my: 2 }} />
           <Paper
@@ -504,15 +466,17 @@ const RepairHistoryPage = () => {
               borderRadius: 2,
               textAlign: 'right',
               bgcolor: '#e3f2fd',
+              opacity: isFetching ? 0.7 : 1,
             }}
           >
-            {!isKtvUser && (
+            {canViewRevenue && (
               <Typography variant="body2" color="text.secondary">
                 DT trước hoa hồng: {formatMoney(summary.revenueBeforeCommission)}
               </Typography>
             )}
             <Typography variant="body2" color="text.secondary">
               {isKtvUser ? 'Tổng doanh thu của bạn (sau trừ 25%)' : 'Tổng doanh thu (sau trừ 25%)'}
+              {showPagination ? ' (toàn bộ khoảng ngày)' : ''}
             </Typography>
             <Typography variant="h5" fontWeight="bold" color="primary">
               {formatMoney(totalRevenue)}
@@ -520,7 +484,7 @@ const RepairHistoryPage = () => {
           </Paper>
         </>
       )}
-    </Box>
+    </PageLayout>
   );
 };
 

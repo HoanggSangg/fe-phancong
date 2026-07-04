@@ -22,6 +22,8 @@ import {
   Divider,
 } from '@mui/material';
 import { Edit, Delete, SupervisorAccount } from '@mui/icons-material';
+import PageLayout from '../common/PageLayout';
+import PageHeader from '../common/PageHeader';
 
 const SupervisorsPage = () => {
   const [supervisors, setSupervisors] = useState([]);
@@ -109,43 +111,12 @@ const SupervisorsPage = () => {
   };
 
   return (
-    <Box
-      sx={{
-        p: 3,
-        width: '100%',
-        maxWidth: '100%',
-        backgroundColor: '#f8fafc',
-        minHeight: '100vh',
-        borderRadius: 0,
-        boxSizing: 'border-box',
-        px: 2,
-      }}
-    >
-      <Box
-        sx={{
-          background: '#f5f5f5',
-          borderRadius: 2,
-          px: { xs: 2, sm: 4 },
-          py: { xs: 2, sm: 3 },
-          mb: 3,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 2,
-          justifyContent: 'center',
-        }}
-      >
-        <Box sx={{ display: 'flex', alignItems: 'center', mr: 2 }}>
-          <span role="img" aria-label="supervisor" style={{ fontSize: 40 }}>👷‍♂️</span>
-        </Box>
-        <Box>
-          <Typography variant="h5" fontWeight="bold" color="primary">
-            Danh sách giám sát
-          </Typography>
-          <Typography variant="body2" color="textSecondary">
-            Quản lý, thêm mới và chỉnh sửa thông tin các giám sát viên tại đây.
-          </Typography>
-        </Box>
-      </Box>
+    <PageLayout>
+      <PageHeader
+        emoji="👷‍♂️"
+        title="Danh sách giám sát"
+        subtitle="Quản lý, thêm mới và chỉnh sửa thông tin các giám sát viên tại đây."
+      />
       <Divider sx={{ mb: 2 }} />
       <Box
         sx={{
@@ -254,7 +225,7 @@ const SupervisorsPage = () => {
       </Box>
       <Grid container spacing={2} sx={{ mt: 1, width: '100%', mx: 0 }} justifyContent="center">
         {supervisors.map((s, idx) => (
-          <Grid item xs={12} sm={6} md={2} key={s._id} sx={{ display: 'flex', justifyContent: 'center' }}>
+          <Grid size={{ xs: 12, sm: 6, md: 2 }} key={s._id} sx={{ display: 'flex', justifyContent: 'center' }}>
             <Card
               elevation={2}
               sx={{
@@ -303,7 +274,7 @@ const SupervisorsPage = () => {
         ))}
         {/* Add empty placeholders if needed to always show 6 columns */}
         {Array.from({ length: supervisors.length % 6 === 0 ? 0 : 6 - (supervisors.length % 6) }).map((_, idx) => (
-          <Grid item xs={12} sm={6} md={2} key={`empty-${idx}`} sx={{ display: 'flex', justifyContent: 'center' }}>
+          <Grid size={{ xs: 12, sm: 6, md: 2 }} key={`empty-${idx}`} sx={{ display: 'flex', justifyContent: 'center' }}>
             <Box sx={{ visibility: 'hidden', maxWidth: 200, width: '100%' }}>
               <Card />
             </Box>
@@ -377,7 +348,7 @@ const SupervisorsPage = () => {
           </Button>
         </DialogActions>
       </Dialog>
-    </Box>
+    </PageLayout>
   );
 };
 

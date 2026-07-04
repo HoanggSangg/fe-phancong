@@ -1,4 +1,3 @@
-// ./components/pages/AvailableWorkersPage.jsx
 import React, { useEffect, useState } from 'react';
 import {
   Box,
@@ -7,15 +6,161 @@ import {
   Card,
   CardContent,
   Avatar,
-  Paper,
   TextField,
   CircularProgress,
-  Divider,
+  Stack,
+  Paper,
+  Chip,
 } from '@mui/material';
 import { Person } from '@mui/icons-material';
 import { getAvailableWorkers } from '../apis';
+import PageLayout from '../common/PageLayout';
+import PageHeader from '../common/PageHeader';
+import useIsMobile from '../../hooks/useIsMobile';
+
+const removeVietnameseTones = (str = '') =>
+  str
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D')
+    .toLowerCase();
+
+const getWorkerPrefix = (worker) => {
+  const teamName = removeVietnameseTones(worker.team?.name || '');
+  if (teamName.includes('lai xe') || teamName.includes('tai xe') || teamName.includes('driver')) {
+    return 'TX';
+  }
+  return 'KTV';
+};
+
+const WorkerMobileRow = ({ worker }) => (
+  <Paper
+    sx={{
+      px: 1,
+      py: 0.75,
+      display: 'flex',
+      alignItems: 'center',
+      gap: 1,
+    }}
+  >
+    <Avatar
+      src={worker.avatar || ''}
+      alt={worker.name || 'Ảnh thợ'}
+      sx={{ width: 36, height: 36, bgcolor: 'primary.main', flexShrink: 0 }}
+    >
+      {!worker.avatar && <Person sx={{ fontSize: 20 }} />}
+    </Avatar>
+
+    <Box sx={{ flex: 1, minWidth: 0 }}>
+      <Typography
+        variant="caption"
+        fontWeight={700}
+        noWrap
+        sx={{ display: 'block', lineHeight: 1.3, fontSize: 12 }}
+      >
+        {getWorkerPrefix(worker)} · {worker.name}
+      </Typography>
+      <Typography variant="caption" color="text.secondary" noWrap sx={{ fontSize: 11 }}>
+        MNV {worker.soBaoDanh || '—'}
+      </Typography>
+    </Box>
+
+    <Chip
+      label="Rảnh"
+      color="success"
+      size="small"
+      sx={{ height: 20, fontSize: 10, fontWeight: 700, flexShrink: 0 }}
+    />
+  </Paper>
+);
+
+const WorkerDesktopCard = ({ worker }) => (
+  <Card
+    sx={{
+      width: '100%',
+      minHeight: 280,
+      borderRadius: 5,
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      py: 3,
+      transition: 'all .25s ease',
+      '&:hover': {
+        transform: 'translateY(-6px)',
+        boxShadow: '0 12px 30px rgba(37,99,235,0.15)',
+      },
+    }}
+  >
+    <CardContent
+      sx={{
+        p: 0,
+        width: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+      }}
+    >
+      <Avatar
+        src={worker.avatar || ''}
+        alt={worker.name || 'Ảnh thợ'}
+        sx={{
+          bgcolor: '#3b82f6',
+          width: 110,
+          height: 110,
+          mb: 2,
+          border: '4px solid #dbeafe',
+          boxShadow: '0 8px 20px rgba(59,130,246,0.25)',
+        }}
+      >
+        {!worker.avatar && <Person sx={{ fontSize: 50 }} />}
+      </Avatar>
+
+      <Typography
+        sx={{
+          fontSize: 22,
+          fontWeight: 800,
+          color: '#0f172a',
+          textAlign: 'center',
+          mb: 1,
+        }}
+      >
+        {getWorkerPrefix(worker) === 'TX' ? 'Tài xế' : 'KTV'} {worker.name}
+      </Typography>
+
+      <Typography
+        sx={{
+          fontSize: 17,
+          fontWeight: 700,
+          color: '#2563eb',
+          textAlign: 'center',
+          mb: 1,
+        }}
+      >
+        MNV: {worker.soBaoDanh || '---'}
+      </Typography>
+
+      <Box
+        sx={{
+          mt: 1,
+          px: 2,
+          py: 0.7,
+          borderRadius: 999,
+          bgcolor: '#dcfce7',
+          color: '#15803d',
+          fontWeight: 800,
+          fontSize: 14,
+        }}
+      >
+        ĐANG RẢNH
+      </Box>
+    </CardContent>
+  </Card>
+);
 
 const AvailableWorkersPage = () => {
+  const isMobile = useIsMobile();
   const [workers, setWorkers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -39,108 +184,21 @@ const AvailableWorkersPage = () => {
     worker.name?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const removeVietnameseTones = (str = '') => {
-    return str
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/đ/g, 'd')
-      .replace(/Đ/g, 'D')
-      .toLowerCase();
-  };
-
-  const getWorkerPrefix = (worker) => {
-    const teamName = removeVietnameseTones(worker.team?.name || '');
-
-    if (
-      teamName.includes('lai xe') ||
-      teamName.includes('tai xe') ||
-      teamName.includes('driver')
-    ) {
-      return 'Tài xế';
-    }
-
-    return 'KTV';
-  };
-
   return (
-    <Box
-      sx={{
-        p: { xs: 1, sm: 3 },
-        width: '100%',
-        maxWidth: '100%',
-        backgroundColor: '#f8fafc',
-        minHeight: '100vh',
-        borderRadius: 0,
-        boxSizing: 'border-box',
-        px: { xs: 1, sm: 2 },
-      }}
-    >
-      <Paper
-        elevation={0}
-        sx={{
-          display: 'flex',
-          alignItems: { xs: 'flex-start', sm: 'center' },
-          flexDirection: { xs: 'column', sm: 'row' },
-          gap: 3,
-          background: '#fff',
-          borderRadius: 4,
-          boxShadow: '0 4px 24px rgba(37,99,235,0.07)',
-          mb: 4,
-          py: { xs: 3, sm: 4 },
-          px: { xs: 2, sm: 6 },
-        }}
-      >
-        <Box
-          sx={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            bgcolor: 'rgba(59,130,246,0.08)',
-            borderRadius: '50%',
-            width: 72,
-            height: 72,
-            mr: { xs: 0, sm: 2 },
-            mb: { xs: 2, sm: 0 },
-          }}
-        >
-          <span role="img" aria-label="worker" style={{ fontSize: 44 }}>
-            🧑‍🔧
-          </span>
-        </Box>
+    <PageLayout>
+      <PageHeader
+        emoji="🧑‍🔧"
+        title="Thợ đang rảnh"
+        subtitle={
+          isMobile
+            ? `${filteredWorkers.length} thợ`
+            : 'Tra cứu nhanh các thợ hiện đang rảnh để phân công công việc hiệu quả hơn.'
+        }
+      />
 
-        <Box>
-          <Typography
-            variant="h4"
-            fontWeight="bold"
-            sx={{
-              fontSize: { xs: 24, sm: 32 },
-              color: '#1e293b',
-              mb: 1,
-            }}
-          >
-            Danh sách thợ đang rảnh
-          </Typography>
-
-          <Typography
-            sx={{
-              color: '#64748b',
-              fontSize: 17,
-              fontWeight: 400,
-              maxWidth: 600,
-            }}
-          >
-            Tra cứu nhanh các thợ hiện đang rảnh để phân công công việc hiệu quả hơn.
-          </Typography>
-        </Box>
-      </Paper>
-
-      <Box mb={3}>
-        <Divider />
-      </Box>
-
-      <Box display="flex" gap={2} mb={3} justifyContent="center" sx={{ px: { xs: 0, sm: 2 } }}>
+      <Box display="flex" mb={{ xs: 1.5, sm: 3 }} justifyContent="center">
         <TextField
-          label="Tìm kiếm thợ rảnh theo tên"
+          label={isMobile ? 'Tìm thợ' : 'Tìm kiếm thợ rảnh theo tên'}
           variant="outlined"
           size="small"
           fullWidth
@@ -148,124 +206,41 @@ const AvailableWorkersPage = () => {
           onChange={(e) => setSearchTerm(e.target.value)}
           sx={{
             maxWidth: { xs: '100%', sm: 450 },
-            background: '#fff',
-            borderRadius: 2,
+            bgcolor: 'background.paper',
           }}
         />
       </Box>
 
       {loading ? (
         <Box display="flex" justifyContent="center" mt={4}>
-          <CircularProgress />
+          <CircularProgress size={isMobile ? 28 : 40} />
         </Box>
       ) : filteredWorkers.length === 0 ? (
-        <Typography align="center">🚫 Hiện không có thợ nào rảnh.</Typography>
+        <Typography align="center" variant="body2" color="text.secondary">
+          Hiện không có thợ nào rảnh.
+        </Typography>
+      ) : isMobile ? (
+        <Stack spacing={0.75}>
+          {filteredWorkers.map((worker) => (
+            <WorkerMobileRow key={worker._id} worker={worker} />
+          ))}
+        </Stack>
       ) : (
-        <Grid
-          container
-          spacing={3}
-          sx={{ mt: 1, width: '100%', mx: 0 }}
-          justifyContent="center"
-        >
+        <Grid container spacing={3} sx={{ mt: 1, width: '100%', mx: 0 }} justifyContent="center">
           {filteredWorkers.map((worker) => (
             <Grid
-              item
-              xs={12}
-              sm={6}
-              md={4}
+              size={{ sm: 6, md: 4 }}
               key={worker._id}
-              sx={{
-                display: 'flex',
-                justifyContent: 'center',
-              }}
+              sx={{ display: 'flex', justifyContent: 'center' }}
             >
-              <Card
-                elevation={4}
-                sx={{
-                  width: { xs: '92vw', sm: 260 },
-                  minHeight: 280,
-                  borderRadius: 5,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  py: 3,
-                  transition: 'all .25s ease',
-                  '&:hover': {
-                    transform: 'translateY(-6px)',
-                    boxShadow: '0 12px 30px rgba(37,99,235,0.15)',
-                  },
-                }}
-              >
-                <CardContent
-                  sx={{
-                    p: 0,
-                    width: '100%',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                  }}
-                >
-                  <Avatar
-                    src={worker.avatar || ''}
-                    alt={worker.name || 'Ảnh thợ'}
-                    sx={{
-                      bgcolor: '#3b82f6',
-                      width: 110,
-                      height: 110,
-                      mb: 2,
-                      border: '4px solid #dbeafe',
-                      boxShadow: '0 8px 20px rgba(59,130,246,0.25)',
-                    }}
-                  >
-                    {!worker.avatar && <Person sx={{ fontSize: 50 }} />}
-                  </Avatar>
-
-                  <Typography
-                    sx={{
-                      fontSize: 22,
-                      fontWeight: 800,
-                      color: '#0f172a',
-                      textAlign: 'center',
-                      mb: 1,
-                    }}
-                  >
-                    {getWorkerPrefix(worker)} {worker.name}
-                  </Typography>
-
-                  <Typography
-                    sx={{
-                      fontSize: 17,
-                      fontWeight: 700,
-                      color: '#2563eb',
-                      textAlign: 'center',
-                      mb: 1,
-                    }}
-                  >
-                    MNV: {worker.soBaoDanh || '---'}
-                  </Typography>
-
-                  <Box
-                    sx={{
-                      mt: 1,
-                      px: 2,
-                      py: 0.7,
-                      borderRadius: 999,
-                      bgcolor: '#dcfce7',
-                      color: '#15803d',
-                      fontWeight: 800,
-                      fontSize: 14,
-                    }}
-                  >
-                    ĐANG RẢNH
-                  </Box>
-                </CardContent>
-              </Card>
+              <Box sx={{ width: 260 }}>
+                <WorkerDesktopCard worker={worker} />
+              </Box>
             </Grid>
           ))}
         </Grid>
       )}
-    </Box>
+    </PageLayout>
   );
 };
 

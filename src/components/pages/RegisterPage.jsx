@@ -70,11 +70,12 @@ const RegisterPage = () => {
       <Paper
         component="form"
         onSubmit={handleSubmit}
-        sx={{ p: { xs: 3, sm: 4 }, width: '100%', maxWidth: 480, borderRadius: 3 }}
+        elevation={1}
+        sx={{ p: { xs: 2.5, sm: 3 }, width: '100%', maxWidth: 420 }}
       >
-        <Stack spacing={2}>
+        <Stack spacing={1.5}>
           <Box textAlign="center">
-            <Typography variant="h5" fontWeight="bold" color="#b71c1c">
+            <Typography variant="h5" color="primary">
               Đăng ký
             </Typography>
             <Typography variant="body2" color="text.secondary">
@@ -89,7 +90,7 @@ const RegisterPage = () => {
           <TextField label="Mật khẩu" type="password" value={form.password} onChange={handleChange('password')} required fullWidth />
           <TextField label="Xác nhận mật khẩu" type="password" value={form.confirmPassword} onChange={handleChange('confirmPassword')} required fullWidth />
 
-          <Button type="submit" variant="contained" size="large" disabled={loading} fullWidth>
+          <Button type="submit" variant="contained" disabled={loading} fullWidth>
             {loading ? 'Đang đăng ký...' : 'Đăng ký'}
           </Button>
 
