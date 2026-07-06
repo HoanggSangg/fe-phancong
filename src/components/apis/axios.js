@@ -1,6 +1,17 @@
 import axios from 'axios';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+const resolveApiBase = () => {
+  if (import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL;
+  }
+  if (typeof window !== 'undefined') {
+    const { protocol, hostname } = window.location;
+    return `${protocol}//${hostname}:3000/api`;
+  }
+  return 'http://localhost:3000/api';
+};
+
+const API_BASE = resolveApiBase();
 
 export const api = axios.create({
   baseURL: API_BASE,
