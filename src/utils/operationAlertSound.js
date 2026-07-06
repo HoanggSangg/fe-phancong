@@ -57,6 +57,7 @@ const ACTION_LABELS = {
   remove_job: 'Xóa việc',
   add_member: 'Thêm thành viên',
   remove_member: 'Xóa thành viên',
+  ktv_notify: 'Báo admin',
 };
 
 const sanitizeForSpeech = (text) => {

@@ -176,7 +176,7 @@ const AccountPermissionsPage = () => {
     group.items.filter((item) => draftPermissions.includes(item.key)).length;
 
   return (
-    <PageLayout maxWidth="wide">
+    <PageLayout>
       <PageHeader
         icon={<Security />}
         title="Phân chức năng tài khoản"
@@ -216,7 +216,7 @@ const AccountPermissionsPage = () => {
 
       <Grid container spacing={2}>
         {showUserList && (
-        <Grid size={{ xs: 12, md: 4 }}>
+        <Grid size={{ xs: 12, lg: 3 }}>
           <Paper sx={{ p: 2, borderRadius: 3, height: '100%' }}>
             <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 1.5 }}>
               Chọn tài khoản
@@ -263,7 +263,7 @@ const AccountPermissionsPage = () => {
         )}
 
         {showPermissionForm && (
-        <Grid size={{ xs: 12, md: 8 }}>
+        <Grid size={{ xs: 12, lg: 9 }}>
           <Paper sx={{ p: 2, borderRadius: 3 }}>
             {!selectedUser ? (
               <Box sx={{ py: 8, textAlign: 'center' }}>
@@ -329,6 +329,7 @@ const AccountPermissionsPage = () => {
                 <FormControlLabel
                   control={
                     <Checkbox
+                      id="account-permissions-use-custom"
                       checked={useCustom}
                       onChange={(e) => {
                         const checked = e.target.checked;
@@ -377,26 +378,23 @@ const AccountPermissionsPage = () => {
                       <AccordionDetails sx={{ pt: 0 }}>
                         <Grid container spacing={1}>
                           {group.items.map((item) => (
-                            <Grid size={{ xs: 12, sm: 6 }} key={item.key}>
+                            <Grid size={{ xs: 12, sm: 6, md: 4, xl: 3 }} key={item.key}>
                               <FormControlLabel
                                 control={
                                   <Checkbox
+                                    id={`permission-${item.key}`}
                                     checked={draftPermissions.includes(item.key)}
                                     onChange={() => togglePermission(item.key)}
                                     disabled={!useCustom}
                                   />
                                 }
-                                label={(
-                                  <Box>
-                                    <Typography variant="body2">{item.label}</Typography>
-                                    {item.path && (
-                                      <Typography variant="caption" color="text.secondary">
-                                        {item.path}
-                                      </Typography>
-                                    )}
-                                  </Box>
-                                )}
+                                label={item.label}
                               />
+                              {item.path && (
+                                <Typography variant="caption" color="text.secondary" sx={{ pl: 4.25, display: 'block' }}>
+                                  {item.path}
+                                </Typography>
+                              )}
                             </Grid>
                           ))}
                         </Grid>

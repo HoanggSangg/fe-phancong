@@ -13,7 +13,7 @@ export const ROLE_LABELS = {
 export const ROLE_DESCRIPTIONS = {
   admin: 'Toàn quyền: quản lý xe, thợ, báo cáo, địa điểm, giám sát và tài khoản',
   giam_sat: 'Quản lý xe, phân công thợ, xem báo cáo — không xóa xe hay quản lý hệ thống',
-  ktv: 'Xem đầy đủ xe, quản lý xe, lịch sử sửa chữa và công việc được giao',
+  ktv: 'Xem tất cả xe trong ngày, quản lý xe của mình và chi tiết công việc được giao',
 };
 
 export const CAR_STATUS_LABELS = {
@@ -42,12 +42,12 @@ export const PERMISSION_CATALOG = [
   { key: 'cars.delete', label: 'Xóa xe', group: 'Quản lý xe', defaultRoles: ['admin'] },
   { key: 'cars.voice', label: 'Nghe thông báo thao tác (Quản lý xe)', group: 'Quản lý xe', defaultRoles: ['admin', 'giam_sat'] },
   { key: 'workers.main', label: 'Danh sách thợ', group: 'Thợ & công việc', path: '/workers/main', defaultRoles: ['admin', 'giam_sat'] },
-  { key: 'workers.available', label: 'Thợ rảnh', group: 'Thợ & công việc', path: '/workers/available', defaultRoles: ['admin', 'giam_sat', 'ktv'] },
   { key: 'workers.woker', label: 'Chi tiết công việc', group: 'Thợ & công việc', path: '/woker', defaultRoles: ['admin', 'giam_sat', 'ktv'] },
-  { key: 'workers.repair-history', label: 'Lịch sử sửa chữa', group: 'Thợ & công việc', path: '/repair-history', defaultRoles: ['admin', 'giam_sat', 'ktv'] },
-  { key: 'workers.kpi', label: 'KPI thợ', group: 'Thợ & công việc', path: '/workers/kpi', defaultRoles: ['admin', 'giam_sat', 'ktv'] },
+  { key: 'workers.available', label: 'Thợ rảnh', group: 'Thợ & công việc', path: '/workers/available', defaultRoles: ['admin', 'giam_sat'] },
+  { key: 'workers.repair-history', label: 'Lịch sử sửa chữa', group: 'Thợ & công việc', path: '/repair-history', defaultRoles: ['admin', 'giam_sat'] },
   { key: 'teams.manage', label: 'Quản lý tổ', group: 'Thợ & công việc', path: '/teams', defaultRoles: ['admin', 'giam_sat'] },
   { key: 'reports.revenue', label: 'Doanh thu thợ', group: 'Báo cáo', path: '/workers/revenue-chart', defaultRoles: ['admin', 'giam_sat'] },
+  { key: 'reports.dashboard', label: 'Dashboard tổng quan', group: 'Báo cáo', path: '/dashboard', defaultRoles: ['admin'] },
   { key: 'reports.praise', label: 'Tuyên dương tuần', group: 'Báo cáo', path: '/workers/weekly-praise', defaultRoles: ['admin', 'giam_sat'] },
   { key: 'reports.warning', label: 'Cảnh báo tuần', group: 'Báo cáo', path: '/workers/weekly-warning', defaultRoles: ['admin', 'giam_sat'] },
   { key: 'system.locations', label: 'Địa điểm', group: 'Hệ thống', path: '/locations', defaultRoles: ['admin'] },
@@ -55,6 +55,7 @@ export const PERMISSION_CATALOG = [
   { key: 'system.users', label: 'Tài khoản', group: 'Hệ thống', path: '/users', defaultRoles: ['admin'] },
   { key: 'system.permissions', label: 'Phân chức năng', group: 'Hệ thống', path: '/account-permissions', defaultRoles: ['admin'] },
   { key: 'system.audit-logs', label: 'Lịch sử thao tác', group: 'Hệ thống', path: '/audit-logs', defaultRoles: ['admin'] },
+  { key: 'system.ktv-messages', label: 'Tin nhắn KTV', group: 'Hệ thống', path: '/ktv-messages', defaultRoles: ['admin'] },
 ];
 
 export const PERMISSION_KEYS = PERMISSION_CATALOG.map((item) => item.key);
@@ -111,19 +112,22 @@ export const getPermissionGroups = () =>
     items: PERMISSION_CATALOG.filter((item) => item.group === group),
   }));
 
-export const isKtv = (role) => role === ROLES.KTV;
-
-const resolveRole = (roleOrUser) =>
-  typeof roleOrUser === 'object' ? roleOrUser?.role : roleOrUser;
+export const isKtv = (roleOrUser) => {
+  const role = typeof roleOrUser === 'object' ? roleOrUser?.role : roleOrUser;
+  return role === ROLES.KTV;
+};
 
 export const canManageCars = (roleOrUser) => {
   if (typeof roleOrUser === 'object') return hasPermission(roleOrUser, 'cars.manage');
   return ['admin', 'giam_sat', 'ktv'].includes(roleOrUser);
 };
 
+export const canEditManagedCars = (user) =>
+  hasPermission(user, 'cars.manage') && !isKtv(user);
+
 export const canDeleteCars = (roleOrUser) => {
   if (typeof roleOrUser === 'object') return hasPermission(roleOrUser, 'cars.delete');
-  return resolveRole(roleOrUser) === ROLES.ADMIN;
+  return roleOrUser === ROLES.ADMIN;
 };
 
 export const canHearOperationVoice = (roleOrUser) => {

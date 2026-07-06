@@ -207,9 +207,11 @@ const Home = () => {
 
       <FilterPanel>
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} useFlexGap flexWrap="wrap">
-          <FormControl sx={{ minWidth: { xs: '100%', sm: 200 }, flex: 1 }}>
-            <InputLabel>Địa điểm</InputLabel>
+          <FormControl sx={{ minWidth: { xs: '100%', sm: 200 }, flex: 1 }} size="small">
+            <InputLabel id="home-location-label">Địa điểm</InputLabel>
             <Select
+              labelId="home-location-label"
+              id="home-location-select"
               value={selectedLocation}
               label="Địa điểm"
               onChange={(e) => setSelectedLocation(e.target.value)}
@@ -221,9 +223,11 @@ const Home = () => {
             </Select>
           </FormControl>
 
-          <FormControl sx={{ minWidth: { xs: '100%', sm: 200 }, flex: 1 }}>
-            <InputLabel>Giám sát</InputLabel>
+          <FormControl sx={{ minWidth: { xs: '100%', sm: 200 }, flex: 1 }} size="small">
+            <InputLabel id="home-supervisor-label">Giám sát</InputLabel>
             <Select
+              labelId="home-supervisor-label"
+              id="home-supervisor-select"
               value={selectedSupervisor}
               label="Giám sát"
               onChange={(e) => setSelectedSupervisor(e.target.value)}
@@ -235,9 +239,11 @@ const Home = () => {
             </Select>
           </FormControl>
 
-          <FormControl sx={{ minWidth: { xs: '100%', sm: 200 }, flex: 1 }}>
-            <InputLabel>Mục hiển thị</InputLabel>
+          <FormControl sx={{ minWidth: { xs: '100%', sm: 200 }, flex: 1 }} size="small">
+            <InputLabel id="home-section-label">Mục hiển thị</InputLabel>
             <Select
+              labelId="home-section-label"
+              id="home-section-select"
               value={selectedSectionKey}
               label="Mục hiển thị"
               onChange={(e) => setSelectedSectionKey(e.target.value)}

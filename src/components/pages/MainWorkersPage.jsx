@@ -33,18 +33,16 @@ import {
   Tooltip,
   Alert,
   Switch,
-  FormControlLabel,
   ToggleButton,
   ToggleButtonGroup,
-  Stack,
 } from '@mui/material';
-import { Edit, Delete, TrendingUp, Person, Phone, UploadFile, MonetizationOn, MoneyOff } from '@mui/icons-material';
+import { Edit, Delete, TrendingUp, Person, UploadFile } from '@mui/icons-material';
 import { filterWorkersByKeyword } from '../../utils/workerSearch';
 import PageLayout from '../common/PageLayout';
 import PageHeader from '../common/PageHeader';
 import useIsMobile from '../../hooks/useIsMobile';
 
-const WorkerMobileRow = ({
+const WorkerRow = ({
   worker,
   canManageRevenue,
   togglingRevenueId,
@@ -53,21 +51,30 @@ const WorkerMobileRow = ({
   onDelete,
   onViewPerformance,
 }) => (
-  <Paper sx={{ px: 1, py: 0.75 }}>
-    <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
+  <Paper
+    sx={{
+      px: 1.25,
+      py: 0.75,
+      borderRadius: 2,
+      border: '1px solid',
+      borderColor: 'divider',
+      height: '100%',
+    }}
+  >
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
       <Avatar
         src={worker.avatar || ''}
         alt={worker.name}
-        sx={{ width: 36, height: 36, bgcolor: 'primary.main', flexShrink: 0, mt: 0.25 }}
+        sx={{ width: 40, height: 40, bgcolor: 'primary.main', flexShrink: 0 }}
       >
-        {!worker.avatar && <Person sx={{ fontSize: 20 }} />}
+        {!worker.avatar && <Person sx={{ fontSize: 22 }} />}
       </Avatar>
 
       <Box sx={{ flex: 1, minWidth: 0 }}>
-        <Typography variant="caption" fontWeight={700} noWrap sx={{ display: 'block', fontSize: 12 }}>
+        <Typography variant="body2" fontWeight={700} noWrap sx={{ fontSize: 13, lineHeight: 1.3 }}>
           {worker.name}
         </Typography>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap', mt: 0.25 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
           {worker.soBaoDanh && (
             <Typography variant="caption" color="text.secondary" sx={{ fontSize: 11 }}>
               MNV {worker.soBaoDanh}
@@ -77,174 +84,40 @@ const WorkerMobileRow = ({
             <Chip label="Không DT" size="small" color="warning" sx={{ height: 18, fontSize: 10 }} />
           )}
         </Box>
-        {canManageRevenue && (
-          <FormControlLabel
-            sx={{ m: 0, mt: 0.5, '& .MuiFormControlLabel-label': { fontSize: 11 } }}
-            control={
-              <Switch
-                size="small"
-                checked={worker.countRevenue !== false}
-                onChange={() => onToggleCountRevenue(worker)}
-                disabled={togglingRevenueId === worker._id}
-                color="success"
-              />
-            }
-            label="Tính DT"
-          />
-        )}
       </Box>
 
+      {canManageRevenue && (
+        <Tooltip title={worker.countRevenue === false ? 'Bật tính DT' : 'Tắt tính DT'}>
+          <Switch
+            size="small"
+            checked={worker.countRevenue !== false}
+            onChange={() => onToggleCountRevenue(worker)}
+            disabled={togglingRevenueId === worker._id}
+            color="success"
+            sx={{ flexShrink: 0 }}
+          />
+        </Tooltip>
+      )}
+
       <Box sx={{ display: 'flex', flexShrink: 0, gap: 0.25 }}>
-        <IconButton size="small" onClick={() => onEdit(worker)} aria-label="Sửa">
-          <Edit sx={{ fontSize: 18 }} />
-        </IconButton>
-        <IconButton size="small" onClick={() => onDelete(worker._id)} aria-label="Xóa" color="error">
-          <Delete sx={{ fontSize: 18 }} />
-        </IconButton>
-        <IconButton size="small" onClick={() => onViewPerformance(worker)} aria-label="KPI" color="success">
-          <TrendingUp sx={{ fontSize: 18 }} />
-        </IconButton>
+        <Tooltip title="Chỉnh sửa">
+          <IconButton size="small" onClick={() => onEdit(worker)} aria-label="Sửa">
+            <Edit sx={{ fontSize: 17 }} />
+          </IconButton>
+        </Tooltip>
+        <Tooltip title="Xóa">
+          <IconButton size="small" onClick={() => onDelete(worker._id)} aria-label="Xóa" color="error">
+            <Delete sx={{ fontSize: 17 }} />
+          </IconButton>
+        </Tooltip>
+        <Tooltip title="Hiệu suất">
+          <IconButton size="small" onClick={() => onViewPerformance(worker)} aria-label="KPI" color="success">
+            <TrendingUp sx={{ fontSize: 17 }} />
+          </IconButton>
+        </Tooltip>
       </Box>
     </Box>
   </Paper>
-);
-
-const WorkerDesktopCard = ({
-  worker,
-  canManageRevenue,
-  togglingRevenueId,
-  onToggleCountRevenue,
-  onEdit,
-  onDelete,
-  onViewPerformance,
-}) => (
-  <Card
-    elevation={2}
-    sx={{
-      width: { xs: '100%', sm: 200 },
-      minHeight: 220,
-      borderRadius: 3,
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      py: 2,
-    }}
-  >
-    <CardContent sx={{ p: 0, width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-      <Avatar
-        src={worker.avatar || ''}
-        alt={worker.name}
-        sx={{
-          bgcolor: '#3b82f6',
-          width: 56,
-          height: 56,
-          mb: 1.5,
-          border: '2px solid #dbeafe',
-          boxShadow: '0 4px 12px rgba(59,130,246,0.25)',
-        }}
-      >
-        {!worker.avatar && <Person fontSize="large" />}
-      </Avatar>
-      <Typography
-        variant="h6"
-        fontWeight="bold"
-        sx={{ color: '#1e293b', fontSize: 18, textAlign: 'center', mb: 0.5 }}
-      >
-        {worker.name}
-      </Typography>
-      {worker.soBaoDanh && (
-        <Chip label={`SBD: ${worker.soBaoDanh}`} size="small" sx={{ mb: 1, fontWeight: 600 }} />
-      )}
-      {worker.countRevenue === false && (
-        <Chip label="Không tính DT" size="small" color="warning" sx={{ mb: 1, fontWeight: 600 }} />
-      )}
-      {worker.phone && (
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 2 }}>
-          <Phone sx={{ fontSize: 16, color: '#64748b', mr: 1 }} />
-          <Typography sx={{ color: '#64748b', fontSize: 14 }}>{worker.phone}</Typography>
-        </Box>
-      )}
-      <Box sx={{ width: '100%', mt: 2 }}>
-        {canManageRevenue && (
-          <Box sx={{ display: 'flex', justifyContent: 'center', mb: 1 }}>
-            <Tooltip
-              title={
-                worker.countRevenue === false
-                  ? 'Bật tính doanh thu cho thợ này'
-                  : 'Tắt tính doanh thu cho thợ này'
-              }
-            >
-              <FormControlLabel
-                sx={{ m: 0, gap: 0.5 }}
-                control={
-                  <Switch
-                    size="small"
-                    checked={worker.countRevenue !== false}
-                    onChange={() => onToggleCountRevenue(worker)}
-                    disabled={togglingRevenueId === worker._id}
-                    color="success"
-                  />
-                }
-                label={
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                    {worker.countRevenue === false ? (
-                      <MoneyOff sx={{ fontSize: 16, color: '#f59e0b' }} />
-                    ) : (
-                      <MonetizationOn sx={{ fontSize: 16, color: '#10b981' }} />
-                    )}
-                    <Typography variant="caption" sx={{ fontWeight: 700, color: '#475569' }}>
-                      Tính DT
-                    </Typography>
-                  </Box>
-                }
-              />
-            </Tooltip>
-          </Box>
-        )}
-        <Box sx={{ display: 'flex', justifyContent: 'center', gap: 1, mb: 1 }}>
-          <Tooltip title="Chỉnh sửa">
-            <IconButton
-              size="small"
-              onClick={() => onEdit(worker)}
-              sx={{ bgcolor: '#f1f5f9', '&:hover': { bgcolor: '#e2e8f0' } }}
-            >
-              <Edit fontSize="small" />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title="Xóa">
-            <IconButton
-              size="small"
-              onClick={() => onDelete(worker._id)}
-              sx={{ bgcolor: '#fef2f2', '&:hover': { bgcolor: '#fee2e2' } }}
-            >
-              <Delete fontSize="small" sx={{ color: '#dc2626' }} />
-            </IconButton>
-          </Tooltip>
-        </Box>
-        <Box sx={{ display: 'flex', justifyContent: 'center' }}>
-          <Button
-            size="small"
-            variant="contained"
-            startIcon={<TrendingUp />}
-            onClick={() => onViewPerformance(worker)}
-            sx={{
-              bgcolor: '#10b981',
-              '&:hover': { bgcolor: '#059669' },
-              fontSize: 12,
-              px: 2,
-              boxShadow: 'none',
-              borderRadius: 2,
-              minWidth: 0,
-              height: 32,
-            }}
-          >
-            Hiệu suất
-          </Button>
-        </Box>
-      </Box>
-    </CardContent>
-  </Card>
 );
 
 const WorkersPage = () => {
@@ -594,11 +467,10 @@ const WorkersPage = () => {
         </Box>
       )}
 
-      {isMobile ? (
-        <Stack spacing={0.75} sx={{ mt: 1.5 }}>
-          {filteredWorkers.map((w) => (
-            <WorkerMobileRow
-              key={w._id}
+      <Grid container spacing={1} sx={{ mt: 1, width: '100%', mx: 0 }}>
+        {filteredWorkers.map((w) => (
+          <Grid size={{ xs: 12, md: 6, xl: 4 }} key={w._id}>
+            <WorkerRow
               worker={w}
               canManageRevenue={canManageRevenue}
               togglingRevenueId={togglingRevenueId}
@@ -607,25 +479,9 @@ const WorkersPage = () => {
               onDelete={handleDelete}
               onViewPerformance={handleViewPerformance}
             />
-          ))}
-        </Stack>
-      ) : (
-        <Grid container spacing={2} sx={{ mt: 3, width: '100%', mx: 0 }} justifyContent="center">
-          {filteredWorkers.map((w) => (
-            <Grid size={{ sm: 6, md: 2 }} key={w._id} sx={{ display: 'flex', justifyContent: 'center' }}>
-              <WorkerDesktopCard
-                worker={w}
-                canManageRevenue={canManageRevenue}
-                togglingRevenueId={togglingRevenueId}
-                onToggleCountRevenue={handleToggleCountRevenue}
-                onEdit={handleEditClick}
-                onDelete={handleDelete}
-                onViewPerformance={handleViewPerformance}
-              />
-            </Grid>
-          ))}
-        </Grid>
-      )}
+          </Grid>
+        ))}
+      </Grid>
 
       {/* Dialog chỉnh sửa */}
       <Dialog open={editOpen} onClose={() => setEditOpen(false)} maxWidth="sm" fullWidth>

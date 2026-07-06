@@ -4,6 +4,7 @@ import {
   deleteCar,
   updateCarStatusWithWorker,
   getCarWorkerHistory,
+  notifyAdminAboutCar,
 } from '../apis/index';
 import {
   Button,
@@ -27,7 +28,7 @@ import DirectionsCarIcon from '@mui/icons-material/DirectionsCar';
 import dayjs from 'dayjs';
 import customParseFormat from 'dayjs/plugin/customParseFormat';
 import { useAuth } from '../../context/AuthContext';
-import { canDeleteCars, canHearOperationVoice, canManageCars, CAR_STATUS_LABELS } from '../../utils/permissions';
+import { canDeleteCars, canHearOperationVoice, canEditManagedCars, CAR_STATUS_LABELS, isKtv } from '../../utils/permissions';
 import { CAR_STATUS_COLORS, needsWorkerSelection } from '../../utils/carStatusConfig';
 import FullscreenDialog from '../common/FullscreenDialog';
 import OperationVoiceControls from '../common/OperationVoiceControls';
@@ -39,6 +40,8 @@ import StatusUpdateDialog from '../ManageCars/StatusUpdateDialog';
 import CarEditDialog from '../ManageCars/CarEditDialog';
 import RepairItemsDialog from '../ManageCars/RepairItemsDialog';
 import CarsPanel from '../ManageCars/CarsPanel';
+import CarNotifyAdminDialog from '../ManageCars/CarNotifyAdminDialog';
+import EnablePushNotificationButton from '../common/EnablePushNotificationButton';
 import PageLayout from '../common/PageLayout';
 import PageHeader from '../common/PageHeader';
 import {
@@ -54,7 +57,8 @@ const ManageCars = () => {
   const canDelete = canDeleteCars(user);
   const canHearVoice = canHearOperationVoice(user);
   const { voiceEnabled, toggleVoice, testVoice } = useOperationVoiceMonitor({ poll: canHearVoice });
-  const canManage = canManageCars(user);
+  const canManage = canEditManagedCars(user);
+  const isKtvUser = isKtv(user);
 
   const {
     allCars,
@@ -67,7 +71,7 @@ const ManageCars = () => {
     fetchCars,
     refreshAvailableWorkers,
     invalidateHomeDashboard,
-  } = useManageCarsBootstrap();
+  } = useManageCarsBootstrap(user);
 
   const [filterDate, setFilterDate] = useState(null);
   const [editOpen, setEditOpen] = useState(false);
@@ -84,6 +88,9 @@ const ManageCars = () => {
   const [searchPlate, setSearchPlate] = useState('');
   const [tableSupervisor, setTableSupervisor] = useState('');
   const [pageFullscreen, setPageFullscreen] = useState(false);
+  const [notifyDialogOpen, setNotifyDialogOpen] = useState(false);
+  const [notifyCar, setNotifyCar] = useState(null);
+  const [notifySending, setNotifySending] = useState(false);
 
   const repair = useRepairItems({
     canManage,
@@ -267,6 +274,36 @@ const ManageCars = () => {
     return all.filter((w, i, arr) => arr.findIndex((a) => a._id === w._id) === i);
   };
 
+  const handleOpenNotifyAdmin = (car) => {
+    setNotifyCar(car);
+    setNotifyDialogOpen(true);
+  };
+
+  const handleSendNotifyAdmin = async (message) => {
+    if (!notifyCar) return;
+
+    setNotifySending(true);
+    try {
+      const res = await notifyAdminAboutCar(notifyCar._id, message);
+      setNotifyDialogOpen(false);
+      setNotifyCar(null);
+      setSnackbar({
+        open: true,
+        message: res.data?.message || 'Đã gửi thông báo cho admin',
+        severity: 'success',
+      });
+    } catch (err) {
+      console.error('Lỗi khi gửi thông báo cho admin:', err);
+      setSnackbar({
+        open: true,
+        message: err.response?.data?.message || 'Gửi thông báo thất bại',
+        severity: 'error',
+      });
+    } finally {
+      setNotifySending(false);
+    }
+  };
+
   const panelProps = {
     isMobile,
     displayedCars: displayedCars,
@@ -282,6 +319,7 @@ const ManageCars = () => {
     onTableSupervisorChange: setTableSupervisor,
     canManage,
     canDelete,
+    canNotifyAdmin: isKtvUser,
     getStatusConfig,
     renderStatusIcon,
     onStatusChange: handleStatusChangeClick,
@@ -289,6 +327,7 @@ const ManageCars = () => {
     onEdit: handleEditClick,
     onDelete: handleDelete,
     onOpenHistory: handleOpenWorkerHistory,
+    onNotifyAdmin: handleOpenNotifyAdmin,
   };
 
   return (
@@ -296,9 +335,14 @@ const ManageCars = () => {
       <PageHeader
         icon={<DirectionsCarIcon color="primary" />}
         title="Quản lý xe"
-        subtitle="Theo dõi, cập nhật trạng thái và lịch sử xe trong hệ thống"
+        subtitle={
+          isKtv(user)
+            ? 'Xem các xe được gán cho bạn'
+            : 'Theo dõi, cập nhật trạng thái và lịch sử xe trong hệ thống'
+        }
         actions={
           <>
+            {isKtvUser && <EnablePushNotificationButton />}
             {canHearVoice && (
               <OperationVoiceControls
                 voiceEnabled={voiceEnabled}
@@ -371,6 +415,19 @@ const ManageCars = () => {
         loading={historyLoading}
         error={historyError}
         data={historyData}
+      />
+
+      <CarNotifyAdminDialog
+        open={notifyDialogOpen}
+        onClose={() => {
+          if (notifySending) return;
+          setNotifyDialogOpen(false);
+          setNotifyCar(null);
+        }}
+        car={notifyCar}
+        getStatusConfig={getStatusConfig}
+        onSend={handleSendNotifyAdmin}
+        sending={notifySending}
       />
 
       <FullscreenDialog

@@ -1,59 +1,119 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   getAllLocations,
   createLocation,
   updateLocation,
   deleteLocation,
 } from '../apis/index';
-
 import {
   Box,
   TextField,
   Button,
   Typography,
-  List,
-  ListItem,
-  ListItemText,
   IconButton,
-  Divider,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
   Paper,
   Tooltip,
+  Grid,
+  Chip,
+  Stack,
 } from '@mui/material';
-
-import { Edit, Delete, Save, Close } from '@mui/icons-material';
-import LocationOnIcon from '@mui/icons-material/LocationOn';
-import LockIcon from '@mui/icons-material/Lock';
+import { Edit, Delete, LocationOn, Lock } from '@mui/icons-material';
 import PageLayout from '../common/PageLayout';
 import PageHeader from '../common/PageHeader';
+
+const LocationRow = ({ location, index, onEdit, onDelete }) => (
+  <Paper
+    variant="outlined"
+    sx={{
+      px: 1.25,
+      py: 0.85,
+      borderRadius: 1.5,
+      border: '2px solid',
+      borderColor: 'grey.300',
+      bgcolor: 'background.paper',
+      display: 'flex',
+      alignItems: 'center',
+      gap: 1,
+      height: '100%',
+      transition: 'border-color 0.2s',
+      '&:hover': { borderColor: 'success.light' },
+    }}
+  >
+    <Box
+      sx={{
+        width: 40,
+        height: 40,
+        borderRadius: '50%',
+        bgcolor: 'success.main',
+        color: 'white',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexShrink: 0,
+      }}
+    >
+      <LocationOn sx={{ fontSize: 22 }} />
+    </Box>
+
+    <Box sx={{ flex: 1, minWidth: 0 }}>
+      <Typography variant="body2" fontWeight={700} noWrap sx={{ fontSize: 13, lineHeight: 1.3 }}>
+        {location.name}
+      </Typography>
+      <Typography variant="caption" color="text.secondary" sx={{ fontSize: 11 }}>
+        STT {index + 1}
+      </Typography>
+    </Box>
+
+    <Box sx={{ display: 'flex', flexShrink: 0, gap: 0.25 }}>
+      <Tooltip title="Chỉnh sửa">
+        <IconButton size="small" onClick={() => onEdit(location)} aria-label="Sửa">
+          <Edit sx={{ fontSize: 17 }} />
+        </IconButton>
+      </Tooltip>
+      <Tooltip title="Xóa">
+        <IconButton size="small" onClick={() => onDelete(location._id)} aria-label="Xóa" color="error">
+          <Delete sx={{ fontSize: 17 }} />
+        </IconButton>
+      </Tooltip>
+    </Box>
+  </Paper>
+);
 
 const LocationManager = () => {
   const [locations, setLocations] = useState([]);
   const [newName, setNewName] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const [editId, setEditId] = useState(null);
-  const [editName, setEditName] = useState('');
+  const [editOpen, setEditOpen] = useState(false);
+  const [editData, setEditData] = useState({ id: '', name: '' });
 
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
   const [password, setPassword] = useState('');
   const [deleteTargetId, setDeleteTargetId] = useState(null);
 
-  useEffect(() => {
-    fetchLocations();
-  }, []);
-
   const fetchLocations = async () => {
     try {
       const res = await getAllLocations();
-      setLocations(res.data);
+      setLocations(res.data || []);
     } catch (err) {
       console.error('Lỗi khi tải địa điểm:', err);
     }
   };
+
+  useEffect(() => {
+    fetchLocations();
+  }, []);
+
+  const filteredLocations = useMemo(() => {
+    const keyword = searchTerm.trim().toLowerCase();
+    if (!keyword) return locations;
+    return locations.filter((item) => item.name?.toLowerCase().includes(keyword));
+  }, [locations, searchTerm]);
 
   const handleCreate = async (e) => {
     e.preventDefault();
@@ -61,7 +121,7 @@ const LocationManager = () => {
 
     try {
       setLoading(true);
-      await createLocation({ name: newName });
+      await createLocation({ name: newName.trim() });
       setNewName('');
       fetchLocations();
     } catch (err) {
@@ -71,11 +131,16 @@ const LocationManager = () => {
     }
   };
 
-  const handleUpdate = async (id) => {
+  const handleEditClick = (location) => {
+    setEditData({ id: location._id, name: location.name });
+    setEditOpen(true);
+  };
+
+  const handleEditSave = async () => {
+    if (!editData.name.trim()) return;
     try {
-      await updateLocation(id, { name: editName });
-      setEditId(null);
-      setEditName('');
+      await updateLocation(editData.id, { name: editData.name.trim() });
+      setEditOpen(false);
       fetchLocations();
     } catch (err) {
       console.error('Lỗi khi cập nhật địa điểm:', err);
@@ -88,7 +153,7 @@ const LocationManager = () => {
   };
 
   const markPasswordVerified = () => {
-    const expiry = new Date(Date.now() + 60 * 60 * 10000); // 10 giờ
+    const expiry = new Date(Date.now() + 60 * 60 * 10000);
     localStorage.setItem('location_verified_until', expiry.toISOString());
   };
 
@@ -112,124 +177,133 @@ const LocationManager = () => {
   };
 
   return (
-    <PageLayout maxWidth="narrow">
+    <PageLayout>
       <PageHeader
-        icon={<LocationOnIcon />}
+        icon={<LocationOn color="primary" />}
         title="Quản lý địa điểm"
+        subtitle={`${filteredLocations.length} địa điểm trong hệ thống`}
       />
 
-      <Paper elevation={3} sx={{ p: 2, mb: 3, borderRadius: 3, boxShadow: 2 }}>
+      <Box
+        sx={{
+          display: 'flex',
+          flexDirection: { xs: 'column', md: 'row' },
+          alignItems: { xs: 'stretch', md: 'center' },
+          gap: 1.5,
+          bgcolor: 'background.paper',
+          borderRadius: 2,
+          border: 1,
+          borderColor: 'divider',
+          p: { xs: 1.5, sm: 2 },
+          mb: 1.5,
+        }}
+      >
+        <Chip
+          label={`Tổng: ${filteredLocations.length}`}
+          color="success"
+          variant="outlined"
+          size="small"
+          sx={{ fontWeight: 700, alignSelf: { xs: 'flex-start', md: 'center' }, flexShrink: 0 }}
+        />
+
         <Box
           component="form"
           onSubmit={handleCreate}
-          sx={{ display: 'flex', gap: 2 }}
+          sx={{
+            flex: 1,
+            display: 'flex',
+            flexDirection: { xs: 'column', sm: 'row' },
+            gap: 1,
+            alignItems: { sm: 'center' },
+            minWidth: 0,
+          }}
         >
           <TextField
             label="Tên địa điểm mới"
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
+            required
+            size="small"
             fullWidth
-            InputLabelProps={{ shrink: true }}
+            sx={{ maxWidth: { sm: 280 } }}
           />
-          <Button type="submit" variant="contained" disabled={loading} sx={{ borderRadius: 2, fontWeight: 600 }}>
+          <TextField
+            label="Tìm địa điểm"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            size="small"
+            fullWidth
+            sx={{ maxWidth: { sm: 220 } }}
+          />
+          <Button
+            type="submit"
+            variant="contained"
+            disabled={loading}
+            size="small"
+            sx={{ flexShrink: 0, whiteSpace: 'nowrap', textTransform: 'none' }}
+          >
             {loading ? 'Đang thêm...' : 'Thêm'}
           </Button>
         </Box>
-      </Paper>
+      </Box>
 
-      <Paper elevation={4} sx={{ borderRadius: 3, boxShadow: 3, p: 1 }}>
-        <List>
-          {locations.map((loc) => (
-            <React.Fragment key={loc._id}>
-              <ListItem
-                sx={{
-                  '&:hover': { backgroundColor: '#f5f5f5' },
-                  borderRadius: 2,
-                  mb: 1,
-                  px: 1,
-                }}
-                secondaryAction={
-                  editId === loc._id ? (
-                    <>
-                      <Tooltip title="Lưu">
-                        <span>
-                          <IconButton onClick={() => handleUpdate(loc._id)} sx={{ borderRadius: 2 }}>
-                            <Save />
-                          </IconButton>
-                        </span>
-                      </Tooltip>
-                      <Tooltip title="Huỷ">
-                        <span>
-                          <IconButton onClick={() => setEditId(null)} sx={{ borderRadius: 2 }}>
-                            <Close />
-                          </IconButton>
-                        </span>
-                      </Tooltip>
-                    </>
-                  ) : (
-                    <>
-                      <Tooltip title="Sửa địa điểm">
-                        <span>
-                          <IconButton
-                            onClick={() => {
-                              setEditId(loc._id);
-                              setEditName(loc.name);
-                            }}
-                            sx={{ borderRadius: 2 }}
-                          >
-                            <Edit />
-                          </IconButton>
-                        </span>
-                      </Tooltip>
-                      <Tooltip title="Xoá địa điểm">
-                        <span>
-                          <IconButton onClick={() => handleDelete(loc._id)} sx={{ borderRadius: 2 }}>
-                            <Delete />
-                          </IconButton>
-                        </span>
-                      </Tooltip>
-                    </>
-                  )
-                }
-              >
-                {editId === loc._id ? (
-                  <TextField
-                    value={editName}
-                    onChange={(e) => setEditName(e.target.value)}
-                    fullWidth
-                    variant="standard"
-                    InputLabelProps={{ shrink: true }}
-                    sx={{ background: '#fffde7', borderRadius: 1 }}
-                  />
-                ) : (
-                  <ListItemText primary={loc.name} sx={{ ml: 1 }} />
-                )}
-              </ListItem>
-              <Divider />
-            </React.Fragment>
+      {filteredLocations.length === 0 ? (
+        <Typography align="center" variant="body2" color="text.secondary">
+          {searchTerm.trim() ? 'Không tìm thấy địa điểm phù hợp.' : 'Chưa có địa điểm nào.'}
+        </Typography>
+      ) : (
+        <Grid container spacing={1}>
+          {filteredLocations.map((location, index) => (
+            <Grid size={{ xs: 12, sm: 6, md: 4, lg: 3, xl: 2 }} key={location._id}>
+              <LocationRow
+                location={location}
+                index={index}
+                onEdit={handleEditClick}
+                onDelete={handleDelete}
+              />
+            </Grid>
           ))}
-        </List>
-      </Paper>
+        </Grid>
+      )}
 
-      {/* Dialog xác thực mật khẩu xóa */}
-      <Dialog open={confirmDialogOpen} onClose={() => setConfirmDialogOpen(false)} PaperProps={{ sx: { borderRadius: 3 } }}>
-        <DialogTitle>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <LockIcon color="error" />
-            <Typography variant="h6" fontWeight="bold">Xác thực để xoá</Typography>
-          </Box>
+      <Dialog open={editOpen} onClose={() => setEditOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ fontWeight: 700 }}>Cập nhật địa điểm</DialogTitle>
+        <DialogContent>
+          <TextField
+            label="Tên địa điểm"
+            value={editData.name}
+            onChange={(e) => setEditData({ ...editData, name: e.target.value })}
+            required
+            fullWidth
+            size="small"
+            sx={{ mt: 1 }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEditOpen(false)} variant="outlined">Huỷ</Button>
+          <Button onClick={handleEditSave} variant="contained">Lưu</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={confirmDialogOpen} onClose={() => setConfirmDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ color: 'error.main', fontWeight: 700 }}>
+          <Stack direction="row" alignItems="center" gap={1}>
+            <Lock fontSize="small" />
+            Xác thực để xoá
+          </Stack>
         </DialogTitle>
-        <DialogContent sx={{ p: 3 }}>
+        <DialogContent>
           <TextField
             type="password"
             label="Nhập mật khẩu"
             fullWidth
+            size="small"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            sx={{ mt: 2, mb: 2 }}
+            sx={{ mt: 1 }}
           />
         </DialogContent>
-        <DialogActions sx={{ justifyContent: 'center', gap: 2, p: 2 }}>
+        <DialogActions>
           <Button onClick={() => setConfirmDialogOpen(false)} variant="outlined">Huỷ</Button>
           <Button
             variant="contained"
@@ -241,7 +315,7 @@ const LocationManager = () => {
                 setPassword('');
                 proceedDelete(deleteTargetId);
               } else {
-                alert('❌ Sai mật khẩu!');
+                alert('Sai mật khẩu!');
               }
             }}
           >

@@ -29,9 +29,8 @@ import {
   Edit,
   Error,
   History,
-  LocationOn,
+  Message,
   ReceiptLong,
-  Schedule,
 } from '@mui/icons-material';
 import DirectionsCarIcon from '@mui/icons-material/DirectionsCar';
 import dayjs from 'dayjs';
@@ -61,12 +60,29 @@ const CarActions = ({
   car,
   canManage,
   canDelete,
+  canNotifyAdmin,
   onLoadRepairItems,
   onEdit,
   onDelete,
   onOpenHistory,
+  onNotifyAdmin,
 }) => (
   <Box sx={{ display: 'flex', gap: 0.5 }}>
+    {canNotifyAdmin && (
+      <Tooltip title="Báo admin về trạng thái xe">
+        <span>
+          <IconButton
+            size="small"
+            color="warning"
+            onClick={() => onNotifyAdmin(car)}
+            sx={{ borderRadius: 2 }}
+            aria-label="Báo admin"
+          >
+            <Message />
+          </IconButton>
+        </span>
+      </Tooltip>
+    )}
     <Tooltip title="Chi tiết lệnh sửa chữa (API + công việc ngoài báo giá)">
       <span>
         <IconButton size="small" color="info" onClick={() => onLoadRepairItems(car)} sx={{ borderRadius: 2 }}>
@@ -108,6 +124,7 @@ const CarCard = ({
   car,
   canManage,
   canDelete,
+  canNotifyAdmin,
   getStatusConfig,
   renderStatusIcon,
   onStatusChange,
@@ -115,6 +132,7 @@ const CarCard = ({
   onEdit,
   onDelete,
   onOpenHistory,
+  onNotifyAdmin,
 }) => (
   <Card key={car._id} sx={{ mb: 1.5, borderRadius: 3, border: (car.isLate || car.overdue) ? '2px solid #f44336' : undefined }}>
     <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
@@ -192,10 +210,12 @@ const CarCard = ({
         car={car}
         canManage={canManage}
         canDelete={canDelete}
+        canNotifyAdmin={canNotifyAdmin}
         onLoadRepairItems={onLoadRepairItems}
         onEdit={onEdit}
         onDelete={onDelete}
         onOpenHistory={onOpenHistory}
+        onNotifyAdmin={onNotifyAdmin}
       />
     </CardActions>
   </Card>
@@ -211,6 +231,7 @@ const CarTable = ({
   onTableSupervisorChange,
   canManage,
   canDelete,
+  canNotifyAdmin,
   getStatusConfig,
   renderStatusIcon,
   onStatusChange,
@@ -218,6 +239,7 @@ const CarTable = ({
   onEdit,
   onDelete,
   onOpenHistory,
+  onNotifyAdmin,
 }) => {
   const sortedCars = filterDisplayedCars({
     cars,
@@ -240,8 +262,10 @@ const CarTable = ({
             sx={{ maxWidth: 250, width: '100%' }}
           />
           <FormControl sx={{ minWidth: 180, maxWidth: 250, width: '100%' }} size="small">
-            <InputLabel>Chọn giám sát</InputLabel>
+            <InputLabel id="cars-table-supervisor-label">Chọn giám sát</InputLabel>
             <Select
+              labelId="cars-table-supervisor-label"
+              id="cars-table-supervisor-select"
               value={tableSupervisor}
               label="Chọn giám sát"
               onChange={(e) => onTableSupervisorChange(e.target.value)}
@@ -331,10 +355,12 @@ const CarTable = ({
                     car={car}
                     canManage={canManage}
                     canDelete={canDelete}
+                    canNotifyAdmin={canNotifyAdmin}
                     onLoadRepairItems={onLoadRepairItems}
                     onEdit={onEdit}
                     onDelete={onDelete}
                     onOpenHistory={onOpenHistory}
+                    onNotifyAdmin={onNotifyAdmin}
                   />
                 </TableCell>
               </TableRow>
@@ -362,6 +388,7 @@ const CarsPanel = ({
   onTableSupervisorChange,
   canManage,
   canDelete,
+  canNotifyAdmin,
   getStatusConfig,
   renderStatusIcon,
   onStatusChange,
@@ -369,6 +396,7 @@ const CarsPanel = ({
   onEdit,
   onDelete,
   onOpenHistory,
+  onNotifyAdmin,
 }) => {
   const filteredCars = filterDisplayedCars({
     cars: displayedCars,
@@ -385,11 +413,13 @@ const CarsPanel = ({
           <Grid container spacing={2} alignItems="flex-end">
             <Grid size={{ xs: 12, sm: 3 }}>
               <FormControl fullWidth size="small">
-                <InputLabel><LocationOn sx={{ mr: 1 }} fontSize="small" />Địa điểm</InputLabel>
+                <InputLabel id="manage-cars-location-label">Địa điểm</InputLabel>
                 <Select
+                  labelId="manage-cars-location-label"
+                  id="manage-cars-location-select"
                   value={selectedLocation}
                   onChange={(e) => onLocationChange(e.target.value)}
-                  label={<><LocationOn sx={{ mr: 1 }} fontSize="small" />Địa điểm</>}
+                  label="Địa điểm"
                 >
                   <MenuItem value="all">
                     <Typography variant="body2" fontWeight="bold">Tất cả địa điểm</Typography>
@@ -402,7 +432,7 @@ const CarsPanel = ({
             </Grid>
             <Grid size={{ xs: 12, sm: 3 }}>
               <TextField
-                label={<><Schedule sx={{ mr: 1 }} fontSize="small" />Ngày nhận xe</>}
+                label="Ngày nhận xe"
                 type="date"
                 size="small"
                 fullWidth
@@ -449,8 +479,10 @@ const CarsPanel = ({
               fullWidth
             />
             <FormControl fullWidth size="small">
-              <InputLabel>Chọn giám sát</InputLabel>
+              <InputLabel id="cars-mobile-supervisor-label">Chọn giám sát</InputLabel>
               <Select
+                labelId="cars-mobile-supervisor-label"
+                id="cars-mobile-supervisor-select"
                 value={tableSupervisor}
                 label="Chọn giám sát"
                 onChange={(e) => onTableSupervisorChange(e.target.value)}
@@ -473,6 +505,7 @@ const CarsPanel = ({
               car={car}
               canManage={canManage}
               canDelete={canDelete}
+              canNotifyAdmin={canNotifyAdmin}
               getStatusConfig={getStatusConfig}
               renderStatusIcon={renderStatusIcon}
               onStatusChange={onStatusChange}
@@ -480,6 +513,7 @@ const CarsPanel = ({
               onEdit={onEdit}
               onDelete={onDelete}
               onOpenHistory={onOpenHistory}
+              onNotifyAdmin={onNotifyAdmin}
             />
           ))}
         </Box>
@@ -494,6 +528,7 @@ const CarsPanel = ({
           onTableSupervisorChange={onTableSupervisorChange}
           canManage={canManage}
           canDelete={canDelete}
+          canNotifyAdmin={canNotifyAdmin}
           getStatusConfig={getStatusConfig}
           renderStatusIcon={renderStatusIcon}
           onStatusChange={onStatusChange}
@@ -501,6 +536,7 @@ const CarsPanel = ({
           onEdit={onEdit}
           onDelete={onDelete}
           onOpenHistory={onOpenHistory}
+          onNotifyAdmin={onNotifyAdmin}
         />
       )}
     </>

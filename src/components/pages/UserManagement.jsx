@@ -227,7 +227,7 @@ const UserManagement = () => {
   );
 
   return (
-    <PageLayout maxWidth="medium">
+    <PageLayout>
       <PageHeader
         icon={<AdminPanelSettings color="error" />}
         title="Quản lý tài khoản & phân quyền"
@@ -284,8 +284,9 @@ const UserManagement = () => {
       {isMobile ? (
         filteredUsers.map(renderUserCard)
       ) : (
-        <Paper variant="outlined" sx={{ borderRadius: 3, overflow: 'hidden' }}>
-          <Table size="small">
+        <Paper variant="outlined" sx={{ borderRadius: 3, overflow: 'hidden', width: '100%' }}>
+          <Box sx={{ width: '100%', overflowX: 'auto' }}>
+          <Table size="small" sx={{ minWidth: 900, width: '100%' }}>
             <TableHead sx={{ bgcolor: '#fafafa' }}>
               <TableRow>
                 <TableCell>Họ tên</TableCell>
@@ -323,6 +324,7 @@ const UserManagement = () => {
               ))}
             </TableBody>
           </Table>
+          </Box>
         </Paper>
       )}
 
@@ -367,6 +369,7 @@ const UserManagement = () => {
             <FormControlLabel
               control={
                 <Switch
+                  id="user-form-is-active"
                   checked={form.isActive}
                   onChange={(e) => setForm({ ...form, isActive: e.target.checked })}
                 />

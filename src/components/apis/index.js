@@ -24,12 +24,14 @@ export const createSupervisor = (data) => api.post('/supervisors', data);
 export const updateSupervisor = (id, data) => api.put(`/supervisors/${id}`, data);
 export const deleteSupervisor = (id) => api.delete(`/supervisors/${id}`);
 
-export const getAllCars = () => api.get('/cars');
+export const getAllCars = (params) => api.get('/cars', { params });
 export const createCar = (data) => api.post('/cars', data);
 export const updateCar = (id, data) => api.put(`/cars/${id}`, data);
 export const deleteCar = (id) => api.delete(`/cars/${id}`);
 export const updateCarStatusWithWorker = (id, status, newWorkerId = null) =>
   api.put(`/cars/${id}/status`, { status, ...(newWorkerId && { newWorkerId }) });
+export const notifyAdminAboutCar = (id, message) =>
+  api.post(`/cars/${id}/notify-admin`, { message });
 export const getCarStats = () => api.get('/cars/stats');
 export const getWorkingAndPendingCars = (date) =>
   api.get('/cars/working-pending', { params: date ? { date } : undefined });
@@ -55,7 +57,11 @@ export const getWorkerWeeklyRevenueSummary = (date) =>
   api.get('/worker/revenue/weekly-summary', { params: { date } });
 
 export const getWorkerKpi = (params) => api.get('/worker/kpi', { params });
-export const getAllWorkersKpi = (params) => api.get('/worker/kpi/all', { params });
+
+export const getDashboardOverview = (params) => api.get('/dashboard/overview', { params });
+export const getRevenueSettings = () => api.get('/dashboard/revenue-settings');
+export const updateRevenueSettings = (deductions) =>
+  api.put('/dashboard/revenue-settings', { deductions });
 
 export const getAllTeams = () => api.get('/teams');
 export const getTeamById = (teamId) => api.get(`/teams/${teamId}`);
@@ -71,3 +77,11 @@ export const addManualJobToWorker = (workerId, data) =>
 export const removeManualJobFromWorker = (workerId, jobId) =>
   api.delete(`/worker/${workerId}/manual-jobs/${jobId}`);
 export const getOperationLogs = (params) => api.get('/audit-logs', { params });
+
+export const getKtvMessageSettings = () => api.get('/ktv-messages/settings');
+export const updateKtvMessageSettings = (receiverUserIds) =>
+  api.put('/ktv-messages/settings', { receiverUserIds });
+export const getKtvMessages = (params) => api.get('/ktv-messages', { params });
+export const markKtvMessageRead = (id) => api.patch(`/ktv-messages/${id}/read`);
+export const getKtvSentMessages = (params) => api.get('/ktv-messages/sent', { params });
+export const acknowledgeKtvMessageRead = (id) => api.patch(`/ktv-messages/${id}/acknowledge`);

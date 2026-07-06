@@ -8,14 +8,16 @@ import {
   getAllWorkers,
 } from '../components/apis/index';
 import { queryKeys } from '../lib/queryKeys';
+import { isKtv } from '../utils/permissions';
 
-const useManageCarsBootstrap = () => {
+const useManageCarsBootstrap = (user) => {
   const queryClient = useQueryClient();
   const [workers, setWorkers] = useState([]);
+  const isKtvUser = isKtv(user);
 
   const carsQuery = useQuery({
-    queryKey: queryKeys.cars,
-    queryFn: async () => (await getAllCars()).data,
+    queryKey: isKtvUser ? queryKeys.carsMine : queryKeys.cars,
+    queryFn: async () => (await getAllCars(isKtvUser ? { mine: '1' } : undefined)).data,
     staleTime: 45_000,
   });
 
@@ -23,24 +25,28 @@ const useManageCarsBootstrap = () => {
     queryKey: queryKeys.locations,
     queryFn: async () => (await getAllLocations()).data,
     staleTime: 5 * 60_000,
+    enabled: !isKtvUser,
   });
 
   const allWorkersQuery = useQuery({
     queryKey: queryKeys.workers.all,
     queryFn: async () => (await getAllWorkers()).data,
     staleTime: 60_000,
+    enabled: !isKtvUser,
   });
 
   const availableWorkersQuery = useQuery({
     queryKey: queryKeys.workers.available,
     queryFn: async () => (await getAvailableWorkers()).data,
     staleTime: 30_000,
+    enabled: !isKtvUser,
   });
 
   const supervisorsQuery = useQuery({
     queryKey: queryKeys.supervisors,
     queryFn: async () => (await getAllSupervisors()).data,
     staleTime: 5 * 60_000,
+    enabled: !isKtvUser,
   });
 
   const allCars = carsQuery.data || [];
@@ -57,12 +63,13 @@ const useManageCarsBootstrap = () => {
   }, [carsQuery]);
 
   const refreshAvailableWorkers = useCallback(async () => {
+    if (isKtvUser) return [];
     const result = await availableWorkersQuery.refetch();
     if (result.data) {
       setWorkers(result.data);
     }
     return result.data;
-  }, [availableWorkersQuery]);
+  }, [availableWorkersQuery, isKtvUser]);
 
   const invalidateHomeDashboard = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: queryKeys.homeDashboard });

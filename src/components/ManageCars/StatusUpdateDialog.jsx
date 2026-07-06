@@ -73,9 +73,11 @@ const StatusUpdateDialog = ({
                     ? 'Chọn thợ mới cho sửa bổ sung (bắt buộc):'
                     : 'Chọn thợ cho công việc này:'}
             </Typography>
-            <FormControl fullWidth sx={{ mt: 2, mb: 2 }}>
-              <InputLabel>Chọn thợ</InputLabel>
+            <FormControl fullWidth sx={{ mt: 2, mb: 2 }} size="small">
+              <InputLabel id="status-update-worker-label">Chọn thợ</InputLabel>
               <Select
+                labelId="status-update-worker-label"
+                id="status-update-worker-select"
                 value={selectedNewWorker}
                 onChange={(e) => onSelectedNewWorkerChange(e.target.value)}
                 label="Chọn thợ"

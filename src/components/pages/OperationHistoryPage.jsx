@@ -255,7 +255,7 @@ const OperationHistoryPage = () => {
   );
 
   return (
-    <PageLayout maxWidth="wide">
+    <PageLayout>
       <PageHeader
         icon={<HistoryIcon />}
         title="Lịch sử thao tác"
@@ -361,8 +361,9 @@ const OperationHistoryPage = () => {
           />
         </Stack>
       ) : (
-        <Paper sx={{ borderRadius: 2, overflow: 'hidden' }}>
-          <Table size="small">
+        <Paper sx={{ borderRadius: 2, overflow: 'hidden', width: '100%' }}>
+          <Box sx={{ width: '100%', overflowX: 'auto' }}>
+          <Table size="small" sx={{ minWidth: 1100, width: '100%' }}>
             <TableHead>
               <TableRow sx={{ backgroundColor: '#f8fafc' }}>
                 <TableCell sx={{ fontWeight: 700 }}>Thời gian</TableCell>
@@ -377,6 +378,7 @@ const OperationHistoryPage = () => {
               {logs.map(renderLogRow)}
             </TableBody>
           </Table>
+          </Box>
           <TablePagination
             component="div"
             count={pagination.total}

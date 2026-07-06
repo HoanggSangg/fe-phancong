@@ -69,15 +69,16 @@ const CarEditDialog = ({
           />
         </Grid>
         <Grid size={{ xs: 12, sm: 6 }}>
-          <FormControl fullWidth sx={{ mb: 2 }}>
-            <InputLabel shrink>Giám sát</InputLabel>
+          <FormControl fullWidth sx={{ mb: 2 }} size="small">
+            <InputLabel id="car-edit-supervisor-label">Giám sát</InputLabel>
             <Select
+              labelId="car-edit-supervisor-label"
+              id="car-edit-supervisor-select"
               name="supervisor"
               value={editData.supervisor || ''}
               onChange={onChange}
               label="Giám sát"
               displayEmpty
-              inputProps={{ 'aria-label': 'Giám sát' }}
             >
               <MenuItem value="">
                 <em>Không chọn</em>

@@ -33,7 +33,7 @@ import {
 } from "../apis/index";
 import { queryKeys } from "../../lib/queryKeys";
 import { useAuth } from "../../context/AuthContext";
-import { ACTIVE_CAR_STATUSES, CAR_STATUS_LABELS, hasPermission } from "../../utils/permissions";
+import { ACTIVE_CAR_STATUSES, CAR_STATUS_LABELS, hasPermission, isKtv } from "../../utils/permissions";
 import { filterWorkersByKeyword } from "../../utils/workerSearch";
 import useIsMobile from "../../hooks/useIsMobile";
 import FullscreenDialog from "../common/FullscreenDialog";
@@ -51,6 +51,9 @@ const WokerAssignment = () => {
   const [pageFullscreen, setPageFullscreen] = useState(false);
   const isMobile = useIsMobile();
 
+  const isKtvUser = isKtv(user);
+  const canManageJobs = hasPermission(user, 'workers.woker') && !isKtvUser;
+
   const workersQuery = useQuery({
     queryKey: queryKeys.workers.all,
     queryFn: async () => {
@@ -61,8 +64,8 @@ const WokerAssignment = () => {
   });
 
   const carsQuery = useQuery({
-    queryKey: queryKeys.cars,
-    queryFn: async () => (await getAllCars()).data,
+    queryKey: isKtvUser ? queryKeys.carsMine : queryKeys.cars,
+    queryFn: async () => (await getAllCars(isKtvUser ? { mine: '1' } : undefined)).data,
     staleTime: 45_000,
   });
 
@@ -262,16 +265,18 @@ const WokerAssignment = () => {
             <Typography variant="caption" display="block" color="warning.dark">
               Ngày: {formatDate(job.date)}
             </Typography>
-            <Button
-              size="small"
-              color="error"
-              variant="contained"
-              startIcon={<DeleteIcon />}
-              onClick={() => handleDeleteJob(worker._id, job._id)}
-              sx={{ mt: 0.75 }}
-            >
-              Xóa việc
-            </Button>
+            {canManageJobs && (
+              <Button
+                size="small"
+                color="error"
+                variant="contained"
+                startIcon={<DeleteIcon />}
+                onClick={() => handleDeleteJob(worker._id, job._id)}
+                sx={{ mt: 0.75 }}
+              >
+                Xóa việc
+              </Button>
+            )}
           </Paper>
         ))}
       </Stack>
@@ -279,10 +284,10 @@ const WokerAssignment = () => {
   };
 
   const renderAddJob = (worker) => {
-    if (!hasPermission(user, "workers.main")) {
+    if (!canManageJobs) {
       return (
         <Typography variant="body2" color="text.secondary">
-          Chỉ giám sát/admin giao việc ghi tay
+          Chỉ xem công việc được giao
         </Typography>
       );
     }
@@ -322,13 +327,15 @@ const WokerAssignment = () => {
         flexWrap="wrap"
         alignItems={{ sm: "center" }}
       >
-        <TextField
-          size="small"
-          placeholder="Tìm thợ theo tên, SBD..."
-          value={workerSearch}
-          onChange={(e) => setWorkerSearch(e.target.value)}
-          sx={{ flex: 1, minWidth: { xs: "100%", sm: 200 } }}
-        />
+        {!isKtvUser && (
+          <TextField
+            size="small"
+            placeholder="Tìm thợ theo tên, SBD..."
+            value={workerSearch}
+            onChange={(e) => setWorkerSearch(e.target.value)}
+            sx={{ flex: 1, minWidth: { xs: "100%", sm: 200 } }}
+          />
+        )}
         <TextField
           size="small"
           type="date"
@@ -495,8 +502,12 @@ const WokerAssignment = () => {
     <PageLayout sx={{ bgcolor: "grey.50", minHeight: "100vh" }}>
       <PageHeader
         emoji="📋"
-        title="Phân công công việc theo thợ"
-        subtitle="Giao việc ghi tay theo ngày và theo dõi xe đang được gán cho từng thợ"
+        title={isKtvUser ? "Công việc của tôi" : "Phân công công việc theo thợ"}
+        subtitle={
+          isKtvUser
+            ? "Xem xe đang được gán và công việc ghi tay trong ngày"
+            : "Giao việc ghi tay theo ngày và theo dõi xe đang được gán cho từng thợ"
+        }
         actions={
           <Button
             variant="outlined"

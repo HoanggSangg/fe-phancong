@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   getAllSupervisors,
   deleteSupervisor,
@@ -16,20 +16,70 @@ import {
   Button,
   Box,
   Grid,
-  Card,
-  CardContent,
+  Paper,
   Avatar,
-  Divider,
+  Tooltip,
+  Chip,
 } from '@mui/material';
 import { Edit, Delete, SupervisorAccount } from '@mui/icons-material';
 import PageLayout from '../common/PageLayout';
 import PageHeader from '../common/PageHeader';
 
+const SupervisorRow = ({ supervisor, index, onEdit, onDelete }) => (
+  <Paper
+    sx={{
+      px: 1.25,
+      py: 0.75,
+      borderRadius: 2,
+      border: '1px solid',
+      borderColor: 'divider',
+      display: 'flex',
+      alignItems: 'center',
+      gap: 1,
+      height: '100%',
+    }}
+  >
+    <Avatar
+      sx={{
+        width: 40,
+        height: 40,
+        bgcolor: '#f59e0b',
+        flexShrink: 0,
+      }}
+    >
+      <SupervisorAccount sx={{ fontSize: 22 }} />
+    </Avatar>
+
+    <Box sx={{ flex: 1, minWidth: 0 }}>
+      <Typography variant="body2" fontWeight={700} noWrap sx={{ fontSize: 13, lineHeight: 1.3 }}>
+        {supervisor.name}
+      </Typography>
+      <Typography variant="caption" color="text.secondary" sx={{ fontSize: 11 }}>
+        STT {index + 1}
+      </Typography>
+    </Box>
+
+    <Box sx={{ display: 'flex', flexShrink: 0, gap: 0.25 }}>
+      <Tooltip title="Chỉnh sửa">
+        <IconButton size="small" onClick={() => onEdit(supervisor)} aria-label="Sửa">
+          <Edit sx={{ fontSize: 17 }} />
+        </IconButton>
+      </Tooltip>
+      <Tooltip title="Xóa">
+        <IconButton size="small" onClick={() => onDelete(supervisor._id)} aria-label="Xóa" color="error">
+          <Delete sx={{ fontSize: 17 }} />
+        </IconButton>
+      </Tooltip>
+    </Box>
+  </Paper>
+);
+
 const SupervisorsPage = () => {
   const [supervisors, setSupervisors] = useState([]);
+  const [searchTerm, setSearchTerm] = useState('');
   const [editOpen, setEditOpen] = useState(false);
-  const [editData, setEditData] = useState({ id: '', name: '', phone: '' });
-  const [newSupervisor, setNewSupervisor] = useState({ name: '', phone: '' });
+  const [editData, setEditData] = useState({ id: '', name: '' });
+  const [newSupervisor, setNewSupervisor] = useState({ name: '' });
 
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
   const [password, setPassword] = useState('');
@@ -38,7 +88,7 @@ const SupervisorsPage = () => {
   const fetchSupervisors = async () => {
     try {
       const res = await getAllSupervisors();
-      setSupervisors(res.data);
+      setSupervisors(res.data || []);
     } catch (error) {
       console.error('Lỗi khi lấy danh sách giám sát:', error);
     }
@@ -48,13 +98,19 @@ const SupervisorsPage = () => {
     fetchSupervisors();
   }, []);
 
+  const filteredSupervisors = useMemo(() => {
+    const keyword = searchTerm.trim().toLowerCase();
+    if (!keyword) return supervisors;
+    return supervisors.filter((item) => item.name?.toLowerCase().includes(keyword));
+  }, [supervisors, searchTerm]);
+
   const isPasswordVerified = () => {
     const verifiedUntil = localStorage.getItem('verified_until');
     return verifiedUntil && new Date(verifiedUntil) > new Date();
   };
 
   const markPasswordVerified = () => {
-    const expiry = new Date(Date.now() + 60 * 60 * 10000); // 10 giờ
+    const expiry = new Date(Date.now() + 60 * 60 * 10000);
     localStorage.setItem('verified_until', expiry.toISOString());
   };
 
@@ -68,27 +124,23 @@ const SupervisorsPage = () => {
   };
 
   const proceedDelete = async (id) => {
-    if (window.confirm('Bạn có chắc muốn xoá người giám sát này?')) {
-      try {
-        await deleteSupervisor(id);
-        fetchSupervisors();
-      } catch (error) {
-        console.error('Lỗi khi xoá:', error);
-      }
+    if (!window.confirm('Bạn có chắc muốn xoá người giám sát này?')) return;
+    try {
+      await deleteSupervisor(id);
+      fetchSupervisors();
+    } catch (error) {
+      console.error('Lỗi khi xoá:', error);
     }
   };
 
   const handleEditClick = (supervisor) => {
-    setEditData({ id: supervisor._id, name: supervisor.name, phone: supervisor.phone });
+    setEditData({ id: supervisor._id, name: supervisor.name });
     setEditOpen(true);
   };
 
   const handleEditSave = async () => {
     try {
-      await updateSupervisor(editData.id, {
-        name: editData.name,
-        phone: editData.phone,
-      });
+      await updateSupervisor(editData.id, { name: editData.name });
       setEditOpen(false);
       fetchSupervisors();
     } catch (error) {
@@ -99,11 +151,12 @@ const SupervisorsPage = () => {
   const handleAddSupervisor = async (e) => {
     e.preventDefault();
     if (!newSupervisor.name.trim()) {
-      return alert('Vui lòng nhập tên giám sát');
+      alert('Vui lòng nhập tên giám sát');
+      return;
     }
     try {
       await createSupervisor(newSupervisor);
-      setNewSupervisor({ name: '', phone: '' });
+      setNewSupervisor({ name: '' });
       fetchSupervisors();
     } catch (error) {
       console.error('Lỗi khi thêm giám sát:', error);
@@ -115,223 +168,128 @@ const SupervisorsPage = () => {
       <PageHeader
         emoji="👷‍♂️"
         title="Danh sách giám sát"
-        subtitle="Quản lý, thêm mới và chỉnh sửa thông tin các giám sát viên tại đây."
+        subtitle={`Quản lý giám sát viên — ${filteredSupervisors.length} người`}
       />
-      <Divider sx={{ mb: 2 }} />
+
       <Box
         sx={{
           display: 'flex',
-          flexDirection: { xs: 'column', sm: 'row' },
-          alignItems: 'stretch',
-          justifyContent: 'center',
-          gap: 1,
-          mb: 2,
-          width: '100%',
-          maxWidth: 1100,
-          mx: 'auto',
+          flexDirection: { xs: 'column', md: 'row' },
+          alignItems: { xs: 'stretch', md: 'center' },
+          gap: 1.5,
+          bgcolor: 'background.paper',
+          borderRadius: 2,
+          border: 1,
+          borderColor: 'divider',
+          p: { xs: 1.5, sm: 2 },
+          mb: 1.5,
         }}
       >
-        <Box
-          sx={{
-            flex: { xs: 'unset', sm: 1 },
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            background: '#fff',
-            borderRadius: 3,
-            boxShadow: '0 2px 12px rgba(0,0,0,0.06)',
-            py: 0.5,
-            px: 0,
-            minHeight: 80,
-            width: '100%',
-            maxWidth: '100%',
-            mx: 0,
-            mb: { xs: 2, sm: 0 },
-          }}
-        >
-          <Box sx={{ textAlign: 'center', width: '100%' }}>
-            <Typography sx={{ fontWeight: 'bold', fontSize: 22, color: '#2563eb', mb: 1 }}>
-              Tổng số giám sát
-            </Typography>
-            <Typography sx={{ fontWeight: 'bold', fontSize: 32, color: '#1e293b' }}>
-              {supervisors.length}
-            </Typography>
-          </Box>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexShrink: 0 }}>
+          <Chip
+            label={`Tổng: ${filteredSupervisors.length}`}
+            color="primary"
+            variant="outlined"
+            size="small"
+            sx={{ fontWeight: 700 }}
+          />
         </Box>
+
         <Box
+          component="form"
+          onSubmit={handleAddSupervisor}
           sx={{
-            flex: { xs: 'unset', sm: 2 },
-            minWidth: 0,
-            width: { xs: '100%', sm: 'unset' },
+            flex: 1,
+            display: 'flex',
+            flexDirection: { xs: 'column', sm: 'row' },
+            gap: 1,
+            alignItems: { sm: 'center' },
           }}
         >
-          <Box
-            component="form"
-            onSubmit={handleAddSupervisor}
-            sx={{
-              display: 'flex',
-              flexDirection: { xs: 'column', sm: 'row' },
-              gap: { xs: 1.5, sm: 2 },
-              flexWrap: 'wrap',
-              mb: 0,
-              justifyContent: 'center',
-              background: '#fff',
-              borderRadius: 3,
-              boxShadow: '0 2px 12px rgba(0,0,0,0.06)',
-              py: 2,
-              px: 2,
-              alignItems: 'center',
-              maxWidth: { xs: '95vw', sm: 500 },
-              mx: 'auto',
-              position: 'relative',
-            }}
+          <TextField
+            label="Tên giám sát"
+            value={newSupervisor.name}
+            onChange={(e) => setNewSupervisor({ name: e.target.value })}
+            required
+            size="small"
+            fullWidth
+            sx={{ maxWidth: { sm: 280 } }}
+          />
+          <TextField
+            label="Tìm giám sát"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            size="small"
+            fullWidth
+            sx={{ maxWidth: { sm: 220 } }}
+          />
+          <Button
+            type="submit"
+            variant="contained"
+            size="small"
+            sx={{ flexShrink: 0, whiteSpace: 'nowrap', textTransform: 'none' }}
           >
-            <TextField
-              label="Tên giám sát"
-              value={newSupervisor.name}
-              onChange={(e) => setNewSupervisor({ ...newSupervisor, name: e.target.value })}
-              required
-              fullWidth
-              sx={{
-                minWidth: { xs: 0, sm: 200 },
-                background: '#f8fafc',
-                borderRadius: 2,
-                '& .MuiOutlinedInput-root': {
-                  borderRadius: 2,
-                  fontSize: 17,
-                },
-                '& .MuiInputLabel-root': {
-                  fontSize: 16,
-                },
-              }}
-              inputProps={{ style: { padding: '12px 14px' } }}
-            />
-            <Button type="submit" variant="contained" fullWidth sx={{
-              fontSize: 16,
-              px: 3,
-              py: 1.5,
-              borderRadius: 2,
-              bgcolor: '#2563eb',
-              boxShadow: '0 2px 8px rgba(37,99,235,0.08)',
-              '&:hover': { bgcolor: '#1d4ed8' },
-              height: { xs: '44px', sm: '48px' },
-              mt: { xs: 1, sm: 0 },
-              maxWidth: { xs: '100%', sm: 'unset' },
-            }}>
-              Thêm
-            </Button>
-          </Box>
+            Thêm
+          </Button>
         </Box>
       </Box>
-      <Grid container spacing={2} sx={{ mt: 1, width: '100%', mx: 0 }} justifyContent="center">
-        {supervisors.map((s, idx) => (
-          <Grid size={{ xs: 12, sm: 6, md: 2 }} key={s._id} sx={{ display: 'flex', justifyContent: 'center' }}>
-            <Card
-              elevation={2}
-              sx={{
-                width: { xs: '90vw', sm: 200 },
-                minHeight: 160,
-                borderRadius: 3,
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                py: 2,
-              }}
-            >
-              <CardContent sx={{ p: 0, width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                <Avatar
-                  sx={{
-                    bgcolor: '#f59e42',
-                    width: 48,
-                    height: 48,
-                    mb: 1.5
-                  }}
-                >
-                  <SupervisorAccount fontSize="medium" />
-                </Avatar>
-                <Typography
-                  variant="h6"
-                  fontWeight="bold"
-                  sx={{ color: '#1e293b', fontSize: 17, textAlign: 'center', mb: 1 }}
-                >
-                  {s.name}
-                </Typography>
-                <Typography sx={{ color: '#64748b', fontSize: 14 }}>
-                  STT: {idx + 1}
-                </Typography>
-                <Box sx={{ display: 'flex', justifyContent: 'center', gap: 2, mt: 1 }}>
-                  <IconButton edge="end" onClick={() => handleEditClick(s)} sx={{ bgcolor: '#f1f5f9', '&:hover': { bgcolor: '#e2e8f0' }, mx: 0.5 }}>
-                    <Edit fontSize="small" />
-                  </IconButton>
-                  <IconButton edge="end" onClick={() => handleDelete(s._id)} sx={{ bgcolor: '#fef2f2', '&:hover': { bgcolor: '#fee2e2' }, mx: 0.5 }}>
-                    <Delete fontSize="small" sx={{ color: '#dc2626' }} />
-                  </IconButton>
-                </Box>
-              </CardContent>
-            </Card>
-          </Grid>
-        ))}
-        {/* Add empty placeholders if needed to always show 6 columns */}
-        {Array.from({ length: supervisors.length % 6 === 0 ? 0 : 6 - (supervisors.length % 6) }).map((_, idx) => (
-          <Grid size={{ xs: 12, sm: 6, md: 2 }} key={`empty-${idx}`} sx={{ display: 'flex', justifyContent: 'center' }}>
-            <Box sx={{ visibility: 'hidden', maxWidth: 200, width: '100%' }}>
-              <Card />
-            </Box>
-          </Grid>
-        ))}
-      </Grid>
-      {/* Dialog cập nhật */}
-      <Dialog open={editOpen} onClose={() => setEditOpen(false)} PaperProps={{ sx: { borderRadius: 3, p: 1 } }}>
-        <DialogTitle sx={{ fontSize: 22, fontWeight: 'bold', color: '#1e293b', pb: 1 }}>
-          ✏️ Cập nhật giám sát
-        </DialogTitle>
-        <DialogContent sx={{ p: 3, pt: 1 }}>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, mt: 2 }}>
-            <TextField
-              label="Tên"
-              value={editData.name}
-              onChange={(e) => setEditData({ ...editData, name: e.target.value })}
-              required
-              fullWidth
-              InputProps={{ style: { fontSize: 16 } }}
-              InputLabelProps={{ style: { fontSize: 16 } }}
-              sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
-            />
-          </Box>
+
+      {filteredSupervisors.length === 0 ? (
+        <Typography align="center" variant="body2" color="text.secondary">
+          Chưa có giám sát nào.
+        </Typography>
+      ) : (
+        <Grid container spacing={1}>
+          {filteredSupervisors.map((supervisor, index) => (
+            <Grid size={{ xs: 12, sm: 6, md: 4, lg: 3 }} key={supervisor._id}>
+              <SupervisorRow
+                supervisor={supervisor}
+                index={index}
+                onEdit={handleEditClick}
+                onDelete={handleDelete}
+              />
+            </Grid>
+          ))}
+        </Grid>
+      )}
+
+      <Dialog open={editOpen} onClose={() => setEditOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ fontWeight: 'bold' }}>Cập nhật giám sát</DialogTitle>
+        <DialogContent>
+          <TextField
+            label="Tên"
+            value={editData.name}
+            onChange={(e) => setEditData({ ...editData, name: e.target.value })}
+            required
+            fullWidth
+            size="small"
+            sx={{ mt: 1 }}
+          />
         </DialogContent>
-        <DialogActions sx={{ p: 3, pt: 2 }}>
-          <Button onClick={() => setEditOpen(false)} sx={{ fontSize: 16, px: 3 }} variant="outlined">
-            Huỷ
-          </Button>
-          <Button onClick={handleEditSave} variant="contained" sx={{ fontSize: 16, px: 3, bgcolor: '#3b82f6' }}>
-            Lưu
-          </Button>
+        <DialogActions>
+          <Button onClick={() => setEditOpen(false)} variant="outlined">Huỷ</Button>
+          <Button onClick={handleEditSave} variant="contained">Lưu</Button>
         </DialogActions>
       </Dialog>
-      {/* Dialog xác thực xoá */}
-      <Dialog open={confirmDialogOpen} onClose={() => setConfirmDialogOpen(false)} PaperProps={{ sx: { borderRadius: 3, p: 1 } }}>
-        <DialogTitle sx={{ color: '#dc2626', fontWeight: 'bold', fontSize: 20, pb: 1 }}>
-          🔒 Xác thực để xoá
-        </DialogTitle>
-        <DialogContent sx={{ p: 3, pt: 1 }}>
+
+      <Dialog open={confirmDialogOpen} onClose={() => setConfirmDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ color: 'error.main', fontWeight: 'bold' }}>Xác thực để xoá</DialogTitle>
+        <DialogContent>
           <TextField
             type="password"
             label="Nhập mật khẩu"
             fullWidth
+            size="small"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            sx={{ mt: 2, '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
-            InputProps={{ style: { fontSize: 16 } }}
-            InputLabelProps={{ style: { fontSize: 16 } }}
+            sx={{ mt: 1 }}
           />
         </DialogContent>
-        <DialogActions sx={{ p: 3, pt: 2 }}>
-          <Button onClick={() => setConfirmDialogOpen(false)} variant="outlined" sx={{ px: 3 }}>
-            Huỷ
-          </Button>
+        <DialogActions>
+          <Button onClick={() => setConfirmDialogOpen(false)} variant="outlined">Huỷ</Button>
           <Button
             variant="contained"
+            color="error"
             onClick={() => {
               if (password === '123456@') {
                 markPasswordVerified();
@@ -342,7 +300,6 @@ const SupervisorsPage = () => {
                 alert('Sai mật khẩu!');
               }
             }}
-            sx={{ bgcolor: '#dc2626', px: 3 }}
           >
             Xác nhận
           </Button>

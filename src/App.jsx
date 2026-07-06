@@ -15,13 +15,16 @@ import LocationManager from './components/pages/LocationManager';
 import WokerAssignment from './components/pages/WokerAssignment';
 import RepairHistoryPage from './components/pages/RepairHistoryPage';
 import WorkerRevenueChart from './components/pages/WorkerRevenueChart';
-import WorkerKpiPage from './components/pages/WorkerKpiPage';
+import AdminDashboardPage from './components/pages/AdminDashboardPage';
 import WeeklyPraiseForm from './components/pages/WeeklyPraiseForm';
 import WeeklyWarningForm from './components/pages/WeeklyWarningForm';
 import TeamManagement from './components/pages/TeamManagement';
 import UserManagement from './components/pages/UserManagement';
 import AccountPermissionsPage from './components/pages/AccountPermissionsPage';
 import OperationHistoryPage from './components/pages/OperationHistoryPage';
+import KtvMessagesPage from './components/pages/KtvMessagesPage';
+import KtvReadNotificationListener from './components/common/KtvReadNotificationListener';
+import KtvInboxNotificationListener from './components/common/KtvInboxNotificationListener';
 import { hasPermission, getFirstAllowedPath } from './utils/permissions';
 
 const RequireAuth = ({ children }) => {
@@ -53,10 +56,15 @@ const PermissionRoute = ({ permission, children }) => {
   return children;
 };
 
-const AppLayout = () => (
-  <>
-    <AppBarComponent />
-    <Box component="main">
+const AppLayout = () => {
+  const { user } = useAuth();
+
+  return (
+    <>
+      <AppBarComponent />
+      <KtvReadNotificationListener user={user} />
+      <KtvInboxNotificationListener user={user} />
+      <Box component="main">
       <Routes>
         <Route path="/" element={<Navigate to="/cars" />} />
         <Route path="/cars" element={<PermissionRoute permission="cars.today"><CarsTodayPage /></PermissionRoute>} />
@@ -64,7 +72,7 @@ const AppLayout = () => (
         <Route path="/cars/manage" element={<PermissionRoute permission="cars.manage"><ManageCarsPage /></PermissionRoute>} />
         <Route path="/workers/main" element={<PermissionRoute permission="workers.main"><MainWorkersPage /></PermissionRoute>} />
         <Route path="/workers/available" element={<PermissionRoute permission="workers.available"><AvailableWorkersPage /></PermissionRoute>} />
-        <Route path="/workers/kpi" element={<PermissionRoute permission="workers.kpi"><WorkerKpiPage /></PermissionRoute>} />
+        <Route path="/dashboard" element={<PermissionRoute permission="reports.dashboard"><AdminDashboardPage /></PermissionRoute>} />
         <Route path="/workers/revenue-chart" element={<PermissionRoute permission="reports.revenue"><WorkerRevenueChart /></PermissionRoute>} />
         <Route path="/workers/weekly-praise" element={<PermissionRoute permission="reports.praise"><WeeklyPraiseForm /></PermissionRoute>} />
         <Route path="/workers/weekly-warning" element={<PermissionRoute permission="reports.warning"><WeeklyWarningForm /></PermissionRoute>} />
@@ -76,11 +84,13 @@ const AppLayout = () => (
         <Route path="/users" element={<PermissionRoute permission="system.users"><UserManagement /></PermissionRoute>} />
         <Route path="/account-permissions" element={<PermissionRoute permission="system.permissions"><AccountPermissionsPage /></PermissionRoute>} />
         <Route path="/audit-logs" element={<PermissionRoute permission="system.audit-logs"><OperationHistoryPage /></PermissionRoute>} />
+        <Route path="/ktv-messages" element={<PermissionRoute permission="system.ktv-messages"><KtvMessagesPage /></PermissionRoute>} />
         <Route path="*" element={<Navigate to="/cars" />} />
       </Routes>
     </Box>
   </>
-);
+  );
+};
 
 function App() {
   return (
