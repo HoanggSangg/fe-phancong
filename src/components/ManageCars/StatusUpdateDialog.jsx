@@ -53,6 +53,12 @@ const StatusUpdateDialog = ({
             <Typography variant="body2" color="textSecondary">
               Sang: <strong>{getStatusConfig(newStatus).label}</strong>
             </Typography>
+            <Typography variant="body2" color="textSecondary" sx={{ mt: 1 }}>
+              Địa điểm: <strong>{car.location?.name || 'Chưa xác định'}</strong>
+            </Typography>
+            <Typography variant="body2" color="textSecondary">
+              Giám sát: <strong>{car.supervisor?.name || '---'}</strong>
+            </Typography>
           </Box>
         )}
 

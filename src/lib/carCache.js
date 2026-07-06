@@ -3,6 +3,13 @@ import { queryKeys } from './queryKeys';
 
 const normalizeId = (value) => String(value?._id || value || '');
 
+const preservePopulatedRef = (prevValue, nextValue) => {
+  if (!nextValue) return prevValue;
+  if (typeof nextValue === 'object' && nextValue?.name) return nextValue;
+  if (typeof prevValue === 'object' && prevValue?.name) return prevValue;
+  return nextValue;
+};
+
 export const patchCarInCache = (updatedCar) => {
   if (!updatedCar?._id) return;
 
@@ -11,7 +18,15 @@ export const patchCarInCache = (updatedCar) => {
     const id = normalizeId(updatedCar);
     const exists = old.some((car) => normalizeId(car) === id);
     if (!exists) return [...old, updatedCar];
-    return old.map((car) => (normalizeId(car) === id ? { ...car, ...updatedCar } : car));
+    return old.map((car) => {
+      if (normalizeId(car) !== id) return car;
+      return {
+        ...car,
+        ...updatedCar,
+        location: preservePopulatedRef(car.location, updatedCar.location),
+        supervisor: preservePopulatedRef(car.supervisor, updatedCar.supervisor),
+      };
+    });
   });
 };
 

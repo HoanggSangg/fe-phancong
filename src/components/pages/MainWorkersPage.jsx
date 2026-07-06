@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import imageCompression from 'browser-image-compression';
 import {
   getAllWorkers,
   deleteWorker,
@@ -258,7 +259,14 @@ const WorkersPage = () => {
   const [importError, setImportError] = useState('');
   const [togglingRevenueId, setTogglingRevenueId] = useState(null);
   const [editOpen, setEditOpen] = useState(false);
-  const [editData, setEditData] = useState({ id: '', name: '' });
+  const [editSaving, setEditSaving] = useState(false);
+  const [editData, setEditData] = useState({
+    id: '',
+    name: '',
+    soBaoDanh: '',
+    avatarPreview: '',
+    avatarFile: null,
+  });
 
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
   const [password, setPassword] = useState('');
@@ -315,23 +323,76 @@ const WorkersPage = () => {
     }
   };
 
+  const fileToBase64 = (file) =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = (error) => reject(error);
+    });
+
   const handleEditClick = (worker) => {
     setEditData({
       id: worker._id,
-      name: worker.name,
+      name: worker.name || '',
+      soBaoDanh: worker.soBaoDanh || '',
+      avatarPreview: worker.avatar || '',
+      avatarFile: null,
     });
     setEditOpen(true);
   };
 
-  const handleEditSave = async () => {
+  const handleAvatarChange = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
     try {
-      await updateWorker(editData.id, {
-        name: editData.name,
+      const compressedFile = await imageCompression(file, {
+        maxSizeMB: 0.5,
+        maxWidthOrHeight: 800,
+        useWebWorker: true,
       });
+      setEditData((prev) => ({
+        ...prev,
+        avatarFile: compressedFile,
+        avatarPreview: URL.createObjectURL(compressedFile),
+      }));
+    } catch (error) {
+      console.error('Lỗi nén ảnh:', error);
+      alert('Không thể xử lý ảnh. Vui lòng thử ảnh khác.');
+    }
+  };
+
+  const handleEditSave = async () => {
+    if (!editData.name.trim()) {
+      alert('Vui lòng nhập tên thợ');
+      return;
+    }
+    if (!editData.soBaoDanh.trim()) {
+      alert('Vui lòng nhập số báo danh');
+      return;
+    }
+
+    try {
+      setEditSaving(true);
+      const payload = {
+        name: editData.name.trim(),
+        soBaoDanh: editData.soBaoDanh.trim(),
+      };
+
+      if (editData.avatarFile) {
+        payload.avatar = await fileToBase64(editData.avatarFile);
+      }
+
+      await updateWorker(editData.id, payload);
       setEditOpen(false);
       fetchWorkers();
     } catch (error) {
       console.error('Lỗi khi cập nhật thợ:', error);
+      alert(error.response?.data?.message || 'Lỗi khi cập nhật thợ');
+    } finally {
+      setEditSaving(false);
     }
   };
 
@@ -573,11 +634,57 @@ const WorkersPage = () => {
         </DialogTitle>
         <DialogContent>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, mt: 2 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <Avatar
+                src={editData.avatarPreview || ''}
+                alt={editData.name || 'Ảnh thợ'}
+                sx={{
+                  width: 88,
+                  height: 88,
+                  bgcolor: '#3b82f6',
+                  border: '2px solid #dbeafe',
+                }}
+              >
+                {!editData.avatarPreview && <Person sx={{ fontSize: 40 }} />}
+              </Avatar>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                <Button variant="outlined" component="label" sx={{ textTransform: 'none' }}>
+                  {editData.avatarPreview ? 'Đổi ảnh' : 'Thêm ảnh'}
+                  <input
+                    type="file"
+                    hidden
+                    accept="image/*"
+                    onChange={handleAvatarChange}
+                  />
+                </Button>
+                <Typography variant="caption" color="text.secondary">
+                  Ảnh tối đa 800px, nén trước khi upload
+                </Typography>
+              </Box>
+            </Box>
+
             <TextField
               label="Tên thợ"
               value={editData.name}
               onChange={(e) =>
                 setEditData({ ...editData, name: e.target.value })
+              }
+              required
+              fullWidth
+              InputProps={{ style: { fontSize: 16 } }}
+              InputLabelProps={{ style: { fontSize: 16 } }}
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  borderRadius: 2,
+                }
+              }}
+            />
+
+            <TextField
+              label="Số báo danh"
+              value={editData.soBaoDanh}
+              onChange={(e) =>
+                setEditData({ ...editData, soBaoDanh: e.target.value })
               }
               required
               fullWidth
@@ -596,15 +703,17 @@ const WorkersPage = () => {
             onClick={() => setEditOpen(false)}
             sx={{ fontSize: 16, px: 3 }}
             variant="outlined"
+            disabled={editSaving}
           >
             Huỷ
           </Button>
           <Button
             onClick={handleEditSave}
             variant="contained"
+            disabled={editSaving}
             sx={{ fontSize: 16, px: 3, bgcolor: '#3b82f6' }}
           >
-            Lưu thay đổi
+            {editSaving ? 'Đang lưu...' : 'Lưu thay đổi'}
           </Button>
         </DialogActions>
       </Dialog>
