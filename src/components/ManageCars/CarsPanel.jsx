@@ -479,22 +479,6 @@ const CarsPanel = ({
                 </Select>
               </FormControl>
             </Grid>
-            <Grid size={{ xs: 12, sm: 2 }}>
-              <FormControl fullWidth size="small">
-                <InputLabel id="manage-cars-status-label">Trạng thái</InputLabel>
-                <Select
-                  labelId="manage-cars-status-label"
-                  id="manage-cars-status-select"
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                  label="Trạng thái"
-                >
-                  {STATUS_FILTER_OPTIONS.map((opt) => (
-                    <MenuItem key={opt.value} value={opt.value}>{opt.label}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
             <Grid size={{ xs: 12, sm: 3 }}>
               <TextField
                 label="Ngày nhận xe"
