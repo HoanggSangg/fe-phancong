@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Box,
   Button,
@@ -37,6 +37,21 @@ import dayjs from 'dayjs';
 import { filterDisplayedCars, getSupervisorsFromCars } from '../../utils/carListHelpers';
 import { getAvailableStatusTransitions, getConditionConfig } from '../../utils/carStatusConfig';
 import FilterPanel from '../common/FilterPanel';
+
+// ✅ Bộ lọc "Trạng thái" chỉ còn 2 nhóm: Đã giao / Chưa giao (mọi trạng thái khác "delivered" đều là chưa giao)
+const STATUS_FILTER_OPTIONS = [
+  { value: 'all', label: 'Tất cả' },
+  { value: 'delivered', label: 'Đã giao' },
+  { value: 'not_delivered', label: 'Chưa giao' },
+];
+
+// ✅ Hàm kiểm tra xe có khớp bộ lọc trạng thái hay không
+const matchesStatusFilter = (car, statusFilter) => {
+  if (!statusFilter || statusFilter === 'all') return true;
+  if (statusFilter === 'delivered') return car.status === 'delivered';
+  if (statusFilter === 'not_delivered') return car.status !== 'delivered';
+  return true;
+};
 
 const getWorkerNames = (car, role) => {
   const names = car.workers
@@ -240,6 +255,8 @@ const CarTable = ({
   onDelete,
   onOpenHistory,
   onNotifyAdmin,
+  statusFilter,
+  onStatusFilterChange,
 }) => {
   const sortedCars = filterDisplayedCars({
     cars,
@@ -248,6 +265,9 @@ const CarTable = ({
     tableSupervisor,
     hideSearch,
   });
+
+  // ✅ Lọc thêm theo trạng thái: Đã giao / Chưa giao
+  const finalCars = sortedCars.filter((car) => matchesStatusFilter(car, statusFilter));
 
   return (
     <Paper variant="outlined" sx={{ width: '100%', overflowX: 'auto', borderRadius: 3 }}>
@@ -276,6 +296,20 @@ const CarTable = ({
               ))}
             </Select>
           </FormControl>
+          <FormControl sx={{ minWidth: 180, maxWidth: 250, width: '100%' }} size="small">
+            <InputLabel id="cars-table-status-label">Trạng thái</InputLabel>
+            <Select
+              labelId="cars-table-status-label"
+              id="cars-table-status-select"
+              value={statusFilter}
+              label="Trạng thái"
+              onChange={(e) => onStatusFilterChange(e.target.value)}
+            >
+              {STATUS_FILTER_OPTIONS.map((opt) => (
+                <MenuItem key={opt.value} value={opt.value}>{opt.label}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
         </Box>
       )}
       <Table stickyHeader sx={{ minWidth: 1100 }}>
@@ -287,7 +321,7 @@ const CarTable = ({
           </TableRow>
         </TableHead>
         <TableBody>
-          {sortedCars.map((car, idx) => {
+          {finalCars.map((car, idx) => {
             const isLate = car.isLate || car.overdue;
             return (
               <TableRow
@@ -398,6 +432,9 @@ const CarsPanel = ({
   onOpenHistory,
   onNotifyAdmin,
 }) => {
+  // ✅ State lọc theo trạng thái (bao gồm "Đã giao"), quản lý nội bộ trong CarsPanel
+  const [statusFilter, setStatusFilter] = useState('all');
+
   const filteredCars = filterDisplayedCars({
     cars: displayedCars,
     filterDate,
@@ -405,6 +442,18 @@ const CarsPanel = ({
     tableSupervisor,
     hideSearch: isMobile ? hideSearch : true,
   });
+
+  // ✅ Áp dụng thêm bộ lọc trạng thái (Đã giao / Chưa giao) cho danh sách dùng ở dạng Card (mobile)
+  const finalFilteredCars = useMemo(
+    () => filteredCars.filter((car) => matchesStatusFilter(car, statusFilter)),
+    [filteredCars, statusFilter]
+  );
+
+  // ✅ Đếm số xe đã giao trong danh sách hiện tại (dùng cho ô tổng cộng)
+  const deliveredCount = useMemo(
+    () => displayedCars.filter((car) => car.status === 'delivered').length,
+    [displayedCars]
+  );
 
   return (
     <>
@@ -426,6 +475,22 @@ const CarsPanel = ({
                   </MenuItem>
                   {locations.map((location) => (
                     <MenuItem key={location._id} value={location._id}>{location.name}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid size={{ xs: 12, sm: 2 }}>
+              <FormControl fullWidth size="small">
+                <InputLabel id="manage-cars-status-label">Trạng thái</InputLabel>
+                <Select
+                  labelId="manage-cars-status-label"
+                  id="manage-cars-status-select"
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  label="Trạng thái"
+                >
+                  {STATUS_FILTER_OPTIONS.map((opt) => (
+                    <MenuItem key={opt.value} value={opt.value}>{opt.label}</MenuItem>
                   ))}
                 </Select>
               </FormControl>
@@ -459,7 +524,7 @@ const CarsPanel = ({
                   <DirectionsCarIcon fontSize="small" sx={{ mr: 1 }} />Tổng cộng
                 </Typography>
                 <Typography variant="body2" color="textSecondary">
-                  {displayedCars.length} xe
+                  {displayedCars.length} xe · {deliveredCount} đã giao
                 </Typography>
               </Paper>
             </Grid>
@@ -499,7 +564,7 @@ const CarsPanel = ({
 
       {isMobile ? (
         <Box>
-          {filteredCars.map((car) => (
+          {finalFilteredCars.map((car) => (
             <CarCard
               key={car._id}
               car={car}
@@ -537,6 +602,8 @@ const CarsPanel = ({
           onDelete={onDelete}
           onOpenHistory={onOpenHistory}
           onNotifyAdmin={onNotifyAdmin}
+          statusFilter={statusFilter}
+          onStatusFilterChange={setStatusFilter}
         />
       )}
     </>
