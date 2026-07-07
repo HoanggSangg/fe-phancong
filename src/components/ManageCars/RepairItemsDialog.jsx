@@ -40,6 +40,10 @@ const COMPACT_INPUT_SX = {
   '& .MuiInputLabel-root': { fontSize: 12 },
 };
 
+// ✅ Các mức phần trăm thường dùng để chọn nhanh khi chia việc cho thợ.
+// Vẫn giữ ô nhập tay bên cạnh để nhập số khác nếu cần.
+const COMMON_PERCENTAGE_OPTIONS = [100, 70, 60, 50, 40, 30, 25, 20, 10];
+
 // ============================================================
 // ✅ DebouncedTextField: gõ chữ CHỈ cập nhật state cục bộ (rẻ, tức thì).
 // Chỉ đẩy giá trị lên component cha (onCommit) sau khi:
@@ -121,47 +125,68 @@ const InlineWorkers = React.memo(
     onRemoveRepairWorkerRow,
   }) {
     return (
-      <Stack spacing={0.5} sx={{ minWidth: 320 }}>
-        {(item.selectedWorkers || []).map((entry, rowIndex) => (
-          <Box
-            key={`${item._id}-${rowIndex}`}
-            sx={{ display: 'flex', gap: 0.75, alignItems: 'center' }}
-          >
-            <Autocomplete
-              size="small"
-              disabled={!canManage}
-              sx={{ width: 220, ...COMPACT_INPUT_SX }}
-              options={allWorkers}
-              getOptionLabel={(option) => option.name || ''}
-              value={entry.worker}
-              onChange={(_, newValue) => onRepairWorkerChange(item._id, rowIndex, newValue)}
-              renderInput={(params) => (
-                <TextField {...params} placeholder="Chọn thợ" />
-              )}
-              isOptionEqualToValue={(option, value) => option._id === value?._id}
-            />
-            <DebouncedTextField
-              size="small"
-              type="number"
-              label="%"
-              disabled={!canManage}
-              value={entry.percentage}
-              onCommit={(val) => onRepairPercentageChange(item._id, rowIndex, val)}
-              inputProps={{ min: 0, max: 100, step: 1 }}
-              sx={{ width: 72, ...COMPACT_INPUT_SX }}
-            />
-            {canManage && (
-              <IconButton
+      <Stack spacing={0.5} sx={{ minWidth: 430 }}>
+        {(item.selectedWorkers || []).map((entry, rowIndex) => {
+          const selectedQuickPercentage =
+            COMMON_PERCENTAGE_OPTIONS.find((option) => Number(entry.percentage) === option) ?? null;
+
+          return (
+            <Box
+              key={`${item._id}-${rowIndex}`}
+              sx={{ display: 'flex', gap: 0.75, alignItems: 'center' }}
+            >
+              <Autocomplete
                 size="small"
-                color="error"
-                onClick={() => onRemoveRepairWorkerRow(item._id, rowIndex)}
-                sx={{ p: 0.25 }}
-              >
-                <Delete sx={{ fontSize: 16 }} />
-              </IconButton>
-            )}
-          </Box>
-        ))}
+                disabled={!canManage}
+                sx={{ width: 220, ...COMPACT_INPUT_SX }}
+                options={allWorkers}
+                getOptionLabel={(option) => option.name || ''}
+                value={entry.worker}
+                onChange={(_, newValue) => onRepairWorkerChange(item._id, rowIndex, newValue)}
+                renderInput={(params) => (
+                  <TextField {...params} placeholder="Chọn thợ" />
+                )}
+                isOptionEqualToValue={(option, value) => option._id === value?._id}
+              />
+              <DebouncedTextField
+                size="small"
+                type="number"
+                label="%"
+                disabled={!canManage}
+                value={entry.percentage}
+                onCommit={(val) => onRepairPercentageChange(item._id, rowIndex, val)}
+                inputProps={{ min: 0, max: 100, step: 1 }}
+                sx={{ width: 72, ...COMPACT_INPUT_SX }}
+              />
+              <Autocomplete
+                size="small"
+                disabled={!canManage}
+                sx={{ width: 96, ...COMPACT_INPUT_SX }}
+                options={COMMON_PERCENTAGE_OPTIONS}
+                value={selectedQuickPercentage}
+                onChange={(_, newValue) => {
+                  if (newValue !== null) {
+                    onRepairPercentageChange(item._id, rowIndex, String(newValue));
+                  }
+                }}
+                getOptionLabel={(option) => `${option}%`}
+                renderInput={(params) => (
+                  <TextField {...params} placeholder="Nhanh" />
+                )}
+              />
+              {canManage && (
+                <IconButton
+                  size="small"
+                  color="error"
+                  onClick={() => onRemoveRepairWorkerRow(item._id, rowIndex)}
+                  sx={{ p: 0.25 }}
+                >
+                  <Delete sx={{ fontSize: 16 }} />
+                </IconButton>
+              )}
+            </Box>
+          );
+        })}
         {canManage && (
           <IconButton
             size="small"
@@ -199,7 +224,7 @@ const renderCompactRepairTableHead = (canManage, editable = false) => (
     <TableCell sx={{ fontWeight: 'bold', py: 0.75, px: 1, width: 72 }} align="right">SL</TableCell>
     <TableCell sx={{ fontWeight: 'bold', py: 0.75, px: 1, width: 120 }} align="right">ĐG</TableCell>
     <TableCell sx={{ fontWeight: 'bold', py: 0.75, px: 1, width: 120 }} align="right">TT</TableCell>
-    <TableCell sx={{ fontWeight: 'bold', py: 0.75, px: 1, minWidth: 340 }}>Thợ · %</TableCell>
+    <TableCell sx={{ fontWeight: 'bold', py: 0.75, px: 1, minWidth: 450 }}>Thợ</TableCell>
     {editable && canManage && (
       <TableCell sx={{ fontWeight: 'bold', py: 0.75, px: 0.5, width: 36 }} />
     )}
@@ -422,7 +447,7 @@ const RepairItemsDialog = ({
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <ReceiptLong color="info" />
             <Typography variant="h6" fontWeight="bold">
-              Chi tiết lệnh sửa chữa — {repairCar?.plateNumber || ''}
+              Chi tiết lệnh sửa chữa — {repairCar?.plateNumber || ''} - {repairCar?.roNumber || ''}
             </Typography>
           </Box>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
@@ -451,7 +476,7 @@ const RepairItemsDialog = ({
                 </Alert>
               ) : (
                 <Paper variant="outlined" sx={{ overflowX: 'auto' }}>
-                  <Table size="small" sx={{ minWidth: 1100 }}>
+                  <Table size="small" sx={{ minWidth: 1210 }}>
                     <TableHead>{renderCompactRepairTableHead(canManage, false)}</TableHead>
                     <TableBody>
                       {apiRepairItems.map((item, index) => (
@@ -496,7 +521,7 @@ const RepairItemsDialog = ({
                 </Alert>
               ) : (
                 <Paper variant="outlined" sx={{ overflowX: 'auto', borderColor: '#fcd34d' }}>
-                  <Table size="small" sx={{ minWidth: 1100 }}>
+                  <Table size="small" sx={{ minWidth: 1210 }}>
                     <TableHead>{renderCompactRepairTableHead(canManage, true)}</TableHead>
                     <TableBody>
                       {manualRepairItems.map((item, index) => (

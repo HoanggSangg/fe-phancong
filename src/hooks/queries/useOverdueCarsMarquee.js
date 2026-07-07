@@ -11,7 +11,7 @@ export const formatOverdueMarqueeLabel = (cars = []) => {
     .map((car) => {
       const plate = car.plateNumber || '—';
       const ro = car.roNumber || '';
-      return ro ? `${plate} · RO ${ro}` : plate;
+      return ro ? `${plate} · ${ro}` : plate;
     })
     .join('   ◆   ');
 };

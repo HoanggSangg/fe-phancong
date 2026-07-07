@@ -223,8 +223,32 @@ const TeamManagement = () => {
     }
   };
 
+  const getWorkerStatusLabel = (status) => {
+    switch (status) {
+      case 'available':
+        return 'Rảnh';
+      case 'busy':
+        return 'Bận';
+      default:
+        return status || 'Không rõ';
+    }
+  };
+
   return (
-    <PageLayout maxWidth="wide" sx={{ bgcolor: 'grey.50', minHeight: '100vh' }}>
+    <PageLayout
+      maxWidth={false}
+      sx={{
+        bgcolor: 'grey.50',
+        minHeight: '100vh',
+        width: '100%',
+        maxWidth: '100%',
+        px: { xs: 1, sm: 2 },
+        '& .MuiContainer-root': {
+          maxWidth: '100% !important',
+          width: '100%',
+        },
+      }}
+    >
       <PageHeader
         icon={<GroupsIcon />}
         title="Quản lý tổ thợ"
@@ -424,7 +448,7 @@ const TeamManagement = () => {
                             <>
                               MNV: {worker.soBaoDanh}
                               <br />
-                              Trạng thái: {worker.status}
+                              Trạng thái: {getWorkerStatusLabel(worker.status)}
                             </>
                           }
                           sx={{ m: 0, pr: { sm: 14 } }}

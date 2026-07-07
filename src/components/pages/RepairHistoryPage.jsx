@@ -293,7 +293,7 @@ const RepairHistoryPage = () => {
         <Stack direction="row" alignItems="center" spacing={1.5} flexWrap="wrap">
           <DirectionsCarIcon color="primary" />
           <Typography variant="h6" fontWeight="bold" color="primary">
-            {car.plateNumber}
+            {car.plateNumber} - {car.roNumber}
           </Typography>
           {car.carStatus && (
             <Chip size="small" label={CAR_STATUS_LABELS[car.carStatus] || car.carStatus} />

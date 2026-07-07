@@ -144,7 +144,7 @@ const Home = () => {
       <Table sx={{ width: '100%' }} stickyHeader>
         <TableHead>
           <TableRow>
-            {['STT', 'Biển số', 'Địa điểm', 'Loại xe', 'Nhận', 'Thợ chính', 'Thợ phụ', 'Giám sát'].map((title, idx) => (
+            {['STT', 'Biển số', 'Địa điểm', 'Loại xe', 'Thợ chính', 'Thợ phụ', 'Giám sát'].map((title, idx) => (
               <TableCell key={title} align={idx === 0 ? 'center' : 'left'} sx={{ bgcolor: 'grey.100', fontWeight: 600, py: 1 }}>
                 {title}
               </TableCell>
@@ -161,7 +161,6 @@ const Home = () => {
                 <TableCell><Typography variant="body2" fontWeight={600} sx={{ color }}>{car.plateNumber}</Typography></TableCell>
                 <TableCell><Typography variant="body2">{car.location?.name || '---'}</Typography></TableCell>
                 <TableCell><Typography variant="body2">{car.externalCarTypeName || '---'}</Typography></TableCell>
-                <TableCell><Typography variant="body2">{car.currentTime}</Typography></TableCell>
                 <TableCell>{mainWorkers ? <Chip label={mainWorkers} color="primary" /> : <Chip label="Trống" color="error" />}</TableCell>
                 <TableCell>{subWorkers ? <Chip label={subWorkers} color="primary" /> : <Chip label="Trống" color="error" />}</TableCell>
                 <TableCell><Typography variant="body2">{car.supervisor?.name || '---'}</Typography></TableCell>

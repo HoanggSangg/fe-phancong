@@ -18,6 +18,7 @@ export const buildCarGroups = (items = []) => {
       map.set(key, {
         key,
         plateNumber: item.plateNumber,
+        roNumber: item.roNumber,
         carType: item.carType,
         carDate: item.carDate,
         carStatus: item.carStatus,

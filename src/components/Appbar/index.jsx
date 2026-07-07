@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   AppBar,
   Toolbar,
@@ -19,7 +19,7 @@ import {
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import LogoutIcon from '@mui/icons-material/Logout';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { getNavGroupsForUser, ROLE_LABELS } from '../../utils/permissions';
 import { LAYOUT } from '../../constants/layout';
@@ -27,7 +27,10 @@ import useOverdueCarsMarquee, { formatOverdueMarqueeLabel } from '../../hooks/qu
 
 const AppBarComponent = () => {
   const [openDrawer, setOpenDrawer] = useState(false);
+
   const navigate = useNavigate();
+  const location = useLocation();
+
   const { user, logout } = useAuth();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -37,6 +40,25 @@ const AppBarComponent = () => {
   const marqueeDuration = Math.max(12, Math.min(40, overdueCars.length * 4 + 8));
 
   const navGroups = getNavGroupsForUser(user);
+
+  // ✅ Chỉ lấy 1 menu đang chọn, ưu tiên path dài nhất
+  // Ví dụ: /cars/manage sẽ chọn /cars/manage, không chọn /cars
+  const selectedNavPath = useMemo(() => {
+    const allItems = navGroups.flatMap((group) => group.items);
+
+    const matchedItem = allItems
+      .sort((a, b) => b.path.length - a.path.length)
+      .find((item) => {
+        if (item.path === '/') return location.pathname === '/';
+
+        return (
+          location.pathname === item.path ||
+          location.pathname.startsWith(`${item.path}/`)
+        );
+      });
+
+    return matchedItem?.path || '';
+  }, [navGroups, location.pathname]);
 
   const handleNavigate = (path) => {
     navigate(path);
@@ -70,7 +92,7 @@ const AppBarComponent = () => {
             px: { xs: 1, sm: 2 },
           }}
         >
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, zIndex: 2 }}>
             <Box
               component="img"
               src="https://res.cloudinary.com/drbjrsm0s/image/upload/v1745463450/logo_ulbaie.png"
@@ -116,7 +138,13 @@ const AppBarComponent = () => {
             </Box>
           )}
 
-          <IconButton edge="end" color="inherit" aria-label="menu" onClick={() => setOpenDrawer((prev) => !prev)}>
+          <IconButton
+            edge="end"
+            color="inherit"
+            aria-label="menu"
+            onClick={() => setOpenDrawer((prev) => !prev)}
+            sx={{ zIndex: 2 }}
+          >
             <MenuIcon />
           </IconButton>
         </Toolbar>
@@ -136,7 +164,15 @@ const AppBarComponent = () => {
           },
         }}
       >
-        <Box sx={{ width: '100%', height: '100%', overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
+        <Box
+          sx={{
+            width: '100%',
+            height: '100%',
+            overflowY: 'auto',
+            display: 'flex',
+            flexDirection: 'column',
+          }}
+        >
           {user && (
             <Box sx={{ p: 2, bgcolor: '#fafafa' }}>
               <Typography fontWeight="bold">{user.fullName}</Typography>
@@ -165,20 +201,51 @@ const AppBarComponent = () => {
                   </ListSubheader>
                 }
               >
-                {group.items.map((item) => (
-                  <ListItem key={item.path} disablePadding>
-                    <ListItemButton onClick={() => handleNavigate(item.path)} sx={{ py: 0.8, pl: 3 }}>
-                      <ListItemText primary={item.label} primaryTypographyProps={{ fontSize: '0.92rem' }} />
-                    </ListItemButton>
-                  </ListItem>
-                ))}
+                {group.items.map((item) => {
+                  const isSelected = selectedNavPath === item.path;
+
+                  return (
+                    <ListItem key={item.path} disablePadding>
+                      <ListItemButton
+                        selected={isSelected}
+                        onClick={() => handleNavigate(item.path)}
+                        sx={{
+                          py: 0.8,
+                          pl: 3,
+                          '&.Mui-selected': {
+                            bgcolor: '#ffebee',
+                            color: '#b71c1c',
+                          },
+                          '&.Mui-selected:hover': {
+                            bgcolor: '#ffcdd2',
+                          },
+                        }}
+                      >
+                        <ListItemText
+                          primary={item.label}
+                          primaryTypographyProps={{
+                            fontSize: '0.92rem',
+                            fontWeight: isSelected ? 700 : 400,
+                          }}
+                        />
+                      </ListItemButton>
+                    </ListItem>
+                  );
+                })}
               </List>
             ))}
           </Box>
 
           <Divider />
+
           <Box sx={{ p: 2 }}>
-            <Button fullWidth variant="outlined" color="error" startIcon={<LogoutIcon />} onClick={handleLogout}>
+            <Button
+              fullWidth
+              variant="outlined"
+              color="error"
+              startIcon={<LogoutIcon />}
+              onClick={handleLogout}
+            >
               Đăng xuất
             </Button>
           </Box>
