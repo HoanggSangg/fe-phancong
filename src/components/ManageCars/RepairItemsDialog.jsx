@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useRef, useEffect } from 'react';
 import {
   Alert,
   Autocomplete,
@@ -40,6 +40,340 @@ const COMPACT_INPUT_SX = {
   '& .MuiInputLabel-root': { fontSize: 12 },
 };
 
+// ============================================================
+// ✅ DebouncedTextField: gõ chữ CHỈ cập nhật state cục bộ (rẻ, tức thì).
+// Chỉ đẩy giá trị lên component cha (onCommit) sau khi:
+//   - người dùng dừng gõ ~300ms, HOẶC
+//   - rời khỏi ô input (onBlur)
+// => Tách hoàn toàn độ trễ bàn phím khỏi chi phí re-render nặng của cha,
+// dù cha có re-render toàn trang mỗi lần commit, việc gõ vẫn luôn mượt.
+// ============================================================
+const DebouncedTextField = React.memo(function DebouncedTextField({
+  value,
+  onCommit,
+  debounceMs = 300,
+  ...rest
+}) {
+  const [localValue, setLocalValue] = useState(value ?? '');
+  const isFocusedRef = useRef(false);
+  const timerRef = useRef(null);
+
+  // Đồng bộ lại từ prop bên ngoài khi ô KHÔNG đang được focus
+  // (tránh ghi đè con trỏ/nội dung đang gõ dở của người dùng)
+  useEffect(() => {
+    if (!isFocusedRef.current) {
+      setLocalValue(value ?? '');
+    }
+  }, [value]);
+
+  useEffect(() => () => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+  }, []);
+
+  const handleChange = (e) => {
+    const newVal = e.target.value;
+    setLocalValue(newVal);
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => {
+      onCommit(newVal);
+    }, debounceMs);
+  };
+
+  const handleFocus = (e) => {
+    isFocusedRef.current = true;
+    rest.onFocus?.(e);
+  };
+
+  const handleBlur = (e) => {
+    isFocusedRef.current = false;
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    onCommit(localValue);
+    rest.onBlur?.(e);
+  };
+
+  return (
+    <TextField
+      {...rest}
+      value={localValue}
+      onChange={handleChange}
+      onFocus={handleFocus}
+      onBlur={handleBlur}
+    />
+  );
+});
+
+// ============================================================
+// ✅ InlineWorkers: tách riêng + memo hoá.
+// Chỉ re-render khi item, allWorkers hoặc canManage của CHÍNH nó đổi,
+// không bị kéo theo khi người dùng gõ ở dòng khác.
+// ============================================================
+const InlineWorkers = React.memo(
+  function InlineWorkers({
+    item,
+    allWorkers,
+    canManage,
+    onRepairWorkerChange,
+    onRepairPercentageChange,
+    onAddRepairWorkerRow,
+    onRemoveRepairWorkerRow,
+  }) {
+    return (
+      <Stack spacing={0.5} sx={{ minWidth: 320 }}>
+        {(item.selectedWorkers || []).map((entry, rowIndex) => (
+          <Box
+            key={`${item._id}-${rowIndex}`}
+            sx={{ display: 'flex', gap: 0.75, alignItems: 'center' }}
+          >
+            <Autocomplete
+              size="small"
+              disabled={!canManage}
+              sx={{ width: 220, ...COMPACT_INPUT_SX }}
+              options={allWorkers}
+              getOptionLabel={(option) => option.name || ''}
+              value={entry.worker}
+              onChange={(_, newValue) => onRepairWorkerChange(item._id, rowIndex, newValue)}
+              renderInput={(params) => (
+                <TextField {...params} placeholder="Chọn thợ" />
+              )}
+              isOptionEqualToValue={(option, value) => option._id === value?._id}
+            />
+            <DebouncedTextField
+              size="small"
+              type="number"
+              label="%"
+              disabled={!canManage}
+              value={entry.percentage}
+              onCommit={(val) => onRepairPercentageChange(item._id, rowIndex, val)}
+              inputProps={{ min: 0, max: 100, step: 1 }}
+              sx={{ width: 72, ...COMPACT_INPUT_SX }}
+            />
+            {canManage && (
+              <IconButton
+                size="small"
+                color="error"
+                onClick={() => onRemoveRepairWorkerRow(item._id, rowIndex)}
+                sx={{ p: 0.25 }}
+              >
+                <Delete sx={{ fontSize: 16 }} />
+              </IconButton>
+            )}
+          </Box>
+        ))}
+        {canManage && (
+          <IconButton
+            size="small"
+            color="primary"
+            onClick={() => onAddRepairWorkerRow(item._id)}
+            sx={{ alignSelf: 'flex-start', p: 0.25 }}
+          >
+            <Add sx={{ fontSize: 16 }} />
+          </IconButton>
+        )}
+        {item.selectedWorkers?.some((entry) => entry.worker) && (
+          <Typography
+            variant="caption"
+            color={isItemWorkerPercentageValid(item) ? 'success.main' : 'error'}
+            sx={{ lineHeight: 1.2 }}
+          >
+            {getItemWorkerTotalPercentage(item)}%
+          </Typography>
+        )}
+      </Stack>
+    );
+  },
+  // ✅ So sánh tuỳ chỉnh: chỉ re-render khi item CỦA CHÍNH DÒNG NÀY thay đổi
+  (prev, next) =>
+    prev.item === next.item &&
+    prev.allWorkers === next.allWorkers &&
+    prev.canManage === next.canManage
+);
+
+const renderCompactRepairTableHead = (canManage, editable = false) => (
+  <TableRow>
+    <TableCell sx={{ fontWeight: 'bold', py: 0.75, px: 1, width: 36 }}>#</TableCell>
+    <TableCell sx={{ fontWeight: 'bold', py: 0.75, px: 1, width: 90 }}>Nhóm</TableCell>
+    <TableCell sx={{ fontWeight: 'bold', py: 0.75, px: 1, minWidth: 160 }}>Nội dung</TableCell>
+    <TableCell sx={{ fontWeight: 'bold', py: 0.75, px: 1, width: 72 }} align="right">SL</TableCell>
+    <TableCell sx={{ fontWeight: 'bold', py: 0.75, px: 1, width: 120 }} align="right">ĐG</TableCell>
+    <TableCell sx={{ fontWeight: 'bold', py: 0.75, px: 1, width: 120 }} align="right">TT</TableCell>
+    <TableCell sx={{ fontWeight: 'bold', py: 0.75, px: 1, minWidth: 340 }}>Thợ · %</TableCell>
+    {editable && canManage && (
+      <TableCell sx={{ fontWeight: 'bold', py: 0.75, px: 0.5, width: 36 }} />
+    )}
+  </TableRow>
+);
+
+// ============================================================
+// ✅ ManualRepairItemRow: tách riêng + memo hoá.
+// Đây là nơi gây lag nhiều nhất trước đây vì có nhiều TextField
+// controlled. Giờ mỗi dòng chỉ re-render khi `item` của chính nó đổi.
+// ============================================================
+const ManualRepairItemRow = React.memo(
+  function ManualRepairItemRow({
+    item,
+    index,
+    canManage,
+    allWorkers,
+    onManualFieldChange,
+    onRemoveManualItem,
+    onRepairWorkerChange,
+    onRepairPercentageChange,
+    onAddRepairWorkerRow,
+    onRemoveRepairWorkerRow,
+  }) {
+    return (
+      <TableRow hover sx={{ bgcolor: '#fffbeb' }}>
+        <TableCell sx={{ py: 0.5, px: 1, verticalAlign: 'middle' }}>{index + 1}</TableCell>
+        <TableCell sx={{ py: 0.5, px: 1, verticalAlign: 'middle' }}>
+          <DebouncedTextField
+            size="small"
+            disabled={!canManage}
+            value={item.groupName || ''}
+            onCommit={(val) => onManualFieldChange(item._id, 'groupName', val)}
+            sx={{ width: 84, ...COMPACT_INPUT_SX }}
+          />
+        </TableCell>
+        <TableCell sx={{ py: 0.5, px: 1, verticalAlign: 'middle' }}>
+          <DebouncedTextField
+            size="small"
+            disabled={!canManage}
+            placeholder="Nội dung *"
+            value={item.content || ''}
+            onCommit={(val) => onManualFieldChange(item._id, 'content', val)}
+            fullWidth
+            sx={COMPACT_INPUT_SX}
+          />
+        </TableCell>
+        <TableCell sx={{ py: 0.5, px: 1, verticalAlign: 'middle' }} align="right">
+          <DebouncedTextField
+            size="small"
+            type="number"
+            disabled={!canManage}
+            value={item.quantity ?? 1}
+            onCommit={(val) => onManualFieldChange(item._id, 'quantity', val)}
+            inputProps={{ min: 0, step: 1 }}
+            sx={{ width: 64, ...COMPACT_INPUT_SX }}
+          />
+        </TableCell>
+        <TableCell sx={{ py: 0.5, px: 1, verticalAlign: 'middle' }} align="right">
+          <DebouncedTextField
+            size="small"
+            type="number"
+            disabled={!canManage}
+            value={item.unitPrice ?? 0}
+            onCommit={(val) => onManualFieldChange(item._id, 'unitPrice', val)}
+            inputProps={{ min: 0, step: 1000 }}
+            sx={{ width: 112, ...COMPACT_INPUT_SX }}
+          />
+        </TableCell>
+        <TableCell sx={{ py: 0.5, px: 1, verticalAlign: 'middle' }} align="right">
+          <DebouncedTextField
+            size="small"
+            type="number"
+            disabled={!canManage}
+            value={item.amount ?? 0}
+            onCommit={(val) => onManualFieldChange(item._id, 'amount', val)}
+            inputProps={{ min: 0, step: 1000 }}
+            sx={{ width: 112, ...COMPACT_INPUT_SX }}
+          />
+        </TableCell>
+        <TableCell sx={{ py: 0.5, px: 1, verticalAlign: 'middle' }}>
+          <InlineWorkers
+            item={item}
+            allWorkers={allWorkers}
+            canManage={canManage}
+            onRepairWorkerChange={onRepairWorkerChange}
+            onRepairPercentageChange={onRepairPercentageChange}
+            onAddRepairWorkerRow={onAddRepairWorkerRow}
+            onRemoveRepairWorkerRow={onRemoveRepairWorkerRow}
+          />
+        </TableCell>
+        {canManage && (
+          <TableCell sx={{ py: 0.5, px: 0.5, verticalAlign: 'middle' }}>
+            <IconButton size="small" color="error" onClick={() => onRemoveManualItem(item._id)} sx={{ p: 0.25 }}>
+              <Delete sx={{ fontSize: 16 }} />
+            </IconButton>
+          </TableCell>
+        )}
+      </TableRow>
+    );
+  },
+  (prev, next) =>
+    prev.item === next.item &&
+    prev.index === next.index &&
+    prev.canManage === next.canManage &&
+    prev.allWorkers === next.allWorkers
+);
+
+// ============================================================
+// ✅ ApiRepairItemRow: tách riêng + memo hoá (chỉ đọc, nhẹ hơn
+// nhưng vẫn tách ra để không bị render lại khi gõ ở bảng "nhập tay").
+// ============================================================
+const ApiRepairItemRow = React.memo(
+  function ApiRepairItemRow({
+    item,
+    index,
+    allWorkers,
+    canManage,
+    onRepairWorkerChange,
+    onRepairPercentageChange,
+    onAddRepairWorkerRow,
+    onRemoveRepairWorkerRow,
+  }) {
+    return (
+      <TableRow hover>
+        <TableCell sx={{ py: 0.5, px: 1, verticalAlign: 'middle' }}>{index + 1}</TableCell>
+        <TableCell sx={{ py: 0.5, px: 1, verticalAlign: 'middle', fontSize: 13 }}>
+          {item.groupName || 'Khác'}
+        </TableCell>
+        <TableCell
+          sx={{
+            py: 0.5,
+            px: 1,
+            verticalAlign: 'middle',
+            fontSize: 13,
+            maxWidth: 280,
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          }}
+          title={item.content}
+        >
+          {item.content}
+        </TableCell>
+        <TableCell sx={{ py: 0.5, px: 1, verticalAlign: 'middle', fontSize: 13 }} align="right">
+          {item.quantity}
+        </TableCell>
+        <TableCell sx={{ py: 0.5, px: 1, verticalAlign: 'middle', fontSize: 13, whiteSpace: 'nowrap' }} align="right">
+          {formatMoney(item.unitPrice)}
+        </TableCell>
+        <TableCell sx={{ py: 0.5, px: 1, verticalAlign: 'middle', fontSize: 13, whiteSpace: 'nowrap' }} align="right">
+          {formatMoney(item.amount)}
+        </TableCell>
+        <TableCell sx={{ py: 0.5, px: 1, verticalAlign: 'middle' }}>
+          <InlineWorkers
+            item={item}
+            allWorkers={allWorkers}
+            canManage={canManage}
+            onRepairWorkerChange={onRepairWorkerChange}
+            onRepairPercentageChange={onRepairPercentageChange}
+            onAddRepairWorkerRow={onAddRepairWorkerRow}
+            onRemoveRepairWorkerRow={onRemoveRepairWorkerRow}
+          />
+        </TableCell>
+      </TableRow>
+    );
+  },
+  (prev, next) =>
+    prev.item === next.item &&
+    prev.index === next.index &&
+    prev.canManage === next.canManage &&
+    prev.allWorkers === next.allWorkers
+);
+
 const RepairItemsDialog = ({
   open,
   onClose,
@@ -62,190 +396,6 @@ const RepairItemsDialog = ({
   onAddManualItem,
   onRemoveManualItem,
 }) => {
-  const renderInlineWorkers = (item) => (
-    <Stack spacing={0.5} sx={{ minWidth: 320 }}>
-      {(item.selectedWorkers || []).map((entry, rowIndex) => (
-        <Box
-          key={`${item._id}-${rowIndex}`}
-          sx={{ display: 'flex', gap: 0.75, alignItems: 'center' }}
-        >
-          <Autocomplete
-            size="small"
-            disabled={!canManage}
-            sx={{ width: 220, ...COMPACT_INPUT_SX }}
-            options={allWorkers}
-            getOptionLabel={(option) => option.name || ''}
-            value={entry.worker}
-            onChange={(_, newValue) => onRepairWorkerChange(item._id, rowIndex, newValue)}
-            renderInput={(params) => (
-              <TextField {...params} placeholder="Chọn thợ" />
-            )}
-            isOptionEqualToValue={(option, value) => option._id === value?._id}
-          />
-          <TextField
-            size="small"
-            type="number"
-            label="%"
-            disabled={!canManage}
-            value={entry.percentage}
-            onChange={(e) => onRepairPercentageChange(item._id, rowIndex, e.target.value)}
-            inputProps={{ min: 0, max: 100, step: 1 }}
-            sx={{ width: 72, ...COMPACT_INPUT_SX }}
-          />
-          {canManage && (
-            <IconButton
-              size="small"
-              color="error"
-              onClick={() => onRemoveRepairWorkerRow(item._id, rowIndex)}
-              sx={{ p: 0.25 }}
-            >
-              <Delete sx={{ fontSize: 16 }} />
-            </IconButton>
-          )}
-        </Box>
-      ))}
-      {canManage && (
-        <IconButton
-          size="small"
-          color="primary"
-          onClick={() => onAddRepairWorkerRow(item._id)}
-          sx={{ alignSelf: 'flex-start', p: 0.25 }}
-        >
-          <Add sx={{ fontSize: 16 }} />
-        </IconButton>
-      )}
-      {item.selectedWorkers?.some((entry) => entry.worker) && (
-        <Typography
-          variant="caption"
-          color={isItemWorkerPercentageValid(item) ? 'success.main' : 'error'}
-          sx={{ lineHeight: 1.2 }}
-        >
-          {getItemWorkerTotalPercentage(item)}%
-        </Typography>
-      )}
-    </Stack>
-  );
-
-  const renderCompactRepairTableHead = (editable = false) => (
-    <TableRow>
-      <TableCell sx={{ fontWeight: 'bold', py: 0.75, px: 1, width: 36 }}>#</TableCell>
-      <TableCell sx={{ fontWeight: 'bold', py: 0.75, px: 1, width: 90 }}>Nhóm</TableCell>
-      <TableCell sx={{ fontWeight: 'bold', py: 0.75, px: 1, minWidth: 160 }}>Nội dung</TableCell>
-      <TableCell sx={{ fontWeight: 'bold', py: 0.75, px: 1, width: 72 }} align="right">SL</TableCell>
-      <TableCell sx={{ fontWeight: 'bold', py: 0.75, px: 1, width: 120 }} align="right">ĐG</TableCell>
-      <TableCell sx={{ fontWeight: 'bold', py: 0.75, px: 1, width: 120 }} align="right">TT</TableCell>
-      <TableCell sx={{ fontWeight: 'bold', py: 0.75, px: 1, minWidth: 340 }}>Thợ · %</TableCell>
-      {editable && canManage && (
-        <TableCell sx={{ fontWeight: 'bold', py: 0.75, px: 0.5, width: 36 }} />
-      )}
-    </TableRow>
-  );
-
-  const renderManualRepairItemCard = (item, index) => (
-    <TableRow key={item._id} hover sx={{ bgcolor: '#fffbeb' }}>
-      <TableCell sx={{ py: 0.5, px: 1, verticalAlign: 'middle' }}>{index + 1}</TableCell>
-      <TableCell sx={{ py: 0.5, px: 1, verticalAlign: 'middle' }}>
-        <TextField
-          size="small"
-          disabled={!canManage}
-          value={item.groupName || ''}
-          onChange={(e) => onManualFieldChange(item._id, 'groupName', e.target.value)}
-          sx={{ width: 84, ...COMPACT_INPUT_SX }}
-        />
-      </TableCell>
-      <TableCell sx={{ py: 0.5, px: 1, verticalAlign: 'middle' }}>
-        <TextField
-          size="small"
-          disabled={!canManage}
-          placeholder="Nội dung *"
-          value={item.content || ''}
-          onChange={(e) => onManualFieldChange(item._id, 'content', e.target.value)}
-          fullWidth
-          sx={COMPACT_INPUT_SX}
-        />
-      </TableCell>
-      <TableCell sx={{ py: 0.5, px: 1, verticalAlign: 'middle' }} align="right">
-        <TextField
-          size="small"
-          type="number"
-          disabled={!canManage}
-          value={item.quantity ?? 1}
-          onChange={(e) => onManualFieldChange(item._id, 'quantity', e.target.value)}
-          inputProps={{ min: 0, step: 1 }}
-          sx={{ width: 64, ...COMPACT_INPUT_SX }}
-        />
-      </TableCell>
-      <TableCell sx={{ py: 0.5, px: 1, verticalAlign: 'middle' }} align="right">
-        <TextField
-          size="small"
-          type="number"
-          disabled={!canManage}
-          value={item.unitPrice ?? 0}
-          onChange={(e) => onManualFieldChange(item._id, 'unitPrice', e.target.value)}
-          inputProps={{ min: 0, step: 1000 }}
-          sx={{ width: 112, ...COMPACT_INPUT_SX }}
-        />
-      </TableCell>
-      <TableCell sx={{ py: 0.5, px: 1, verticalAlign: 'middle' }} align="right">
-        <TextField
-          size="small"
-          type="number"
-          disabled={!canManage}
-          value={item.amount ?? 0}
-          onChange={(e) => onManualFieldChange(item._id, 'amount', e.target.value)}
-          inputProps={{ min: 0, step: 1000 }}
-          sx={{ width: 112, ...COMPACT_INPUT_SX }}
-        />
-      </TableCell>
-      <TableCell sx={{ py: 0.5, px: 1, verticalAlign: 'middle' }}>
-        {renderInlineWorkers(item)}
-      </TableCell>
-      {canManage && (
-        <TableCell sx={{ py: 0.5, px: 0.5, verticalAlign: 'middle' }}>
-          <IconButton size="small" color="error" onClick={() => onRemoveManualItem(item._id)} sx={{ p: 0.25 }}>
-            <Delete sx={{ fontSize: 16 }} />
-          </IconButton>
-        </TableCell>
-      )}
-    </TableRow>
-  );
-
-  const renderApiRepairItemCard = (item, index) => (
-    <TableRow key={item._id} hover>
-      <TableCell sx={{ py: 0.5, px: 1, verticalAlign: 'middle' }}>{index + 1}</TableCell>
-      <TableCell sx={{ py: 0.5, px: 1, verticalAlign: 'middle', fontSize: 13 }}>
-        {item.groupName || 'Khác'}
-      </TableCell>
-      <TableCell
-        sx={{
-          py: 0.5,
-          px: 1,
-          verticalAlign: 'middle',
-          fontSize: 13,
-          maxWidth: 280,
-          whiteSpace: 'nowrap',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-        }}
-        title={item.content}
-      >
-        {item.content}
-      </TableCell>
-      <TableCell sx={{ py: 0.5, px: 1, verticalAlign: 'middle', fontSize: 13 }} align="right">
-        {item.quantity}
-      </TableCell>
-      <TableCell sx={{ py: 0.5, px: 1, verticalAlign: 'middle', fontSize: 13, whiteSpace: 'nowrap' }} align="right">
-        {formatMoney(item.unitPrice)}
-      </TableCell>
-      <TableCell sx={{ py: 0.5, px: 1, verticalAlign: 'middle', fontSize: 13, whiteSpace: 'nowrap' }} align="right">
-        {formatMoney(item.amount)}
-      </TableCell>
-      <TableCell sx={{ py: 0.5, px: 1, verticalAlign: 'middle' }}>
-        {renderInlineWorkers(item)}
-      </TableCell>
-    </TableRow>
-  );
-
   const totalAmount = useMemo(
     () => repairItems.reduce((sum, item) => sum + Number(item.amount || 0), 0),
     [repairItems]
@@ -302,9 +452,21 @@ const RepairItemsDialog = ({
               ) : (
                 <Paper variant="outlined" sx={{ overflowX: 'auto' }}>
                   <Table size="small" sx={{ minWidth: 1100 }}>
-                    <TableHead>{renderCompactRepairTableHead(false)}</TableHead>
+                    <TableHead>{renderCompactRepairTableHead(canManage, false)}</TableHead>
                     <TableBody>
-                      {apiRepairItems.map((item, index) => renderApiRepairItemCard(item, index))}
+                      {apiRepairItems.map((item, index) => (
+                        <ApiRepairItemRow
+                          key={item._id}
+                          item={item}
+                          index={index}
+                          allWorkers={allWorkers}
+                          canManage={canManage}
+                          onRepairWorkerChange={onRepairWorkerChange}
+                          onRepairPercentageChange={onRepairPercentageChange}
+                          onAddRepairWorkerRow={onAddRepairWorkerRow}
+                          onRemoveRepairWorkerRow={onRemoveRepairWorkerRow}
+                        />
+                      ))}
                     </TableBody>
                   </Table>
                 </Paper>
@@ -335,9 +497,23 @@ const RepairItemsDialog = ({
               ) : (
                 <Paper variant="outlined" sx={{ overflowX: 'auto', borderColor: '#fcd34d' }}>
                   <Table size="small" sx={{ minWidth: 1100 }}>
-                    <TableHead>{renderCompactRepairTableHead(true)}</TableHead>
+                    <TableHead>{renderCompactRepairTableHead(canManage, true)}</TableHead>
                     <TableBody>
-                      {manualRepairItems.map((item, index) => renderManualRepairItemCard(item, index))}
+                      {manualRepairItems.map((item, index) => (
+                        <ManualRepairItemRow
+                          key={item._id}
+                          item={item}
+                          index={index}
+                          canManage={canManage}
+                          allWorkers={allWorkers}
+                          onManualFieldChange={onManualFieldChange}
+                          onRemoveManualItem={onRemoveManualItem}
+                          onRepairWorkerChange={onRepairWorkerChange}
+                          onRepairPercentageChange={onRepairPercentageChange}
+                          onAddRepairWorkerRow={onAddRepairWorkerRow}
+                          onRemoveRepairWorkerRow={onRemoveRepairWorkerRow}
+                        />
+                      ))}
                     </TableBody>
                   </Table>
                 </Paper>
