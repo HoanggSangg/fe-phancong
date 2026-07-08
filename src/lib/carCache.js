@@ -38,6 +38,14 @@ export const removeCarFromCache = (carId) => {
   });
 };
 
+export const invalidateCarsCache = () => {
+  queryClient.invalidateQueries({ queryKey: queryKeys.cars });
+  queryClient.invalidateQueries({ queryKey: queryKeys.carsMine });
+  queryClient.invalidateQueries({ queryKey: queryKeys.homeDashboard });
+  queryClient.invalidateQueries({ queryKey: queryKeys.overdueCars });
+  queryClient.invalidateQueries({ queryKey: queryKeys.workers.available });
+};
+
 export const filterCarsByLocation = (cars = [], locationId = 'all') => {
   if (locationId === 'all') return cars;
   return cars.filter((car) => normalizeId(car.location) === locationId);

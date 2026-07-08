@@ -15,11 +15,14 @@ import {
   lookupCarOrRO,
 } from '../apis/index';
 import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import dayjs from 'dayjs';
 import customParseFormat from 'dayjs/plugin/customParseFormat';
 import DirectionsCarIcon from '@mui/icons-material/DirectionsCar';
 import PageLayout from '../common/PageLayout';
 import PageHeader from '../common/PageHeader';
+import { invalidateCarsCache } from '../../lib/carCache';
+import { queryKeys } from '../../lib/queryKeys';
 
 dayjs.extend(customParseFormat);
 
@@ -76,6 +79,7 @@ const getExternalContext = (externalData) => {
 
 const AddCar = ({ onSuccess }) => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   const [formData, setFormData] = useState({
     plateNumber: '',
@@ -222,6 +226,14 @@ const AddCar = ({ onSuccess }) => {
         `${formatDateVN(header.ngayDuKienHoanThanh)} ${header.gioDuKienHoanThanh.split(':')[0]}h`;
     }
 
+    const roNumber = cleanText(header.soChungtu || formData.roCode || ctx.roCode || '');
+    const roCode = cleanText(header.khoa || externalData?.selectedRO || '');
+
+    if (!roNumber && !roCode) {
+      alert('Thiếu số RO. Vui lòng tra cứu biển số hoặc RO trước khi thêm xe.');
+      return;
+    }
+
     const carToCreate = {
       plateNumber: formData.plateNumber || ctx.plateNumber,
       supervisor: formData.supervisor?._id || null,
@@ -230,16 +242,21 @@ const AddCar = ({ onSuccess }) => {
       condition: formData.condition || null,
       workers,
 
-      roCode: header.khoa || externalData?.selectedRO || '',
-      roNumber: header.soChungtu || formData.roCode || ctx.roCode || '',
+      roCode,
+      roNumber,
       externalCarTypeName: ctx.externalCarTypeName,
       advisorName: header.coVanDichVu1 || '',
-    
+
       repairItems: buildRepairItems(),
     };
 
     try {
       await createCar(carToCreate);
+      invalidateCarsCache();
+      await Promise.all([
+        queryClient.refetchQueries({ queryKey: queryKeys.cars }),
+        queryClient.refetchQueries({ queryKey: queryKeys.carsMine }),
+      ]);
 
       setFormData({
         plateNumber: '',

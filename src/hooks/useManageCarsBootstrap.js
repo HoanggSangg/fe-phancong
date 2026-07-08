@@ -19,6 +19,7 @@ const useManageCarsBootstrap = (user) => {
     queryKey: isKtvUser ? queryKeys.carsMine : queryKeys.cars,
     queryFn: async () => (await getAllCars(isKtvUser ? { mine: '1' } : undefined)).data,
     staleTime: 45_000,
+    refetchOnMount: 'always',
   });
 
   const locationsQuery = useQuery({
