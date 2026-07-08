@@ -34,9 +34,16 @@ import {
 } from '@mui/icons-material';
 import DirectionsCarIcon from '@mui/icons-material/DirectionsCar';
 import dayjs from 'dayjs';
-import { filterDisplayedCars, getSupervisorsFromCars } from '../../utils/carListHelpers';
+import { filterDisplayedCars, getCarROLabel, getSupervisorsFromCars } from '../../utils/carListHelpers';
 import { getAvailableStatusTransitions, getConditionConfig } from '../../utils/carStatusConfig';
 import FilterPanel from '../common/FilterPanel';
+
+const HIGHLIGHT_ROW_SX = {
+  outline: '2px solid #ff9800',
+  outlineOffset: '-2px',
+  backgroundColor: '#fff8e1 !important',
+  '&:hover': { backgroundColor: '#ffecb3 !important' },
+};
 
 // ✅ Bộ lọc "Trạng thái" chỉ còn 2 nhóm: Đã giao / Chưa giao (mọi trạng thái khác "delivered" đều là chưa giao)
 const STATUS_FILTER_OPTIONS = [
@@ -148,8 +155,18 @@ const CarCard = ({
   onDelete,
   onOpenHistory,
   onNotifyAdmin,
+  highlightCarId = '',
 }) => (
-  <Card key={car._id} sx={{ mb: 1.5, borderRadius: 3, border: (car.isLate || car.overdue) ? '2px solid #f44336' : undefined }}>
+  <Card
+    key={car._id}
+    data-car-id={car._id}
+    sx={{
+      mb: 1.5,
+      borderRadius: 3,
+      border: (car.isLate || car.overdue) ? '2px solid #f44336' : undefined,
+      ...(String(highlightCarId) === String(car._id) ? HIGHLIGHT_ROW_SX : {}),
+    }}
+  >
     <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -159,6 +176,9 @@ const CarCard = ({
           <Typography variant="h6" color={(car.isLate || car.overdue) ? 'error' : 'primary'}>
             {car.plateNumber}
           </Typography>
+          {getCarROLabel(car) && (
+            <Chip label={`${getCarROLabel(car)}`} size="small" color="info" variant="outlined" />
+          )}
         </Box>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <Chip
@@ -257,6 +277,7 @@ const CarTable = ({
   onNotifyAdmin,
   statusFilter,
   onStatusFilterChange,
+  highlightCarId = '',
 }) => {
   const sortedCars = filterDisplayedCars({
     cars,
@@ -323,21 +344,27 @@ const CarTable = ({
         <TableBody>
           {finalCars.map((car, idx) => {
             const isLate = car.isLate || car.overdue;
+            const isHighlighted = String(highlightCarId) === String(car._id);
             return (
               <TableRow
                 key={car._id}
+                data-car-id={car._id}
                 sx={{
                   backgroundColor: isLate ? '#ffebee' : (idx % 2 === 0 ? '#fafafa' : '#fff'),
                   transition: 'background 0.2s',
                   '&:hover': { backgroundColor: isLate ? '#ffcdd2' : '#e3f2fd' },
+                  ...(isHighlighted ? HIGHLIGHT_ROW_SX : {}),
                 }}
               >
                 <TableCell>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                     {isLate && <Tooltip title="Xe trễ hẹn"><Error color="error" fontSize="small" /></Tooltip>}
                     <Typography variant="body2" fontWeight="bold" color={isLate ? 'error' : 'primary'}>
                       {car.plateNumber}
                     </Typography>
+                    {getCarROLabel(car) && (
+                      <Chip label={`${getCarROLabel(car)}`} size="small" color="info" variant="outlined" />
+                    )}
                   </Box>
                 </TableCell>
                 <TableCell>{car.externalCarTypeName || 'Chưa xác định'}</TableCell>
@@ -431,6 +458,7 @@ const CarsPanel = ({
   onDelete,
   onOpenHistory,
   onNotifyAdmin,
+  highlightCarId = '',
 }) => {
   // ✅ State lọc theo trạng thái (bao gồm "Đã giao"), quản lý nội bộ trong CarsPanel
   const [statusFilter, setStatusFilter] = useState('all');
@@ -563,6 +591,7 @@ const CarsPanel = ({
               onDelete={onDelete}
               onOpenHistory={onOpenHistory}
               onNotifyAdmin={onNotifyAdmin}
+              highlightCarId={highlightCarId}
             />
           ))}
         </Box>
@@ -588,6 +617,7 @@ const CarsPanel = ({
           onNotifyAdmin={onNotifyAdmin}
           statusFilter={statusFilter}
           onStatusFilterChange={setStatusFilter}
+          highlightCarId={highlightCarId}
         />
       )}
     </>

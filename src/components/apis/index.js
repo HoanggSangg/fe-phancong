@@ -81,7 +81,13 @@ export const getOperationLogs = (params) => api.get('/audit-logs', { params });
 export const getKtvMessageSettings = () => api.get('/ktv-messages/settings');
 export const updateKtvMessageSettings = (receiverUserIds) =>
   api.put('/ktv-messages/settings', { receiverUserIds });
-export const getKtvMessages = (params) => api.get('/ktv-messages', { params });
-export const markKtvMessageRead = (id) => api.patch(`/ktv-messages/${id}/read`);
-export const getKtvSentMessages = (params) => api.get('/ktv-messages/sent', { params });
-export const acknowledgeKtvMessageRead = (id) => api.patch(`/ktv-messages/${id}/acknowledge`);
+export const getKtvMessages = (params) =>
+  api.get('/ktv-messages', { params });
+export const sendKtvMessageToAdmin = (payload) =>
+  api.post('/ktv-messages', payload);
+export const markKtvMessageRead = (id) =>
+  api.patch(`/ktv-messages/${id}/read`);
+export const getKtvSentMessages = (params) =>
+  api.get('/ktv-messages/sent', { params });
+export const acknowledgeKtvMessageRead = (id) =>
+  api.patch(`/ktv-messages/${id}/acknowledge`);

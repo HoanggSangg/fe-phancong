@@ -3,6 +3,7 @@ import { getOperationLogs } from '../components/apis';
 import { getTodayDate } from '../utils/dateFilters';
 import {
   alertNewOperationLogs,
+  filterCarOperationLogs,
   filterVoiceAlertLogs,
   initOperationVoiceSetting,
   isOperationVoiceEnabled,
@@ -15,11 +16,16 @@ import {
 
 const POLL_INTERVAL_MS = 15_000;
 
-const useOperationVoiceMonitor = ({ poll = true } = {}) => {
+const useOperationVoiceMonitor = ({ poll = true, onNewCarLogs } = {}) => {
   const [voiceEnabled, setVoiceEnabled] = useState(() => initOperationVoiceSetting());
   const [latestLog, setLatestLog] = useState(null);
   const knownLogIdsRef = useRef(new Set());
   const initialLoadDoneRef = useRef(false);
+  const onNewCarLogsRef = useRef(onNewCarLogs);
+
+  useEffect(() => {
+    onNewCarLogsRef.current = onNewCarLogs;
+  }, [onNewCarLogs]);
 
   useEffect(() => {
     setOperationVoiceEnabled(voiceEnabled);
@@ -34,12 +40,19 @@ const useOperationVoiceMonitor = ({ poll = true } = {}) => {
     const voiceLogs = filterVoiceAlertLogs(nextItems);
     if (voiceLogs[0]) setLatestLog(voiceLogs[0]);
 
-    if (announceNew && initialLoadDoneRef.current && isOperationVoiceEnabled()) {
-      const newLogs = filterVoiceAlertLogs(
-        nextItems.filter((item) => !knownLogIdsRef.current.has(item._id))
-      );
-      if (newLogs.length > 0) {
-        alertNewOperationLogs(newLogs.slice().reverse());
+    if (announceNew && initialLoadDoneRef.current) {
+      const newItems = nextItems.filter((item) => !knownLogIdsRef.current.has(item._id));
+      const newCarLogs = filterCarOperationLogs(newItems);
+
+      if (newCarLogs.length > 0 && onNewCarLogsRef.current) {
+        onNewCarLogsRef.current(newCarLogs);
+      }
+
+      if (isOperationVoiceEnabled()) {
+        const newLogs = filterVoiceAlertLogs(newItems);
+        if (newLogs.length > 0) {
+          alertNewOperationLogs(newLogs.slice().reverse());
+        }
       }
     }
 

@@ -134,3 +134,9 @@ export const canHearOperationVoice = (roleOrUser) => {
   if (typeof roleOrUser === 'object') return hasPermission(roleOrUser, 'cars.voice');
   return ['admin', 'giam_sat'].includes(roleOrUser);
 };
+
+export const canPollOperationLogs = (user) => {
+  if (!user) return false;
+  if (user.role === ROLES.ADMIN || user.role === ROLES.GIAM_SAT) return true;
+  return hasPermission(user, 'system.audit-logs');
+};

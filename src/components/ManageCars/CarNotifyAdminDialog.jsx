@@ -33,18 +33,40 @@ const CarNotifyAdminDialog = ({
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    onSend(message.trim());
+
+    onSend({
+      message: message.trim(),
+      carId: car._id,
+      plateNumber: car.plateNumber || '',
+      roCode: car.roCode || '',
+      roNumber: car.roNumber || '',
+      carStatus: car.status || '',
+      carStatusLabel: statusLabel || '',
+      locationName: car.locationName || car.location?.name || '',
+      supervisorName: car.supervisorName || car.supervisor?.fullName || '',
+    });
   };
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
       <DialogTitle sx={{ fontWeight: 700 }}>Báo admin về trạng thái xe</DialogTitle>
+
       <Box component="form" onSubmit={handleSubmit}>
         <DialogContent>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', mb: 1.5 }}>
             <Typography variant="subtitle1" fontWeight={800} color="primary">
               {car.plateNumber}
             </Typography>
+
+            {(car.roNumber || car.roCode) && (
+              <Chip
+                label={`${car.roNumber || car.roCode}`}
+                color="info"
+                size="small"
+                variant="outlined"
+              />
+            )}
+
             <Chip
               label={statusLabel}
               color={statusConfig?.color || 'default'}
@@ -53,7 +75,7 @@ const CarNotifyAdminDialog = ({
           </Box>
 
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-            Admin sẽ nhận thông báo trong lịch sử thao tác và đọc bằng giọng nói (nếu đang bật).
+            Admin sẽ nhận thông báo trong lịch sử thao tác và đọc bằng giọng nói nếu đang bật.
           </Typography>
 
           <TextField
@@ -68,10 +90,12 @@ const CarNotifyAdminDialog = ({
             autoFocus
           />
         </DialogContent>
+
         <DialogActions>
           <Button onClick={onClose} variant="outlined" disabled={sending}>
             Huỷ
           </Button>
+
           <Button type="submit" variant="contained" disabled={sending}>
             {sending ? 'Đang gửi...' : 'Gửi cho admin'}
           </Button>

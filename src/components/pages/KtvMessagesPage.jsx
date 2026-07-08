@@ -14,6 +14,8 @@ import {
 import MarkEmailReadIcon from '@mui/icons-material/MarkEmailRead';
 import MessageIcon from '@mui/icons-material/Message';
 import SettingsIcon from '@mui/icons-material/Settings';
+import DirectionsCarIcon from '@mui/icons-material/DirectionsCar';
+import { useNavigate } from 'react-router-dom';
 import {
   getKtvMessageSettings,
   getKtvMessages,
@@ -22,6 +24,7 @@ import {
 } from '../apis';
 import { useAuth } from '../../context/AuthContext';
 import { ROLE_LABELS } from '../../utils/permissions';
+import { normalizeROKey } from '../../utils/carListHelpers';
 import PageLayout from '../common/PageLayout';
 import PageHeader from '../common/PageHeader';
 import EnablePushNotificationButton from '../common/EnablePushNotificationButton';
@@ -30,6 +33,7 @@ const POLL_INTERVAL_MS = 15_000;
 
 const formatDateTime = (value) => {
   if (!value) return '—';
+
   return new Date(value).toLocaleString('vi-VN', {
     day: '2-digit',
     month: '2-digit',
@@ -39,8 +43,29 @@ const formatDateTime = (value) => {
   });
 };
 
-const MessageCard = ({ item, onMarkRead, markingId }) => {
+const getMessageCarId = (item) => {
+  if (!item) return '';
+
+  if (typeof item.car === 'string') return item.car;
+  if (item.car?._id) return item.car._id;
+
+  return (
+    item.carId ||
+    item.carObjectId ||
+    item.vehicleId ||
+    item.vehicle?._id ||
+    ''
+  );
+};
+
+const getMessageRoLabel = (item) => {
+  if (!item) return '';
+  return item.roNumber || item.roCode || item.roKey || '';
+};
+
+const MessageCard = ({ item, onMarkRead, markingId, onViewCar }) => {
   const isUnread = !item.readAt;
+  const roLabel = getMessageRoLabel(item);
 
   return (
     <Paper
@@ -58,13 +83,30 @@ const MessageCard = ({ item, onMarkRead, markingId }) => {
           <Typography variant="subtitle1" fontWeight={800} color="primary">
             {item.plateNumber}
           </Typography>
-          <Chip label={item.carStatusLabel || item.carStatus} size="small" color="primary" variant="outlined" />
+
+          {roLabel && (
+            <Chip
+              label={`${roLabel}`}
+              size="small"
+              color="info"
+              variant="outlined"
+            />
+          )}
+
+          <Chip
+            label={item.carStatusLabel || item.carStatus || '—'}
+            size="small"
+            color="primary"
+            variant="outlined"
+          />
+
           {isUnread ? (
             <Chip label="Chưa xem" size="small" color="warning" />
           ) : (
             <Chip label="Đã xem" size="small" color="success" />
           )}
         </Box>
+
         <Typography variant="caption" color="text.secondary">
           {formatDateTime(item.createdAt)}
         </Typography>
@@ -87,6 +129,16 @@ const MessageCard = ({ item, onMarkRead, markingId }) => {
       <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mb: 1 }}>
         {item.locationName && <Chip label={`Địa điểm: ${item.locationName}`} size="small" />}
         {item.supervisorName && <Chip label={`GS: ${item.supervisorName}`} size="small" />}
+
+        <Button
+          size="small"
+          variant="outlined"
+          color="primary"
+          startIcon={<DirectionsCarIcon />}
+          onClick={() => onViewCar(item)}
+        >
+          Xem xe
+        </Button>
       </Stack>
 
       {item.readAt && (
@@ -112,6 +164,7 @@ const MessageCard = ({ item, onMarkRead, markingId }) => {
 };
 
 const KtvMessagesPage = () => {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
 
@@ -130,11 +183,13 @@ const KtvMessagesPage = () => {
   const fetchMessages = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     setError('');
+
     try {
       const res = await getKtvMessages({
         status: statusFilter === 'all' ? undefined : statusFilter,
         limit: 100,
       });
+
       setMessages(res.data.items || []);
       setUnreadCount(res.data.unreadCount || 0);
     } catch (err) {
@@ -146,11 +201,14 @@ const KtvMessagesPage = () => {
 
   const fetchSettings = useCallback(async () => {
     if (!isAdmin) return;
+
     setSettingsLoading(true);
+
     try {
       const res = await getKtvMessageSettings();
       const users = res.data.eligibleUsers || [];
       const selectedIds = new Set((res.data.receiverUserIds || []).map(String));
+
       setEligibleUsers(users);
       setSelectedReceivers(users.filter((item) => selectedIds.has(String(item._id))));
     } catch (err) {
@@ -163,12 +221,15 @@ const KtvMessagesPage = () => {
   useEffect(() => {
     fetchMessages();
     fetchSettings();
+
     const intervalId = setInterval(() => fetchMessages(true), POLL_INTERVAL_MS);
+
     return () => clearInterval(intervalId);
   }, [fetchMessages, fetchSettings]);
 
   const handleMarkRead = async (id) => {
     setMarkingId(id);
+
     try {
       await markKtvMessageRead(id);
       await fetchMessages(true);
@@ -179,9 +240,42 @@ const KtvMessagesPage = () => {
     }
   };
 
+  const handleViewCar = (item) => {
+    const carId = getMessageCarId(item);
+    const plateNumber = item.plateNumber || '';
+    const roCode = item.roCode || '';
+    const roNumber = item.roNumber || '';
+    const roKey = item.roKey || normalizeROKey(roNumber, roCode);
+
+    const targetCar = {
+      carId,
+      plateNumber,
+      roCode,
+      roNumber,
+      roKey,
+      messageId: item._id || '',
+    };
+
+    sessionStorage.setItem('ktvTargetCar', JSON.stringify(targetCar));
+
+    const params = new URLSearchParams();
+
+    params.set('openCar', '1');
+
+    if (carId) params.set('carId', carId);
+    if (plateNumber) params.set('plateNumber', plateNumber);
+    if (roCode) params.set('roCode', roCode);
+    if (roNumber) params.set('roNumber', roNumber);
+    if (roKey) params.set('roKey', roKey);
+    if (item._id) params.set('messageId', item._id);
+
+    navigate(`/cars/manage?${params.toString()}`);
+  };
+
   const handleSaveSettings = async () => {
     setSettingsSaving(true);
     setSettingsMessage('');
+
     try {
       const res = await updateKtvMessageSettings(selectedReceivers.map((item) => item._id));
       setSettingsMessage(res.data.message || 'Đã lưu cấu hình');
@@ -197,6 +291,7 @@ const KtvMessagesPage = () => {
     if (selectedReceivers.length === 0) {
       return 'Chưa chọn tài khoản — mặc định chỉ admin xem được tin nhắn.';
     }
+
     return `Đã chọn ${selectedReceivers.length} tài khoản nhận tin.`;
   }, [selectedReceivers.length]);
 
@@ -213,6 +308,7 @@ const KtvMessagesPage = () => {
         <Paper variant="outlined" sx={{ p: 2, mb: 2, borderRadius: 2 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
             <SettingsIcon fontSize="small" color="action" />
+
             <Typography variant="subtitle1" fontWeight={700}>
               Tài khoản nhận tin nhắn KTV
             </Typography>
@@ -248,9 +344,11 @@ const KtvMessagesPage = () => {
                   ))
                 }
               />
+
               <Alert severity="info" sx={{ py: 0.5 }}>
                 Giám sát được chọn cần được cấp quyền &quot;Tin nhắn KTV&quot; trong Phân chức năng để vào trang này.
               </Alert>
+
               <Box>
                 <Button
                   variant="contained"
@@ -261,6 +359,7 @@ const KtvMessagesPage = () => {
                   {settingsSaving ? 'Đang lưu...' : 'Lưu cấu hình'}
                 </Button>
               </Box>
+
               {settingsMessage && (
                 <Alert severity="info" onClose={() => setSettingsMessage('')}>
                   {settingsMessage}
@@ -309,6 +408,7 @@ const KtvMessagesPage = () => {
               key={item._id}
               item={item}
               onMarkRead={handleMarkRead}
+              onViewCar={handleViewCar}
               markingId={markingId}
             />
           ))}

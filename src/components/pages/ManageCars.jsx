@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   updateCar,
   deleteCar,
@@ -27,9 +27,23 @@ import FullscreenIcon from '@mui/icons-material/Fullscreen';
 import DirectionsCarIcon from '@mui/icons-material/DirectionsCar';
 import dayjs from 'dayjs';
 import customParseFormat from 'dayjs/plugin/customParseFormat';
+import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { canDeleteCars, canHearOperationVoice, canEditManagedCars, CAR_STATUS_LABELS, isKtv } from '../../utils/permissions';
+import {
+  canDeleteCars,
+  canHearOperationVoice,
+  canEditManagedCars,
+  canPollOperationLogs,
+  CAR_STATUS_LABELS,
+  isKtv,
+} from '../../utils/permissions';
 import { CAR_STATUS_COLORS, needsWorkerSelection } from '../../utils/carStatusConfig';
+import {
+  filterCarsByLocation,
+  patchCarInCache,
+  removeCarFromCache,
+} from '../../lib/carCache';
+import { findCarByPlateAndRO, getCarROLabel } from '../../utils/carListHelpers';
 import FullscreenDialog from '../common/FullscreenDialog';
 import OperationVoiceControls from '../common/OperationVoiceControls';
 import useOperationVoiceMonitor from '../../hooks/useOperationVoiceMonitor';
@@ -44,19 +58,16 @@ import CarNotifyAdminDialog from '../ManageCars/CarNotifyAdminDialog';
 import EnablePushNotificationButton from '../common/EnablePushNotificationButton';
 import PageLayout from '../common/PageLayout';
 import PageHeader from '../common/PageHeader';
-import {
-  filterCarsByLocation,
-  patchCarInCache,
-  removeCarFromCache,
-} from '../../lib/carCache';
 
 dayjs.extend(customParseFormat);
+
+const CAR_SYNC_INTERVAL_MS = 15_000;
 
 const ManageCars = () => {
   const { user } = useAuth();
   const canDelete = canDeleteCars(user);
   const canHearVoice = canHearOperationVoice(user);
-  const { voiceEnabled, toggleVoice, testVoice } = useOperationVoiceMonitor({ poll: canHearVoice });
+  const canPollLogs = canPollOperationLogs(user);
   const canManage = canEditManagedCars(user);
   const isKtvUser = isKtv(user);
 
@@ -72,6 +83,29 @@ const ManageCars = () => {
     refreshAvailableWorkers,
     invalidateHomeDashboard,
   } = useManageCarsBootstrap(user);
+
+  const handleRemoteCarChange = useCallback(async () => {
+    await fetchCars();
+    await refreshAvailableWorkers();
+    invalidateHomeDashboard();
+  }, [fetchCars, refreshAvailableWorkers, invalidateHomeDashboard]);
+
+  const { voiceEnabled, toggleVoice, testVoice } = useOperationVoiceMonitor({
+    poll: canPollLogs,
+    onNewCarLogs: handleRemoteCarChange,
+  });
+
+  useEffect(() => {
+    if (!isKtvUser) return undefined;
+
+    const syncCars = () => {
+      fetchCars().catch(() => {});
+      invalidateHomeDashboard();
+    };
+
+    const timer = window.setInterval(syncCars, CAR_SYNC_INTERVAL_MS);
+    return () => window.clearInterval(timer);
+  }, [isKtvUser, fetchCars, invalidateHomeDashboard]);
 
   const [filterDate, setFilterDate] = useState(null);
   const [editOpen, setEditOpen] = useState(false);
@@ -91,6 +125,9 @@ const ManageCars = () => {
   const [notifyDialogOpen, setNotifyDialogOpen] = useState(false);
   const [notifyCar, setNotifyCar] = useState(null);
   const [notifySending, setNotifySending] = useState(false);
+  const [highlightCarId, setHighlightCarId] = useState('');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const openCarHandledRef = useRef(false);
 
   const repair = useRepairItems({
     canManage,
@@ -123,6 +160,80 @@ const ManageCars = () => {
     () => filterCarsByLocation(allCars, selectedLocation),
     [allCars, selectedLocation],
   );
+
+  useEffect(() => {
+    if (searchParams.get('openCar') !== '1') {
+      openCarHandledRef.current = false;
+      return;
+    }
+
+    if (allCars.length === 0 || openCarHandledRef.current) return;
+
+    openCarHandledRef.current = true;
+
+    let storedTarget = null;
+
+    try {
+      const raw = sessionStorage.getItem('ktvTargetCar');
+      if (raw) {
+        storedTarget = JSON.parse(raw);
+        sessionStorage.removeItem('ktvTargetCar');
+      }
+    } catch {
+      storedTarget = null;
+    }
+
+    const criteria = {
+      carId: searchParams.get('carId') || storedTarget?.carId || '',
+      plateNumber: searchParams.get('plateNumber') || storedTarget?.plateNumber || '',
+      roCode: searchParams.get('roCode') || storedTarget?.roCode || '',
+      roNumber: searchParams.get('roNumber') || storedTarget?.roNumber || '',
+      roKey: searchParams.get('roKey') || storedTarget?.roKey || '',
+    };
+
+    const matchedCar = findCarByPlateAndRO(allCars, criteria);
+    const roLabel = criteria.roNumber || criteria.roCode || criteria.roKey || '';
+
+    if (matchedCar) {
+      const locationId = matchedCar.location?._id || matchedCar.location;
+      setSelectedLocation(locationId ? String(locationId) : 'all');
+      setFilterDate(null);
+      setSearchPlate(matchedCar.plateNumber || criteria.plateNumber);
+      setHighlightCarId(String(matchedCar._id));
+      setSnackbar({
+        open: true,
+        message: `Đã tìm thấy xe ${matchedCar.plateNumber}${getCarROLabel(matchedCar) ? ` — RO: ${getCarROLabel(matchedCar)}` : ''}`,
+        severity: 'success',
+      });
+    } else {
+      if (criteria.plateNumber) setSearchPlate(criteria.plateNumber);
+
+      setSnackbar({
+        open: true,
+        message: `Không tìm thấy xe ${criteria.plateNumber || '—'}${roLabel ? ` — RO: ${roLabel}` : ''}`,
+        severity: 'warning',
+      });
+    }
+
+    setSearchParams({}, { replace: true });
+  }, [allCars, searchParams, setSearchParams]);
+
+  useEffect(() => {
+    if (!highlightCarId) return undefined;
+
+    const scrollTimer = setTimeout(() => {
+      document
+        .querySelector(`[data-car-id="${highlightCarId}"]`)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 400);
+
+    const clearTimer = setTimeout(() => setHighlightCarId(''), 8000);
+
+    return () => {
+      clearTimeout(scrollTimer);
+      clearTimeout(clearTimer);
+    };
+  }, [highlightCarId, searchPlate, displayedCars.length]);
 
   const handleLocationChange = (locationId) => {
     setSelectedLocation(locationId);
@@ -279,11 +390,12 @@ const ManageCars = () => {
     setNotifyDialogOpen(true);
   };
 
-  const handleSendNotifyAdmin = async (message) => {
+  const handleSendNotifyAdmin = async (payload) => {
     if (!notifyCar) return;
 
     setNotifySending(true);
     try {
+      const message = typeof payload === 'string' ? payload : payload?.message || '';
       const res = await notifyAdminAboutCar(notifyCar._id, message);
       setNotifyDialogOpen(false);
       setNotifyCar(null);
@@ -328,6 +440,7 @@ const ManageCars = () => {
     onDelete: handleDelete,
     onOpenHistory: handleOpenWorkerHistory,
     onNotifyAdmin: handleOpenNotifyAdmin,
+    highlightCarId,
   };
 
   return (

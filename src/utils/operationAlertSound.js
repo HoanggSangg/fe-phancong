@@ -8,6 +8,10 @@ export const isVoiceAlertLog = (log) => VOICE_ALERT_MODULES.includes(log?.module
 
 export const filterVoiceAlertLogs = (logs = []) => logs.filter(isVoiceAlertLog);
 
+export const isCarOperationLog = (log) => log?.module === 'car';
+
+export const filterCarOperationLogs = (logs = []) => logs.filter(isCarOperationLog);
+
 let audioContext;
 let voiceEnabled = true;
 let voicesReady = false;
