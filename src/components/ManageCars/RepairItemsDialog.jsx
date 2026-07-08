@@ -110,6 +110,83 @@ const DebouncedTextField = React.memo(function DebouncedTextField({
 });
 
 // ============================================================
+// ✅ DebouncedMoneyField: giống DebouncedTextField nhưng hiển thị
+// số có dấu phân cách hàng nghìn (vd: 1.250.000) ngay trong lúc gõ.
+// - Người dùng chỉ gõ được chữ số (mọi ký tự khác bị loại bỏ).
+// - Giá trị commit lên component cha (onCommit) là CHUỖI SỐ THÔ,
+//   không có dấu chấm (vd "1250000"), để cha tự xử lý/convert Number().
+// - Vẫn giữ cơ chế debounce ~300ms + commit khi blur như DebouncedTextField.
+// ============================================================
+const formatMoneyInput = (val) => {
+  const digits = String(val ?? '').replace(/[^\d]/g, '');
+  if (digits === '') return '';
+  return Number(digits).toLocaleString('vi-VN');
+};
+
+const parseMoneyInput = (val) => String(val ?? '').replace(/[^\d]/g, '');
+
+const DebouncedMoneyField = React.memo(function DebouncedMoneyField({
+  value,
+  onCommit,
+  debounceMs = 300,
+  ...rest
+}) {
+  const [localValue, setLocalValue] = useState(formatMoneyInput(value));
+  const isFocusedRef = useRef(false);
+  const timerRef = useRef(null);
+
+  // Đồng bộ lại từ prop bên ngoài khi ô KHÔNG đang được focus
+  useEffect(() => {
+    if (!isFocusedRef.current) {
+      setLocalValue(formatMoneyInput(value));
+    }
+  }, [value]);
+
+  useEffect(() => () => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+  }, []);
+
+  const commitRaw = (formatted) => {
+    onCommit(parseMoneyInput(formatted));
+  };
+
+  const handleChange = (e) => {
+    const formatted = formatMoneyInput(e.target.value);
+    setLocalValue(formatted);
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => {
+      commitRaw(formatted);
+    }, debounceMs);
+  };
+
+  const handleFocus = (e) => {
+    isFocusedRef.current = true;
+    rest.onFocus?.(e);
+  };
+
+  const handleBlur = (e) => {
+    isFocusedRef.current = false;
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    commitRaw(localValue);
+    rest.onBlur?.(e);
+  };
+
+  return (
+    <TextField
+      {...rest}
+      value={localValue}
+      onChange={handleChange}
+      onFocus={handleFocus}
+      onBlur={handleBlur}
+      inputProps={{ ...(rest.inputProps || {}), inputMode: 'numeric' }}
+    />
+  );
+});
+
+// ============================================================
 // ✅ InlineWorkers: tách riêng + memo hoá.
 // Chỉ re-render khi item, allWorkers hoặc canManage của CHÍNH nó đổi,
 // không bị kéo theo khi người dùng gõ ở dòng khác.
@@ -235,6 +312,8 @@ const renderCompactRepairTableHead = (canManage, editable = false) => (
 // ✅ ManualRepairItemRow: tách riêng + memo hoá.
 // Đây là nơi gây lag nhiều nhất trước đây vì có nhiều TextField
 // controlled. Giờ mỗi dòng chỉ re-render khi `item` của chính nó đổi.
+// Cột ĐG và TT dùng DebouncedMoneyField để hiển thị định dạng tiền
+// (dấu chấm phân cách hàng nghìn) ngay trong lúc nhập.
 // ============================================================
 const ManualRepairItemRow = React.memo(
   function ManualRepairItemRow({
@@ -284,24 +363,20 @@ const ManualRepairItemRow = React.memo(
           />
         </TableCell>
         <TableCell sx={{ py: 0.5, px: 1, verticalAlign: 'middle' }} align="right">
-          <DebouncedTextField
+          <DebouncedMoneyField
             size="small"
-            type="number"
             disabled={!canManage}
             value={item.unitPrice ?? 0}
             onCommit={(val) => onManualFieldChange(item._id, 'unitPrice', val)}
-            inputProps={{ min: 0, step: 1000 }}
             sx={{ width: 112, ...COMPACT_INPUT_SX }}
           />
         </TableCell>
         <TableCell sx={{ py: 0.5, px: 1, verticalAlign: 'middle' }} align="right">
-          <DebouncedTextField
+          <DebouncedMoneyField
             size="small"
-            type="number"
             disabled={!canManage}
             value={item.amount ?? 0}
             onCommit={(val) => onManualFieldChange(item._id, 'amount', val)}
-            inputProps={{ min: 0, step: 1000 }}
             sx={{ width: 112, ...COMPACT_INPUT_SX }}
           />
         </TableCell>

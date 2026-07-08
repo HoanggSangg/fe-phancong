@@ -180,7 +180,14 @@ const CarCard = ({
             <Chip label={`${getCarROLabel(car)}`} size="small" color="info" variant="outlined" />
           )}
         </Box>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          <Chip
+            label={car.status === 'delivered' ? 'Đã giao' : 'Chưa giao'}
+            color={car.status === 'delivered' ? 'success' : 'warning'}
+            size="small"
+            variant="outlined"
+            sx={{ fontWeight: 700 }}
+          />
           <Chip
             icon={renderStatusIcon(car.status)}
             label={getStatusConfig(car.status).label}
@@ -567,6 +574,20 @@ const CarsPanel = ({
                 <MenuItem value="">Tất cả giám sát</MenuItem>
                 {getSupervisorsFromCars(displayedCars).map((sup) => (
                   <MenuItem key={sup._id} value={sup._id}>{sup.name}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <FormControl fullWidth size="small">
+              <InputLabel id="cars-mobile-status-label">Trạng thái</InputLabel>
+              <Select
+                labelId="cars-mobile-status-label"
+                id="cars-mobile-status-select"
+                value={statusFilter}
+                label="Trạng thái"
+                onChange={(e) => setStatusFilter(e.target.value)}
+              >
+                {STATUS_FILTER_OPTIONS.map((opt) => (
+                  <MenuItem key={opt.value} value={opt.value}>{opt.label}</MenuItem>
                 ))}
               </Select>
             </FormControl>

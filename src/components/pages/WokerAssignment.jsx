@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Box,
@@ -25,6 +25,8 @@ import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
 import DirectionsCarIcon from "@mui/icons-material/DirectionsCar";
+import OpenInNewIcon from "@mui/icons-material/OpenInNew";
+import { getCarROLabel, normalizeROKey } from "../../utils/carListHelpers";
 import {
   getAllWorkers,
   getAllCars,
@@ -44,6 +46,7 @@ import FilterPanel from "../common/FilterPanel";
 const WokerAssignment = () => {
   const { user } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [date, setDate] = useState("");
   const [workerSearch, setWorkerSearch] = useState("");
@@ -53,6 +56,7 @@ const WokerAssignment = () => {
 
   const isKtvUser = isKtv(user);
   const canManageJobs = hasPermission(user, 'workers.woker') && !isKtvUser;
+  const canViewCars = hasPermission(user, 'cars.manage');
 
   const workersQuery = useQuery({
     queryKey: queryKeys.workers.all,
@@ -196,6 +200,39 @@ const WokerAssignment = () => {
     />
   );
 
+  const getDeliveryStatus = (car) =>
+    car.status === "delivered"
+      ? { label: "Đã giao", color: "success" }
+      : { label: "Chưa giao", color: "warning" };
+
+  const handleViewCar = (car) => {
+    const plateNumber = car.plateNumber || "";
+    const roCode = car.roCode || "";
+    const roNumber = car.roNumber || "";
+    const roKey = car.roKey || normalizeROKey(roNumber, roCode);
+
+    sessionStorage.setItem(
+      "ktvTargetCar",
+      JSON.stringify({
+        carId: car._id || "",
+        plateNumber,
+        roCode,
+        roNumber,
+        roKey,
+      })
+    );
+
+    const params = new URLSearchParams();
+    params.set("openCar", "1");
+    if (car._id) params.set("carId", car._id);
+    if (plateNumber) params.set("plateNumber", plateNumber);
+    if (roCode) params.set("roCode", roCode);
+    if (roNumber) params.set("roNumber", roNumber);
+    if (roKey) params.set("roKey", roKey);
+
+    navigate(`/cars/manage?${params.toString()}`);
+  };
+
   const renderCars = (worker, currentCars) => {
     if (currentCars.length === 0) {
       return (
@@ -207,33 +244,68 @@ const WokerAssignment = () => {
 
     return (
       <Stack spacing={0.75}>
-        {currentCars.map((car) => (
-          <Paper
-            key={car._id}
-            variant="outlined"
-            sx={{
-              p: 1,
-              bgcolor: "info.50",
-              borderColor: "info.light",
-            }}
-          >
-            <Stack direction="row" alignItems="center" spacing={0.5}>
-              <DirectionsCarIcon sx={{ fontSize: 16, color: "info.dark" }} />
-              <Typography variant="body2" fontWeight="bold" color="info.dark">
-                {car.plateNumber}
+        {currentCars.map((car) => {
+          const deliveryStatus = getDeliveryStatus(car);
+          const roLabel = getCarROLabel(car);
+
+          return (
+            <Paper
+              key={car._id}
+              variant="outlined"
+              sx={{
+                p: 1,
+                bgcolor: "info.50",
+                borderColor: "info.light",
+              }}
+            >
+              <Stack
+                direction="row"
+                alignItems="center"
+                justifyContent="space-between"
+                spacing={0.5}
+              >
+                <Stack direction="row" alignItems="center" spacing={0.5} flexWrap="wrap">
+                  <DirectionsCarIcon sx={{ fontSize: 16, color: "info.dark" }} />
+                  <Typography variant="body2" fontWeight="bold" color="info.dark">
+                    {car.plateNumber}
+                  </Typography>
+                  {roLabel && (
+                    <Chip label={roLabel} size="small" color="info" variant="outlined" />
+                  )}
+                </Stack>
+                {isMobile && (
+                  <Chip
+                    label={deliveryStatus.label}
+                    size="small"
+                    color={deliveryStatus.color}
+                    sx={{ fontWeight: 700 }}
+                  />
+                )}
+              </Stack>
+              <Typography variant="caption" display="block" color="info.dark">
+                Vai trò: {getWorkerRoleOnCar(car, worker._id)}
               </Typography>
-            </Stack>
-            <Typography variant="caption" display="block" color="info.dark">
-              Vai trò: {getWorkerRoleOnCar(car, worker._id)}
-            </Typography>
-            <Typography variant="caption" display="block" color="info.dark">
-              Trạng thái: {CAR_STATUS_LABELS[car.status] || car.status}
-            </Typography>
-            <Typography variant="caption" display="block" color="info.dark">
-              Hiệu xe: {car.externalCarTypeName || "—"}
-            </Typography>
-          </Paper>
-        ))}
+              <Typography variant="caption" display="block" color="info.dark">
+                Trạng thái: {CAR_STATUS_LABELS[car.status] || car.status}
+              </Typography>
+              <Typography variant="caption" display="block" color="info.dark">
+                Hiệu xe: {car.externalCarTypeName || "—"}
+              </Typography>
+              {canViewCars && (
+                <Button
+                  size="small"
+                  variant="outlined"
+                  color="info"
+                  startIcon={<OpenInNewIcon />}
+                  onClick={() => handleViewCar(car)}
+                  sx={{ mt: 0.75, textTransform: "none" }}
+                >
+                  Xem xe
+                </Button>
+              )}
+            </Paper>
+          );
+        })}
       </Stack>
     );
   };
