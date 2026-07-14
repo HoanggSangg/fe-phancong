@@ -125,7 +125,7 @@ const AddCar = ({ onSuccess }) => {
     const cleanKeyword = cleanText(keyword);
     if (!cleanKeyword) return;
 
-    if (searchType === 'plate' && cleanKeyword.length < 7) return;
+    if (searchType === 'plate' && cleanKeyword.length < 4) return;
     if (searchType === 'ro' && cleanKeyword.length < 5) return;
 
     try {
@@ -424,7 +424,7 @@ const AddCar = ({ onSuccess }) => {
             }}
             required
             fullWidth
-            helperText="VD: 50Z6699, 51G18419"
+            helperText="VD: 50Z6699, 51G18419, PP4048"
           />
 
           <TextField

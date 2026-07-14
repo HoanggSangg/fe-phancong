@@ -95,9 +95,12 @@ export const filterDisplayedCars = ({
 
   if (!hideSearch) {
     if (searchPlate) {
-      filtered = filtered.filter((car) =>
-        car.plateNumber?.toLowerCase().includes(searchPlate.toLowerCase())
-      );
+      const normalizedSearch = normalizePlate(searchPlate);
+      filtered = filtered.filter((car) => {
+        const normalizedPlate = normalizePlate(car.plateNumber);
+        if (!normalizedSearch) return true;
+        return normalizedPlate.includes(normalizedSearch);
+      });
     }
     if (tableSupervisor) {
       filtered = filtered.filter((car) => car.supervisor?._id === tableSupervisor);

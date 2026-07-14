@@ -44,7 +44,7 @@ export const PERMISSION_CATALOG = [
   { key: 'workers.main', label: 'Danh sách thợ', group: 'Thợ & công việc', path: '/workers/main', defaultRoles: ['admin', 'giam_sat'] },
   { key: 'workers.woker', label: 'Chi tiết công việc', group: 'Thợ & công việc', path: '/woker', defaultRoles: ['admin', 'giam_sat', 'ktv'] },
   { key: 'workers.available', label: 'Thợ rảnh', group: 'Thợ & công việc', path: '/workers/available', defaultRoles: ['admin', 'giam_sat'] },
-  { key: 'workers.repair-history', label: 'Lịch sử sửa chữa', group: 'Thợ & công việc', path: '/repair-history', defaultRoles: ['admin', 'giam_sat'] },
+  { key: 'workers.repair-history', label: 'Lịch sử sửa chữa', group: 'Thợ & công việc', path: '/repair-history', defaultRoles: ['admin', 'giam_sat', 'ktv'] },
   { key: 'teams.manage', label: 'Quản lý tổ', group: 'Thợ & công việc', path: '/teams', defaultRoles: ['admin', 'giam_sat'] },
   { key: 'reports.revenue', label: 'Doanh thu thợ', group: 'Báo cáo', path: '/workers/revenue-chart', defaultRoles: ['admin', 'giam_sat'] },
   { key: 'reports.dashboard', label: 'Dashboard tổng quan', group: 'Báo cáo', path: '/dashboard', defaultRoles: ['admin'] },

@@ -49,6 +49,7 @@ const RepairHistoryPage = () => {
   const { user } = useAuth();
   const isKtvUser = isKtv(user?.role);
   const canViewRevenue = hasPermission(user, 'reports.revenue');
+  const canViewItemPrices = isKtvUser || canViewRevenue;
 
   const [page, setPage] = useState(1);
   const [exportError, setExportError] = useState('');
@@ -147,7 +148,7 @@ const RepairHistoryPage = () => {
         {assignments.map((assignment, index) => (
           <Typography key={`${assignment.workerId}-${index}`} variant="body2">
             {assignment.workerName || '—'} ({assignment.percentage}%)
-            {canViewRevenue && <> · {formatMoney(assignment.revenue)}</>}
+            {(canViewRevenue || isKtvUser) && <> · {formatMoney(assignment.revenue)}</>}
           </Typography>
         ))}
       </Stack>
@@ -174,14 +175,16 @@ const RepairHistoryPage = () => {
       <Typography variant="body2" color="text.secondary">
         Xe đã giao — đã gom {car.items.length} hạng mục. Bấm &quot;Xem hạng mục&quot; để mở chi tiết.
       </Typography>
-      {canViewRevenue && (
+      {canViewItemPrices && (
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mt: 1 }}>
           <Typography variant="body2">
             Tổng thành tiền: <strong>{formatMoney(car.totalAmount)}</strong>
           </Typography>
-          <Typography variant="body2">
-            Doanh thu thợ: <strong>{formatMoney(car.totalRevenue)}</strong>
-          </Typography>
+          {canViewRevenue && (
+            <Typography variant="body2">
+              Doanh thu thợ: <strong>{formatMoney(car.totalRevenue)}</strong>
+            </Typography>
+          )}
         </Stack>
       )}
     </Box>
@@ -192,14 +195,16 @@ const RepairHistoryPage = () => {
       <TableRow key={item._id} hover>
         <TableCell>{item.groupName || 'Khác'}</TableCell>
         <TableCell sx={{ minWidth: 200 }}>{item.content}</TableCell>
+        {canViewItemPrices && (
+          <TableCell align="right">{formatMoney(item.amount)}</TableCell>
+        )}
+        {(canViewRevenue || isKtvUser) && (
+          <TableCell>{renderWorkers(item.allAssignments || item.assignments)}</TableCell>
+        )}
         {canViewRevenue && (
-          <>
-            <TableCell align="right">{formatMoney(item.amount)}</TableCell>
-            <TableCell>{renderWorkers(item.allAssignments || item.assignments)}</TableCell>
-            <TableCell align="right">
-              {formatMoney(sumAssignmentsRevenue(item.allAssignments || item.assignments))}
-            </TableCell>
-          </>
+          <TableCell align="right">
+            {formatMoney(sumAssignmentsRevenue(item.allAssignments || item.assignments))}
+          </TableCell>
         )}
       </TableRow>
     ));
@@ -224,7 +229,7 @@ const RepairHistoryPage = () => {
           </Box>
           <Stack direction="row" spacing={1} alignItems="center">
             {renderDeliveredToggle(car)}
-            {canViewRevenue && (
+            {canViewItemPrices && (
               <Box textAlign="right">
                 <Typography variant="body2" color="text.secondary">
                   Tổng thành tiền
@@ -257,13 +262,13 @@ const RepairHistoryPage = () => {
                   <Typography variant="body2" sx={{ mb: 0.5 }}>
                     {item.content}
                   </Typography>
-                  {canViewRevenue && (
-                    <>
-                      <Typography variant="body2">
-                        Thành tiền: <strong>{formatMoney(item.amount)}</strong>
-                      </Typography>
-                      <Box sx={{ mt: 0.5 }}>{renderWorkers(item.allAssignments || item.assignments)}</Box>
-                    </>
+                  {canViewItemPrices && (
+                    <Typography variant="body2">
+                      Thành tiền: <strong>{formatMoney(item.amount)}</strong>
+                    </Typography>
+                  )}
+                  {(canViewRevenue || isKtvUser) && (
+                    <Box sx={{ mt: 0.5 }}>{renderWorkers(item.allAssignments || item.assignments)}</Box>
                   )}
                 </Box>
               ))}
@@ -303,7 +308,7 @@ const RepairHistoryPage = () => {
           </Typography>
           {renderDeliveredToggle(car)}
         </Stack>
-        {canViewRevenue && (
+        {canViewItemPrices && (
           <Stack direction="row" spacing={3} alignItems="center">
             <Box textAlign="right">
               <Typography variant="caption" color="text.secondary">
@@ -313,14 +318,16 @@ const RepairHistoryPage = () => {
                 {formatMoney(car.totalAmount)}
               </Typography>
             </Box>
-            <Box textAlign="right">
-              <Typography variant="caption" color="text.secondary">
-                Doanh thu thợ
-              </Typography>
-              <Typography variant="body1" fontWeight="bold" color="primary">
-                {formatMoney(car.totalRevenue)}
-              </Typography>
-            </Box>
+            {canViewRevenue && (
+              <Box textAlign="right">
+                <Typography variant="caption" color="text.secondary">
+                  Doanh thu thợ
+                </Typography>
+                <Typography variant="body1" fontWeight="bold" color="primary">
+                  {formatMoney(car.totalRevenue)}
+                </Typography>
+              </Box>
+            )}
           </Stack>
         )}
       </Box>
@@ -332,16 +339,18 @@ const RepairHistoryPage = () => {
               <TableRow>
                 <TableCell sx={{ fontWeight: 'bold' }}>Nhóm</TableCell>
                 <TableCell sx={{ fontWeight: 'bold' }}>Nội dung</TableCell>
+                {canViewItemPrices && (
+                  <TableCell sx={{ fontWeight: 'bold' }} align="right">
+                    Thành tiền
+                  </TableCell>
+                )}
+                {(canViewRevenue || isKtvUser) && (
+                  <TableCell sx={{ fontWeight: 'bold', minWidth: 180 }}>Thợ thực hiện</TableCell>
+                )}
                 {canViewRevenue && (
-                  <>
-                    <TableCell sx={{ fontWeight: 'bold' }} align="right">
-                      Thành tiền
-                    </TableCell>
-                    <TableCell sx={{ fontWeight: 'bold', minWidth: 180 }}>Thợ thực hiện</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold' }} align="right">
-                      Doanh thu
-                    </TableCell>
-                  </>
+                  <TableCell sx={{ fontWeight: 'bold' }} align="right">
+                    Doanh thu
+                  </TableCell>
                 )}
               </TableRow>
             </TableHead>

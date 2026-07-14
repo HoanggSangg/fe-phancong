@@ -86,7 +86,7 @@ export const exportRepairHistoryToExcel = ({
   periodLabel = '',
 }) => {
   const headers = isKtvUser
-    ? ['Biển số', 'Loại xe', 'Ngày', 'Trạng thái', 'Nhóm', 'Nội dung', 'Thợ thực hiện']
+    ? ['Biển số', 'Loại xe', 'Ngày', 'Trạng thái', 'Nhóm', 'Nội dung', 'Thành tiền', 'Thợ thực hiện']
     : [
         'Biển số',
         'Loại xe',
@@ -116,6 +116,7 @@ export const exportRepairHistoryToExcel = ({
               statusLabel,
               'Tổng hợp',
               `${car.items.length} hạng mục (xe đã giao)`,
+              Number(car.totalAmount || 0),
               aggregateWorkersForCar(car, true),
             ]
           : [
@@ -145,6 +146,7 @@ export const exportRepairHistoryToExcel = ({
               index === 0 ? statusLabel : '',
               item.groupName || 'Khác',
               item.content || '',
+              Number(item.amount || 0),
               formatWorkersCell(assignments, true),
             ]
           : [
@@ -169,7 +171,7 @@ export const exportRepairHistoryToExcel = ({
   rows.push([]);
   rows.push(
     isKtvUser
-      ? ['', '', '', '', '', 'TỔNG', `${carGroups.length} xe · ${rows.length - 2} dòng`]
+      ? ['', '', '', '', '', 'TỔNG', totalAmount, `${carGroups.length} xe · ${rows.length - 2} dòng`]
       : [
           '',
           '',
@@ -186,7 +188,7 @@ export const exportRepairHistoryToExcel = ({
 
   const ws = XLSX.utils.aoa_to_sheet(rows);
   ws['!cols'] = isKtvUser
-    ? [{ wch: 14 }, { wch: 18 }, { wch: 12 }, { wch: 14 }, { wch: 16 }, { wch: 40 }, { wch: 36 }]
+    ? [{ wch: 14 }, { wch: 18 }, { wch: 12 }, { wch: 14 }, { wch: 16 }, { wch: 40 }, { wch: 14 }, { wch: 36 }]
     : [
         { wch: 14 },
         { wch: 18 },
