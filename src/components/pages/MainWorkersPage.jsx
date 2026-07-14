@@ -716,7 +716,6 @@ const WorkersPage = () => {
                         <Typography variant="h6" color="#166534" fontWeight="bold">
                           {formatMoney(kpiData.revenueAfterCommission)}
                         </Typography>
-                        <Typography variant="body2" color="#15803d">DT sau trừ 25%</Typography>
                       </CardContent>
                     </Card>
                   </Grid>

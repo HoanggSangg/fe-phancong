@@ -483,10 +483,6 @@ const RepairHistoryPage = () => {
                 DT trước hoa hồng: {formatMoney(summary.revenueBeforeCommission)}
               </Typography>
             )}
-            <Typography variant="body2" color="text.secondary">
-              {isKtvUser ? 'Tổng doanh thu của bạn (sau trừ 25%)' : 'Tổng doanh thu (sau trừ 25%)'}
-              {showPagination ? ' (toàn bộ khoảng ngày)' : ''}
-            </Typography>
             <Typography variant="h5" fontWeight="bold" color="primary">
               {formatMoney(totalRevenue)}
             </Typography>
