@@ -23,6 +23,7 @@ export const patchCarInCache = (updatedCar) => {
       return {
         ...car,
         ...updatedCar,
+        workers: updatedCar.workers ?? car.workers,
         location: preservePopulatedRef(car.location, updatedCar.location),
         supervisor: preservePopulatedRef(car.supervisor, updatedCar.supervisor),
       };
@@ -44,6 +45,11 @@ export const invalidateCarsCache = () => {
   queryClient.invalidateQueries({ queryKey: queryKeys.homeDashboard });
   queryClient.invalidateQueries({ queryKey: queryKeys.overdueCars });
   queryClient.invalidateQueries({ queryKey: queryKeys.workers.available });
+};
+
+export const invalidateWorkerJobCaches = () => {
+  invalidateCarsCache();
+  queryClient.invalidateQueries({ queryKey: queryKeys.workers.all });
 };
 
 export const filterCarsByLocation = (cars = [], locationId = 'all') => {

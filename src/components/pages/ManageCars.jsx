@@ -42,6 +42,7 @@ import {
   filterCarsByLocation,
   patchCarInCache,
   removeCarFromCache,
+  invalidateWorkerJobCaches,
 } from '../../lib/carCache';
 import { findCarByPlateAndRO, getCarROLabel } from '../../utils/carListHelpers';
 import FullscreenDialog from '../common/FullscreenDialog';
@@ -88,6 +89,7 @@ const ManageCars = () => {
     await fetchCars();
     await refreshAvailableWorkers();
     invalidateHomeDashboard();
+    invalidateWorkerJobCaches();
   }, [fetchCars, refreshAvailableWorkers, invalidateHomeDashboard]);
 
   const { voiceEnabled, toggleVoice, testVoice } = useOperationVoiceMonitor({
@@ -295,11 +297,18 @@ const ManageCars = () => {
         ],
       };
 
-      await updateCar(editData._id, updatedCar);
+      const res = await updateCar(editData._id, updatedCar);
       setEditOpen(false);
-      await fetchCars();
+
+      if (res.data?._id) {
+        patchCarInCache(res.data);
+      } else {
+        await fetchCars();
+      }
+
       await refreshAvailableWorkers();
       invalidateHomeDashboard();
+      invalidateWorkerJobCaches();
       setSnackbar({ open: true, message: 'Cập nhật xe thành công', severity: 'success' });
     } catch (err) {
       console.error('Lỗi khi cập nhật xe:', err);
@@ -315,6 +324,7 @@ const ManageCars = () => {
           removeCarFromCache(id);
           await refreshAvailableWorkers();
           invalidateHomeDashboard();
+          invalidateWorkerJobCaches();
           setSnackbar({ open: true, message: 'Xoá xe thành công', severity: 'success' });
         })
         .catch((err) => {
@@ -347,6 +357,7 @@ const ManageCars = () => {
 
       await refreshAvailableWorkers();
       invalidateHomeDashboard();
+      invalidateWorkerJobCaches();
 
       setSnackbar({
         open: true,

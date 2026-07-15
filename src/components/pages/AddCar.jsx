@@ -21,7 +21,7 @@ import customParseFormat from 'dayjs/plugin/customParseFormat';
 import DirectionsCarIcon from '@mui/icons-material/DirectionsCar';
 import PageLayout from '../common/PageLayout';
 import PageHeader from '../common/PageHeader';
-import { invalidateCarsCache } from '../../lib/carCache';
+import { invalidateWorkerJobCaches } from '../../lib/carCache';
 import { queryKeys } from '../../lib/queryKeys';
 
 dayjs.extend(customParseFormat);
@@ -252,7 +252,7 @@ const AddCar = ({ onSuccess }) => {
 
     try {
       await createCar(carToCreate);
-      invalidateCarsCache();
+      invalidateWorkerJobCaches();
       await Promise.all([
         queryClient.refetchQueries({ queryKey: queryKeys.cars }),
         queryClient.refetchQueries({ queryKey: queryKeys.carsMine }),
