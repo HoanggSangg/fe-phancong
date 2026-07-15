@@ -140,10 +140,7 @@ const WokerAssignment = () => {
       const busyCars = getWorkerBusyCars(worker._id);
       const manualJobs = getManualJobsByDate(worker);
 
-      const isBusy =
-        typeof worker.isBusy === "boolean"
-          ? worker.isBusy
-          : busyCars.length > 0 || manualJobs.some((job) => job.status === "co_viec");
+      const isBusy = worker.status === 'busy';
 
       return {
         worker,
