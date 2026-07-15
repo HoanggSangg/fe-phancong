@@ -64,7 +64,8 @@ const WokerAssignment = () => {
       const res = await getAllWorkers();
       return res?.data?.workers || res?.data || [];
     },
-    staleTime: 60_000,
+    staleTime: 30_000,
+    refetchInterval: 30_000,
   });
 
   const carsQuery = useQuery({
@@ -83,6 +84,7 @@ const WokerAssignment = () => {
   const reloadAll = async () => {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: queryKeys.workers.all }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.workers.available }),
       queryClient.invalidateQueries({ queryKey: queryKeys.cars }),
     ]);
   };
@@ -139,10 +141,21 @@ const WokerAssignment = () => {
       const manualJobs = getManualJobsByDate(worker);
 
       const isBusy =
-        busyCars.length > 0 ||
-        manualJobs.some((job) => job.status === "co_viec");
+        typeof worker.isBusy === "boolean"
+          ? worker.isBusy
+          : busyCars.length > 0 || manualJobs.some((job) => job.status === "co_viec");
 
-      return { worker, assignedCars, busyCars, manualJobs, isBusy };
+      return {
+        worker,
+        assignedCars,
+        busyCars,
+        manualJobs,
+        isBusy,
+        pendingCarsCount:
+          typeof worker.pendingCarsCount === "number"
+            ? worker.pendingCarsCount
+            : assignedCars.filter((car) => car.status === "pending").length,
+      };
     });
 
   const filteredWorkers = useMemo(
@@ -197,10 +210,13 @@ const WokerAssignment = () => {
   };
 
   const getStatusText = (row) => {
-    if (row.busyCars.length > 0) return "Đang bận";
-    if (row.manualJobs.some((job) => job.status === "co_viec")) return "Có việc ghi tay";
+    if (row.isBusy) {
+      if (row.busyCars.length > 0) return "Đang bận";
+      if (row.manualJobs.some((job) => job.status === "co_viec")) return "Có việc ghi tay";
+      return "Đang bận";
+    }
 
-    const pendingCount = row.assignedCars.filter((car) => car.status === "pending").length;
+    const pendingCount = row.pendingCarsCount || 0;
     if (pendingCount > 0) {
       return pendingCount === 1 ? "1 xe chờ sửa" : `${pendingCount} xe chờ sửa`;
     }

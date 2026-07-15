@@ -50,6 +50,7 @@ export const invalidateCarsCache = () => {
 export const invalidateWorkerJobCaches = () => {
   invalidateCarsCache();
   queryClient.invalidateQueries({ queryKey: queryKeys.workers.all });
+  queryClient.invalidateQueries({ queryKey: queryKeys.workers.available });
 };
 
 export const filterCarsByLocation = (cars = [], locationId = 'all') => {
