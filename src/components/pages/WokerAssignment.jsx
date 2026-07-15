@@ -35,7 +35,7 @@ import {
 } from "../apis/index";
 import { queryKeys } from "../../lib/queryKeys";
 import { useAuth } from "../../context/AuthContext";
-import { ACTIVE_CAR_STATUSES, CAR_STATUS_LABELS, hasPermission, isKtv } from "../../utils/permissions";
+import { ACTIVE_CAR_STATUSES, BUSY_CAR_STATUSES, CAR_STATUS_LABELS, hasPermission, isKtv } from "../../utils/permissions";
 import { filterWorkersByKeyword } from "../../utils/workerSearch";
 import useIsMobile from "../../hooks/useIsMobile";
 import FullscreenDialog from "../common/FullscreenDialog";
@@ -100,11 +100,21 @@ const WokerAssignment = () => {
 
   const getWorkerId = (workerRef) => String(workerRef?._id || workerRef || "");
 
-  const getWorkerCurrentCars = (workerId) => {
+  const getWorkerAssignedCars = (workerId) => {
     const wid = String(workerId);
 
     return cars.filter((car) => {
       if (!ACTIVE_CAR_STATUSES.includes(car.status)) return false;
+
+      return car.workers?.some((w) => getWorkerId(w.worker) === wid);
+    });
+  };
+
+  const getWorkerBusyCars = (workerId) => {
+    const wid = String(workerId);
+
+    return cars.filter((car) => {
+      if (!BUSY_CAR_STATUSES.includes(car.status)) return false;
 
       return car.workers?.some((w) => getWorkerId(w.worker) === wid);
     });
@@ -124,14 +134,15 @@ const WokerAssignment = () => {
 
   const buildWorkerRows = (sourceWorkers) =>
     sourceWorkers.map((worker) => {
-      const currentCars = getWorkerCurrentCars(worker._id);
+      const assignedCars = getWorkerAssignedCars(worker._id);
+      const busyCars = getWorkerBusyCars(worker._id);
       const manualJobs = getManualJobsByDate(worker);
 
       const isBusy =
-        currentCars.length > 0 ||
+        busyCars.length > 0 ||
         manualJobs.some((job) => job.status === "co_viec");
 
-      return { worker, currentCars, manualJobs, isBusy };
+      return { worker, assignedCars, busyCars, manualJobs, isBusy };
     });
 
   const filteredWorkers = useMemo(
@@ -186,9 +197,16 @@ const WokerAssignment = () => {
   };
 
   const getStatusText = (row) => {
-    if (row.currentCars.length > 0) return "Đang có xe / việc";
-    if (row.manualJobs.length > 0) return "Có việc ghi tay";
-    return "Chưa có việc";
+    if (row.busyCars.length > 0) return "Đang bận";
+    if (row.manualJobs.some((job) => job.status === "co_viec")) return "Có việc ghi tay";
+
+    const pendingCount = row.assignedCars.filter((car) => car.status === "pending").length;
+    if (pendingCount > 0) {
+      return pendingCount === 1 ? "1 xe chờ sửa" : `${pendingCount} xe chờ sửa`;
+    }
+
+    if (row.assignedCars.length > 0) return "Có xe được gán";
+    return "Rảnh";
   };
 
   const renderStatusChip = (row) => (
@@ -440,14 +458,14 @@ const WokerAssignment = () => {
         Việc ghi tay theo ngày: <strong>{selectedDate}</strong>
         <br />
         <Typography component="span" variant="caption">
-          Xe đang làm = xe được gán thợ (chưa giao)
+          Thợ bận = đang sửa / rửa / sửa bổ sung, hoặc có việc ghi tay. Xe chờ sửa vẫn coi là rảnh.
         </Typography>
       </Typography>
     </FilterPanel>
   );
 
   const renderMobileCard = (row) => {
-    const { worker, currentCars, manualJobs } = row;
+    const { worker, assignedCars, manualJobs } = row;
 
     return (
       <Card key={worker._id} variant="outlined">
@@ -479,9 +497,9 @@ const WokerAssignment = () => {
             display="block"
             sx={{ mb: 0.75, textTransform: "uppercase" }}
           >
-            Xe đang làm
+            Xe được gán
           </Typography>
-          <Box sx={{ mb: 1.5 }}>{renderCars(worker, currentCars)}</Box>
+          <Box sx={{ mb: 1.5 }}>{renderCars(worker, assignedCars)}</Box>
 
           <Typography
             variant="caption"
@@ -532,14 +550,14 @@ const WokerAssignment = () => {
               <TableCell sx={{ fontWeight: "bold" }}>Thợ</TableCell>
               <TableCell sx={{ fontWeight: "bold" }}>MNV</TableCell>
               <TableCell sx={{ fontWeight: "bold" }}>Trạng thái</TableCell>
-              <TableCell sx={{ fontWeight: "bold" }}>Xe đang làm</TableCell>
+              <TableCell sx={{ fontWeight: "bold" }}>Xe được gán</TableCell>
               <TableCell sx={{ fontWeight: "bold" }}>Công việc ghi tay</TableCell>
               <TableCell sx={{ fontWeight: "bold" }}>Thêm việc</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {rows.map((row) => {
-              const { worker, currentCars, manualJobs } = row;
+              const { worker, assignedCars, manualJobs } = row;
 
               return (
                 <TableRow key={worker._id} hover>
@@ -553,7 +571,7 @@ const WokerAssignment = () => {
                     {renderStatusChip(row)}
                   </TableCell>
                   <TableCell sx={{ verticalAlign: "top" }}>
-                    {renderCars(worker, currentCars)}
+                    {renderCars(worker, assignedCars)}
                   </TableCell>
                   <TableCell sx={{ verticalAlign: "top" }}>
                     {renderJobs(worker, manualJobs)}

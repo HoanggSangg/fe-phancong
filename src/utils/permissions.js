@@ -35,6 +35,9 @@ export const ACTIVE_CAR_STATUSES = [
   'additional_repair',
 ];
 
+// Xe ở các trạng thái này mới khiến thợ được coi là đang bận (đồng bộ backend workerStatus.js)
+export const BUSY_CAR_STATUSES = ['working', 'waiting_wash', 'additional_repair'];
+
 export const PERMISSION_CATALOG = [
   { key: 'cars.today', label: 'Xe trong ngày', group: 'Quản lý xe', path: '/cars', defaultRoles: ['admin', 'giam_sat', 'ktv'] },
   { key: 'cars.manage', label: 'Quản lý xe', group: 'Quản lý xe', path: '/cars/manage', defaultRoles: ['admin', 'giam_sat', 'ktv'] },
