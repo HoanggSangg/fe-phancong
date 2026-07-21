@@ -11,6 +11,9 @@ const getActiveStorage = () => {
   return null;
 };
 
+const getStoredToken = () =>
+  localStorage.getItem('token') || sessionStorage.getItem('token') || null;
+
 const readStoredUser = () => {
   try {
     const storage = getActiveStorage();
@@ -102,7 +105,15 @@ export const AuthProvider = ({ children }) => {
   };
 
   const value = useMemo(
-    () => ({ user, loading, login, register, logout, refreshUser, isAuthenticated: !!user }),
+    () => ({
+      user,
+      loading,
+      login,
+      register,
+      logout,
+      refreshUser,
+      isAuthenticated: !!user && !!getStoredToken(),
+    }),
     [user, loading, refreshUser]
   );
 

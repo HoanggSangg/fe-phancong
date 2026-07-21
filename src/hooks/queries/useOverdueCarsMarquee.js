@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { getStoredToken } from '../../components/apis/axios';
 import { getOverdueCars } from '../../components/apis/index';
 import { queryKeys } from '../../lib/queryKeys';
 
@@ -23,10 +24,16 @@ const useOverdueCarsMarquee = (enabled = true) =>
       const res = await getOverdueCars();
       return res.data?.cars || [];
     },
-    enabled,
+    enabled: enabled && !!getStoredToken(),
     staleTime: 30_000,
     refetchInterval: 60_000,
     refetchIntervalInBackground: false,
+    retry: (failureCount, error) => {
+      if (error?.response?.status === 401 || error?.response?.status === 403) {
+        return false;
+      }
+      return failureCount < 1;
+    },
   });
 
 export default useOverdueCarsMarquee;

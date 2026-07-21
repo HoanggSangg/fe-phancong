@@ -4,14 +4,22 @@ import {
   getOverdueCars,
   getAllLocations,
 } from '../../components/apis/index';
+import { useAuth } from '../../context/AuthContext';
 import { queryClient } from '../../lib/queryClient';
 import { queryKeys } from '../../lib/queryKeys';
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 
 const fetchOverdueCars = async () => {
-  const res = await getOverdueCars();
-  return res.data?.cars || [];
+  try {
+    const res = await getOverdueCars();
+    return res.data?.cars || [];
+  } catch (error) {
+    if (error?.response?.status === 401 || error?.response?.status === 403) {
+      return [];
+    }
+    throw error;
+  }
 };
 
 const buildHomeDashboard = async () => {
@@ -55,13 +63,23 @@ const buildHomeDashboard = async () => {
   };
 };
 
-const useHomeDashboard = () =>
-  useQuery({
+const useHomeDashboard = () => {
+  const { isAuthenticated, loading } = useAuth();
+
+  return useQuery({
     queryKey: queryKeys.homeDashboard,
     queryFn: buildHomeDashboard,
+    enabled: isAuthenticated && !loading,
     staleTime: 30_000,
     refetchInterval: 30_000,
     refetchIntervalInBackground: false,
+    retry: (failureCount, error) => {
+      if (error?.response?.status === 401 || error?.response?.status === 403) {
+        return false;
+      }
+      return failureCount < 1;
+    },
   });
+};
 
 export default useHomeDashboard;

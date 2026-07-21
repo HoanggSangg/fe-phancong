@@ -31,11 +31,11 @@ const AppBarComponent = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const { user, logout } = useAuth();
+  const { user, logout, isAuthenticated, loading } = useAuth();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
-  const { data: overdueCars = [] } = useOverdueCarsMarquee(!isMobile && !!user);
+  const { data: overdueCars = [] } = useOverdueCarsMarquee(!isMobile && isAuthenticated && !loading);
   const marqueeText = formatOverdueMarqueeLabel(overdueCars);
   const marqueeDuration = Math.max(12, Math.min(40, overdueCars.length * 4 + 8));
 
