@@ -25,6 +25,8 @@ export const updateSupervisor = (id, data) => api.put(`/supervisors/${id}`, data
 export const deleteSupervisor = (id) => api.delete(`/supervisors/${id}`);
 
 export const getAllCars = (params) => api.get('/cars', { params });
+export const getManageCarsList = (params) => api.get('/cars/manage-list', { params });
+export const getCarById = (id, params) => api.get(`/cars/${id}`, { params });
 export const createCar = (data) => api.post('/cars', data);
 export const updateCar = (id, data) => api.put(`/cars/${id}`, data);
 export const deleteCar = (id) => api.delete(`/cars/${id}`);

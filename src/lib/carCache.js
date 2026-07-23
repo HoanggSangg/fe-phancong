@@ -39,9 +39,14 @@ export const removeCarFromCache = (carId) => {
   });
 };
 
+export const invalidateManageCarsList = () => {
+  queryClient.invalidateQueries({ queryKey: ['cars', 'manage'] });
+};
+
 export const invalidateCarsCache = () => {
   queryClient.invalidateQueries({ queryKey: queryKeys.cars });
   queryClient.invalidateQueries({ queryKey: queryKeys.carsMine });
+  invalidateManageCarsList();
   queryClient.invalidateQueries({ queryKey: queryKeys.homeDashboard });
   queryClient.invalidateQueries({ queryKey: queryKeys.overdueCars });
   queryClient.invalidateQueries({ queryKey: queryKeys.workers.available });

@@ -42,7 +42,7 @@ const COMPACT_INPUT_SX = {
 
 // ✅ Các mức phần trăm thường dùng để chọn nhanh khi chia việc cho thợ.
 // Vẫn giữ ô nhập tay bên cạnh để nhập số khác nếu cần.
-const COMMON_PERCENTAGE_OPTIONS = [100, 70, 60, 50, 40, 30, 25, 20, 10];
+const COMMON_PERCENTAGE_OPTIONS = [100, 80, 70, 60, 50, 40, 30, 20, 10];
 
 // ============================================================
 // ✅ DebouncedTextField: gõ chữ CHỈ cập nhật state cục bộ (rẻ, tức thì).

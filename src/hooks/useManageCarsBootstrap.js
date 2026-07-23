@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  getAllCars,
   getAllSupervisors,
   getAvailableWorkers,
   getAllLocations,
@@ -14,13 +13,6 @@ const useManageCarsBootstrap = (user) => {
   const queryClient = useQueryClient();
   const [workers, setWorkers] = useState([]);
   const isKtvUser = isKtv(user);
-
-  const carsQuery = useQuery({
-    queryKey: isKtvUser ? queryKeys.carsMine : queryKeys.cars,
-    queryFn: async () => (await getAllCars(isKtvUser ? { mine: '1' } : undefined)).data,
-    staleTime: 45_000,
-    refetchOnMount: 'always',
-  });
 
   const locationsQuery = useQuery({
     queryKey: queryKeys.locations,
@@ -50,18 +42,15 @@ const useManageCarsBootstrap = (user) => {
     enabled: !isKtvUser,
   });
 
-  const allCars = carsQuery.data || [];
-
   useEffect(() => {
     if (availableWorkersQuery.data) {
       setWorkers(availableWorkersQuery.data);
     }
   }, [availableWorkersQuery.data]);
 
-  const fetchCars = useCallback(async () => {
-    const result = await carsQuery.refetch();
-    return result.data;
-  }, [carsQuery]);
+  const refreshManageCarsList = useCallback(async () => {
+    await queryClient.invalidateQueries({ queryKey: ['cars', 'manage'] });
+  }, [queryClient]);
 
   const refreshAvailableWorkers = useCallback(async () => {
     if (isKtvUser) return [];
@@ -78,14 +67,13 @@ const useManageCarsBootstrap = (user) => {
   }, [queryClient]);
 
   return {
-    allCars,
     workers,
     setWorkers,
     allWorkers: allWorkersQuery.data || [],
     availableWorkers: availableWorkersQuery.data || [],
     supervisors: supervisorsQuery.data || [],
     locations: locationsQuery.data || [],
-    fetchCars,
+    refreshManageCarsList,
     refreshAvailableWorkers,
     invalidateHomeDashboard,
   };

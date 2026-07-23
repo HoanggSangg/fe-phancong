@@ -1,6 +1,7 @@
 export const queryKeys = {
   cars: ['cars'],
   carsMine: ['cars', 'mine'],
+  carsManageList: (params) => ['cars', 'manage', params],
   locations: ['locations'],
   workers: {
     all: ['workers', 'all'],

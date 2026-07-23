@@ -5,6 +5,8 @@ import {
   updateCarStatusWithWorker,
   getCarWorkerHistory,
   notifyAdminAboutCar,
+  getCarById,
+  getManageCarsList,
 } from '../apis/index';
 import {
   Button,
@@ -39,16 +41,17 @@ import {
 } from '../../utils/permissions';
 import { CAR_STATUS_COLORS, needsWorkerSelection } from '../../utils/carStatusConfig';
 import {
-  filterCarsByLocation,
   patchCarInCache,
   removeCarFromCache,
   invalidateWorkerJobCaches,
+  invalidateManageCarsList,
 } from '../../lib/carCache';
 import { findCarByPlateAndRO, getCarROLabel } from '../../utils/carListHelpers';
 import FullscreenDialog from '../common/FullscreenDialog';
 import OperationVoiceControls from '../common/OperationVoiceControls';
 import useOperationVoiceMonitor from '../../hooks/useOperationVoiceMonitor';
 import useManageCarsBootstrap from '../../hooks/useManageCarsBootstrap';
+import useManageCarsList from '../../hooks/useManageCarsList';
 import useRepairItems from '../../hooks/useRepairItems';
 import WorkerHistoryDialog from '../ManageCars/WorkerHistoryDialog';
 import StatusUpdateDialog from '../ManageCars/StatusUpdateDialog';
@@ -73,43 +76,23 @@ const ManageCars = () => {
   const isKtvUser = isKtv(user);
 
   const {
-    allCars,
     workers,
     setWorkers,
     allWorkers,
     availableWorkers,
     supervisors,
     locations,
-    fetchCars,
+    refreshManageCarsList,
     refreshAvailableWorkers,
     invalidateHomeDashboard,
   } = useManageCarsBootstrap(user);
 
-  const handleRemoteCarChange = useCallback(async () => {
-    await fetchCars();
-    await refreshAvailableWorkers();
-    invalidateHomeDashboard();
-    invalidateWorkerJobCaches();
-  }, [fetchCars, refreshAvailableWorkers, invalidateHomeDashboard]);
-
-  const { voiceEnabled, toggleVoice, testVoice } = useOperationVoiceMonitor({
-    poll: canPollLogs,
-    onNewCarLogs: handleRemoteCarChange,
-  });
-
-  useEffect(() => {
-    if (!isKtvUser) return undefined;
-
-    const syncCars = () => {
-      fetchCars().catch(() => {});
-      invalidateHomeDashboard();
-    };
-
-    const timer = window.setInterval(syncCars, CAR_SYNC_INTERVAL_MS);
-    return () => window.clearInterval(timer);
-  }, [isKtvUser, fetchCars, invalidateHomeDashboard]);
-
+  const [page, setPage] = useState(1);
+  const [statusFilter, setStatusFilter] = useState('not_delivered');
+  const [filterMonth, setFilterMonth] = useState(() => dayjs().format('YYYY-MM'));
   const [filterDate, setFilterDate] = useState(null);
+  const [searchPlateInput, setSearchPlateInput] = useState('');
+  const [searchPlate, setSearchPlate] = useState('');
   const [editOpen, setEditOpen] = useState(false);
   const [statusUpdateOpen, setStatusUpdateOpen] = useState(false);
   const [editData, setEditData] = useState({});
@@ -121,7 +104,6 @@ const ManageCars = () => {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyData, setHistoryData] = useState(null);
   const [historyError, setHistoryError] = useState('');
-  const [searchPlate, setSearchPlate] = useState('');
   const [tableSupervisor, setTableSupervisor] = useState('');
   const [pageFullscreen, setPageFullscreen] = useState(false);
   const [notifyDialogOpen, setNotifyDialogOpen] = useState(false);
@@ -131,6 +113,30 @@ const ManageCars = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const openCarHandledRef = useRef(false);
 
+  const handleRemoteCarChange = useCallback(async () => {
+    await refreshManageCarsList();
+    await refreshAvailableWorkers();
+    invalidateHomeDashboard();
+    invalidateWorkerJobCaches();
+  }, [refreshManageCarsList, refreshAvailableWorkers, invalidateHomeDashboard]);
+
+  const { voiceEnabled, toggleVoice, testVoice } = useOperationVoiceMonitor({
+    poll: canPollLogs,
+    onNewCarLogs: handleRemoteCarChange,
+  });
+
+  useEffect(() => {
+    if (!isKtvUser) return undefined;
+
+    const syncCars = () => {
+      refreshManageCarsList().catch(() => {});
+      invalidateHomeDashboard();
+    };
+
+    const timer = window.setInterval(syncCars, CAR_SYNC_INTERVAL_MS);
+    return () => window.clearInterval(timer);
+  }, [isKtvUser, refreshManageCarsList, invalidateHomeDashboard]);
+
   const repair = useRepairItems({
     canManage,
     allWorkers,
@@ -139,6 +145,33 @@ const ManageCars = () => {
 
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+
+  const carsListQuery = useManageCarsList(user, {
+    page,
+    statusFilter,
+    filterMonth,
+    filterDate,
+    selectedLocation,
+    tableSupervisor,
+    searchPlate,
+  });
+
+  const displayedCars = carsListQuery.data?.cars || [];
+  const pagination = carsListQuery.data?.pagination || {
+    page: 1,
+    limit: 50,
+    total: 0,
+    totalPages: 1,
+  };
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setSearchPlate(searchPlateInput.trim());
+      setPage(1);
+    }, 400);
+
+    return () => window.clearTimeout(timer);
+  }, [searchPlateInput]);
 
   const STATUS_OPTIONS = useMemo(() => ([
     { value: 'pending', label: CAR_STATUS_LABELS.pending, icon: <Schedule />, color: CAR_STATUS_COLORS.pending },
@@ -158,10 +191,38 @@ const ManageCars = () => {
     return React.cloneElement(config.icon, { color: config.color });
   };
 
-  const displayedCars = useMemo(
-    () => filterCarsByLocation(allCars, selectedLocation),
-    [allCars, selectedLocation],
-  );
+  const handleStatusFilterChange = (value) => {
+    setStatusFilter(value);
+    setPage(1);
+    if (value === 'delivered') {
+      setFilterMonth(dayjs().format('YYYY-MM'));
+    }
+  };
+
+  const handleFilterMonthChange = (month) => {
+    setFilterMonth(month);
+    setPage(1);
+  };
+
+  const handleLocationChange = (locationId) => {
+    setSelectedLocation(locationId);
+    setPage(1);
+  };
+
+  const handleTableSupervisorChange = (supervisorId) => {
+    setTableSupervisor(supervisorId);
+    setPage(1);
+  };
+
+  const handleFilterDateChange = (date) => {
+    setFilterDate(date);
+    setPage(1);
+  };
+
+  const handleClearFilterDate = () => {
+    setFilterDate(null);
+    setPage(1);
+  };
 
   useEffect(() => {
     if (searchParams.get('openCar') !== '1') {
@@ -169,7 +230,7 @@ const ManageCars = () => {
       return;
     }
 
-    if (allCars.length === 0 || openCarHandledRef.current) return;
+    if (openCarHandledRef.current) return;
 
     openCarHandledRef.current = true;
 
@@ -193,32 +254,59 @@ const ManageCars = () => {
       roKey: searchParams.get('roKey') || storedTarget?.roKey || '',
     };
 
-    const matchedCar = findCarByPlateAndRO(allCars, criteria);
     const roLabel = criteria.roNumber || criteria.roCode || criteria.roKey || '';
 
-    if (matchedCar) {
-      const locationId = matchedCar.location?._id || matchedCar.location;
-      setSelectedLocation(locationId ? String(locationId) : 'all');
-      setFilterDate(null);
-      setSearchPlate(matchedCar.plateNumber || criteria.plateNumber);
-      setHighlightCarId(String(matchedCar._id));
-      setSnackbar({
-        open: true,
-        message: `Đã tìm thấy xe ${matchedCar.plateNumber}${getCarROLabel(matchedCar) ? ` — RO: ${getCarROLabel(matchedCar)}` : ''}`,
-        severity: 'success',
-      });
-    } else {
-      if (criteria.plateNumber) setSearchPlate(criteria.plateNumber);
+    const resolveOpenCar = async () => {
+      try {
+        const res = await getManageCarsList({
+          plateNumber: criteria.plateNumber || undefined,
+          page: 1,
+          limit: 50,
+          statusFilter: 'all',
+          ...(isKtvUser ? { mine: '1' } : {}),
+        });
 
-      setSnackbar({
-        open: true,
-        message: `Không tìm thấy xe ${criteria.plateNumber || '—'}${roLabel ? ` — RO: ${roLabel}` : ''}`,
-        severity: 'warning',
-      });
-    }
+        const matchedCar = findCarByPlateAndRO(res.data?.cars || [], criteria);
 
-    setSearchParams({}, { replace: true });
-  }, [allCars, searchParams, setSearchParams]);
+        if (matchedCar) {
+          const locationId = matchedCar.location?._id || matchedCar.location;
+          setSelectedLocation(locationId ? String(locationId) : 'all');
+          setFilterDate(null);
+          setStatusFilter('all');
+          setSearchPlateInput(matchedCar.plateNumber || criteria.plateNumber);
+          setSearchPlate(matchedCar.plateNumber || criteria.plateNumber);
+          setPage(1);
+          setHighlightCarId(String(matchedCar._id));
+          setSnackbar({
+            open: true,
+            message: `Đã tìm thấy xe ${matchedCar.plateNumber}${getCarROLabel(matchedCar) ? ` — RO: ${getCarROLabel(matchedCar)}` : ''}`,
+            severity: 'success',
+          });
+        } else {
+          if (criteria.plateNumber) {
+            setSearchPlateInput(criteria.plateNumber);
+            setSearchPlate(criteria.plateNumber);
+          }
+
+          setSnackbar({
+            open: true,
+            message: `Không tìm thấy xe ${criteria.plateNumber || '—'}${roLabel ? ` — RO: ${roLabel}` : ''}`,
+            severity: 'warning',
+          });
+        }
+      } catch {
+        setSnackbar({
+          open: true,
+          message: `Không tìm thấy xe ${criteria.plateNumber || '—'}${roLabel ? ` — RO: ${roLabel}` : ''}`,
+          severity: 'warning',
+        });
+      }
+
+      setSearchParams({}, { replace: true });
+    };
+
+    resolveOpenCar();
+  }, [searchParams, setSearchParams, isKtvUser]);
 
   useEffect(() => {
     if (!highlightCarId) return undefined;
@@ -237,9 +325,10 @@ const ManageCars = () => {
     };
   }, [highlightCarId, searchPlate, displayedCars.length]);
 
-  const handleLocationChange = (locationId) => {
-    setSelectedLocation(locationId);
-  };
+  const loadCarDetail = useCallback(async (car) => {
+    const res = await getCarById(car._id, isKtvUser ? { mine: '1' } : undefined);
+    return res.data;
+  }, [isKtvUser]);
 
   const handleOpenWorkerHistory = async (car) => {
     setHistoryDialogOpen(true);
@@ -258,32 +347,39 @@ const ManageCars = () => {
     }
   };
 
-  const handleEditClick = (car) => {
-    let merged = [...availableWorkers];
+  const handleEditClick = async (car) => {
+    try {
+      const fullCar = await loadCarDetail(car);
 
-    car.workers.forEach(({ worker }) => {
-      if (!merged.find((w) => w._id === worker._id)) {
-        merged.push(worker);
-      }
-    });
+      let merged = [...availableWorkers];
 
-    setWorkers(merged);
+      fullCar.workers.forEach(({ worker }) => {
+        if (!merged.find((w) => w._id === worker._id)) {
+          merged.push(worker);
+        }
+      });
 
-    const mainWorkerIds = car.workers
-      .filter((w) => w.role === 'main')
-      .map((w) => w.worker._id);
-    const subWorkerIds = car.workers
-      .filter((w) => w.role === 'sub')
-      .map((w) => w.worker._id);
+      setWorkers(merged);
 
-    setEditData({
-      ...car,
-      mainWorkers: mainWorkerIds,
-      subWorkers: subWorkerIds,
-      supervisor: car.supervisor?._id || '',
-    });
+      const mainWorkerIds = fullCar.workers
+        .filter((w) => w.role === 'main')
+        .map((w) => w.worker._id);
+      const subWorkerIds = fullCar.workers
+        .filter((w) => w.role === 'sub')
+        .map((w) => w.worker._id);
 
-    setEditOpen(true);
+      setEditData({
+        ...fullCar,
+        mainWorkers: mainWorkerIds,
+        subWorkers: subWorkerIds,
+        supervisor: fullCar.supervisor?._id || '',
+      });
+
+      setEditOpen(true);
+    } catch (err) {
+      console.error('Lỗi khi tải chi tiết xe:', err);
+      setSnackbar({ open: true, message: 'Không tải được chi tiết xe', severity: 'error' });
+    }
   };
 
   const handleEditSave = async () => {
@@ -302,10 +398,9 @@ const ManageCars = () => {
 
       if (res.data?._id) {
         patchCarInCache(res.data);
-      } else {
-        await fetchCars();
       }
 
+      invalidateManageCarsList();
       await refreshAvailableWorkers();
       invalidateHomeDashboard();
       invalidateWorkerJobCaches();
@@ -322,6 +417,7 @@ const ManageCars = () => {
       deleteCar(id)
         .then(async () => {
           removeCarFromCache(id);
+          invalidateManageCarsList();
           await refreshAvailableWorkers();
           invalidateHomeDashboard();
           invalidateWorkerJobCaches();
@@ -334,12 +430,18 @@ const ManageCars = () => {
     }
   };
 
-  const handleStatusChangeClick = (car, newStatus) => {
+  const handleStatusChangeClick = async (car, newStatus) => {
     if (needsWorkerSelection(car.status, newStatus)) {
-      setStatusUpdateData({ car, newStatus, needsWorker: true });
-      setSelectedNewWorker('');
-      refreshAvailableWorkers();
-      setStatusUpdateOpen(true);
+      try {
+        const fullCar = await loadCarDetail(car);
+        setStatusUpdateData({ car: fullCar, newStatus, needsWorker: true });
+        setSelectedNewWorker('');
+        refreshAvailableWorkers();
+        setStatusUpdateOpen(true);
+      } catch (err) {
+        console.error('Lỗi khi tải chi tiết xe:', err);
+        setSnackbar({ open: true, message: 'Không tải được chi tiết xe', severity: 'error' });
+      }
     } else {
       handleChangeStatus(car._id, newStatus);
     }
@@ -351,10 +453,9 @@ const ManageCars = () => {
 
       if (res.data?.car) {
         patchCarInCache(res.data.car);
-      } else {
-        await fetchCars();
       }
 
+      invalidateManageCarsList();
       await refreshAvailableWorkers();
       invalidateHomeDashboard();
       invalidateWorkerJobCaches();
@@ -429,17 +530,26 @@ const ManageCars = () => {
 
   const panelProps = {
     isMobile,
-    displayedCars: displayedCars,
+    displayedCars,
+    pagination,
+    page,
+    onPageChange: setPage,
+    loading: carsListQuery.isFetching,
     locations,
+    supervisors,
     selectedLocation,
     onLocationChange: handleLocationChange,
     filterDate,
-    onFilterDateChange: setFilterDate,
-    onClearFilterDate: () => setFilterDate(null),
-    searchPlate,
-    onSearchPlateChange: setSearchPlate,
+    onFilterDateChange: handleFilterDateChange,
+    onClearFilterDate: handleClearFilterDate,
+    filterMonth,
+    onFilterMonthChange: handleFilterMonthChange,
+    statusFilter,
+    onStatusFilterChange: handleStatusFilterChange,
+    searchPlate: searchPlateInput,
+    onSearchPlateChange: setSearchPlateInput,
     tableSupervisor,
-    onTableSupervisorChange: setTableSupervisor,
+    onTableSupervisorChange: handleTableSupervisorChange,
     canManage,
     canDelete,
     canNotifyAdmin: isKtvUser,

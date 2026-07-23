@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React from 'react';
 import {
   Box,
   Button,
@@ -6,12 +6,14 @@ import {
   CardActions,
   CardContent,
   Chip,
+  CircularProgress,
   Divider,
   FormControl,
   Grid,
   IconButton,
   InputLabel,
   MenuItem,
+  Pagination,
   Paper,
   Select,
   Stack,
@@ -34,7 +36,7 @@ import {
 } from '@mui/icons-material';
 import DirectionsCarIcon from '@mui/icons-material/DirectionsCar';
 import dayjs from 'dayjs';
-import { filterDisplayedCars, getCarROLabel, getSupervisorsFromCars } from '../../utils/carListHelpers';
+import { getCarROLabel } from '../../utils/carListHelpers';
 import { getAvailableStatusTransitions, getConditionConfig } from '../../utils/carStatusConfig';
 import FilterPanel from '../common/FilterPanel';
 
@@ -45,23 +47,14 @@ const HIGHLIGHT_ROW_SX = {
   '&:hover': { backgroundColor: '#ffecb3 !important' },
 };
 
-// ✅ Bộ lọc "Trạng thái" chỉ còn 2 nhóm: Đã giao / Chưa giao (mọi trạng thái khác "delivered" đều là chưa giao)
 const STATUS_FILTER_OPTIONS = [
   { value: 'all', label: 'Tất cả' },
   { value: 'delivered', label: 'Đã giao' },
   { value: 'not_delivered', label: 'Chưa giao' },
 ];
 
-// ✅ Hàm kiểm tra xe có khớp bộ lọc trạng thái hay không
-const matchesStatusFilter = (car, statusFilter) => {
-  if (!statusFilter || statusFilter === 'all') return true;
-  if (statusFilter === 'delivered') return car.status === 'delivered';
-  if (statusFilter === 'not_delivered') return car.status !== 'delivered';
-  return true;
-};
-
 const getWorkerNames = (car, role) => {
-  const names = car.workers
+  const names = (car.workers || [])
     .filter((w) => w.role === role)
     .map((w) => w.worker?.name)
     .filter(Boolean);
@@ -266,11 +259,11 @@ const CarCard = ({
 const CarTable = ({
   cars,
   hideSearch,
-  filterDate,
   searchPlate,
   tableSupervisor,
   onSearchPlateChange,
   onTableSupervisorChange,
+  supervisors,
   canManage,
   canDelete,
   canNotifyAdmin,
@@ -285,71 +278,67 @@ const CarTable = ({
   statusFilter,
   onStatusFilterChange,
   highlightCarId = '',
-}) => {
-  const sortedCars = filterDisplayedCars({
-    cars,
-    filterDate,
-    searchPlate,
-    tableSupervisor,
-    hideSearch,
-  });
-
-  // ✅ Lọc thêm theo trạng thái: Đã giao / Chưa giao
-  const finalCars = sortedCars.filter((car) => matchesStatusFilter(car, statusFilter));
-
-  return (
-    <Paper variant="outlined" sx={{ width: '100%', overflowX: 'auto', borderRadius: 3 }}>
-      {!hideSearch && (
-        <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center', p: 2 }}>
-          <TextField
-            label="Tìm kiếm biển số xe"
-            variant="outlined"
-            size="small"
-            value={searchPlate}
-            onChange={(e) => onSearchPlateChange(e.target.value)}
-            sx={{ maxWidth: 250, width: '100%' }}
-          />
-          <FormControl sx={{ minWidth: 180, maxWidth: 250, width: '100%' }} size="small">
-            <InputLabel id="cars-table-supervisor-label">Chọn giám sát</InputLabel>
-            <Select
-              labelId="cars-table-supervisor-label"
-              id="cars-table-supervisor-select"
-              value={tableSupervisor}
-              label="Chọn giám sát"
-              onChange={(e) => onTableSupervisorChange(e.target.value)}
-            >
-              <MenuItem value="">Tất cả giám sát</MenuItem>
-              {getSupervisorsFromCars(cars).map((sup) => (
-                <MenuItem key={sup._id} value={sup._id}>{sup.name}</MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-          <FormControl sx={{ minWidth: 180, maxWidth: 250, width: '100%' }} size="small">
-            <InputLabel id="cars-table-status-label">Trạng thái</InputLabel>
-            <Select
-              labelId="cars-table-status-label"
-              id="cars-table-status-select"
-              value={statusFilter}
-              label="Trạng thái"
-              onChange={(e) => onStatusFilterChange(e.target.value)}
-            >
-              {STATUS_FILTER_OPTIONS.map((opt) => (
-                <MenuItem key={opt.value} value={opt.value}>{opt.label}</MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-        </Box>
-      )}
-      <Table stickyHeader sx={{ minWidth: 1100 }}>
-        <TableHead>
-          <TableRow sx={{ background: '#f5f5f5' }}>
-            {['Biển số', 'Loại xe', 'Tình trạng', 'Trạng thái', 'Thợ chính', 'Thợ phụ', 'Thời gian giao', 'Địa điểm', 'Giám sát', 'Chuyển trạng thái', 'Thao tác'].map((label) => (
-              <TableCell key={label} sx={{ fontWeight: 'bold', background: '#f5f5f5' }}>{label}</TableCell>
+}) => (
+  <Paper variant="outlined" sx={{ width: '100%', overflowX: 'auto', borderRadius: 3 }}>
+    {!hideSearch && (
+      <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center', p: 2 }}>
+        <TextField
+          label="Tìm kiếm biển số xe"
+          variant="outlined"
+          size="small"
+          value={searchPlate}
+          onChange={(e) => onSearchPlateChange(e.target.value)}
+          helperText="Tìm trên toàn bộ lịch sử"
+          sx={{ maxWidth: 280, width: '100%' }}
+        />
+        <FormControl sx={{ minWidth: 180, maxWidth: 250, width: '100%' }} size="small">
+          <InputLabel id="cars-table-supervisor-label">Chọn giám sát</InputLabel>
+          <Select
+            labelId="cars-table-supervisor-label"
+            id="cars-table-supervisor-select"
+            value={tableSupervisor}
+            label="Chọn giám sát"
+            onChange={(e) => onTableSupervisorChange(e.target.value)}
+          >
+            <MenuItem value="">Tất cả giám sát</MenuItem>
+            {(supervisors || []).map((sup) => (
+              <MenuItem key={sup._id} value={sup._id}>{sup.name}</MenuItem>
             ))}
+          </Select>
+        </FormControl>
+        <FormControl sx={{ minWidth: 180, maxWidth: 250, width: '100%' }} size="small">
+          <InputLabel id="cars-table-status-label">Trạng thái</InputLabel>
+          <Select
+            labelId="cars-table-status-label"
+            id="cars-table-status-select"
+            value={statusFilter}
+            label="Trạng thái"
+            onChange={(e) => onStatusFilterChange(e.target.value)}
+          >
+            {STATUS_FILTER_OPTIONS.map((opt) => (
+              <MenuItem key={opt.value} value={opt.value}>{opt.label}</MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+      </Box>
+    )}
+    <Table stickyHeader sx={{ minWidth: 1100 }}>
+      <TableHead>
+        <TableRow sx={{ background: '#f5f5f5' }}>
+          {['Biển số', 'Loại xe', 'Tình trạng', 'Trạng thái', 'Thợ chính', 'Thợ phụ', 'Thời gian giao', 'Địa điểm', 'Giám sát', 'Chuyển trạng thái', 'Thao tác'].map((label) => (
+            <TableCell key={label} sx={{ fontWeight: 'bold', background: '#f5f5f5' }}>{label}</TableCell>
+          ))}
+        </TableRow>
+      </TableHead>
+      <TableBody>
+        {cars.length === 0 ? (
+          <TableRow>
+            <TableCell colSpan={11} align="center" sx={{ py: 4 }}>
+              <Typography color="textSecondary">Không có xe phù hợp</Typography>
+            </TableCell>
           </TableRow>
-        </TableHead>
-        <TableBody>
-          {finalCars.map((car, idx) => {
+        ) : (
+          cars.map((car, idx) => {
             const isLate = car.isLate || car.overdue;
             const isHighlighted = String(highlightCarId) === String(car._id);
             return (
@@ -433,23 +422,32 @@ const CarTable = ({
                 </TableCell>
               </TableRow>
             );
-          })}
-        </TableBody>
-      </Table>
-    </Paper>
-  );
-};
+          })
+        )}
+      </TableBody>
+    </Table>
+  </Paper>
+);
 
 const CarsPanel = ({
   hideSearch = false,
   isMobile,
   displayedCars,
+  pagination,
+  page,
+  onPageChange,
+  loading = false,
   locations,
+  supervisors = [],
   selectedLocation,
   onLocationChange,
   filterDate,
   onFilterDateChange,
   onClearFilterDate,
+  filterMonth,
+  onFilterMonthChange,
+  statusFilter,
+  onStatusFilterChange,
   searchPlate,
   onSearchPlateChange,
   tableSupervisor,
@@ -467,28 +465,7 @@ const CarsPanel = ({
   onNotifyAdmin,
   highlightCarId = '',
 }) => {
-  // ✅ State lọc theo trạng thái (bao gồm "Đã giao"), quản lý nội bộ trong CarsPanel
-  const [statusFilter, setStatusFilter] = useState('all');
-
-  const filteredCars = filterDisplayedCars({
-    cars: displayedCars,
-    filterDate,
-    searchPlate,
-    tableSupervisor,
-    hideSearch: isMobile ? hideSearch : true,
-  });
-
-  // ✅ Áp dụng thêm bộ lọc trạng thái (Đã giao / Chưa giao) cho danh sách dùng ở dạng Card (mobile)
-  const finalFilteredCars = useMemo(
-    () => filteredCars.filter((car) => matchesStatusFilter(car, statusFilter)),
-    [filteredCars, statusFilter]
-  );
-
-  // ✅ Đếm số xe đã giao trong danh sách hiện tại (dùng cho ô tổng cộng)
-  const deliveredCount = useMemo(
-    () => displayedCars.filter((car) => car.status === 'delivered').length,
-    [displayedCars]
-  );
+  const deliveredCount = displayedCars.filter((car) => car.status === 'delivered').length;
 
   return (
     <>
@@ -514,36 +491,56 @@ const CarsPanel = ({
                 </Select>
               </FormControl>
             </Grid>
-            <Grid size={{ xs: 12, sm: 3 }}>
-              <TextField
-                label="Ngày nhận xe"
-                type="date"
-                size="small"
-                fullWidth
-                value={filterDate ? dayjs(filterDate).format('YYYY-MM-DD') : ''}
-                onChange={(e) => onFilterDateChange(e.target.value ? dayjs(e.target.value).toDate() : null)}
-                InputLabelProps={{ shrink: true }}
-              />
-            </Grid>
-            <Grid size={{ xs: 12, sm: 2 }}>
-              <Button
-                variant="outlined"
-                size="small"
-                fullWidth
-                onClick={onClearFilterDate}
-                disabled={!filterDate}
-                startIcon={<Delete />}
-              >
-                Xoá lọc ngày
-              </Button>
-            </Grid>
+
+            {statusFilter === 'delivered' ? (
+              <Grid size={{ xs: 12, sm: 3 }}>
+                <TextField
+                  label="Tháng giao xe"
+                  type="month"
+                  size="small"
+                  fullWidth
+                  value={filterMonth}
+                  onChange={(e) => onFilterMonthChange(e.target.value)}
+                  InputLabelProps={{ shrink: true }}
+                />
+              </Grid>
+            ) : (
+              <Grid size={{ xs: 12, sm: 3 }}>
+                <TextField
+                  label="Ngày nhận xe"
+                  type="date"
+                  size="small"
+                  fullWidth
+                  value={filterDate ? dayjs(filterDate).format('YYYY-MM-DD') : ''}
+                  onChange={(e) => onFilterDateChange(e.target.value ? dayjs(e.target.value).toDate() : null)}
+                  InputLabelProps={{ shrink: true }}
+                />
+              </Grid>
+            )}
+
+            {statusFilter !== 'delivered' && (
+              <Grid size={{ xs: 12, sm: 2 }}>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  fullWidth
+                  onClick={onClearFilterDate}
+                  disabled={!filterDate}
+                  startIcon={<Delete />}
+                >
+                  Xoá lọc ngày
+                </Button>
+              </Grid>
+            )}
+
             <Grid size={{ xs: 12, sm: 2 }}>
               <Paper elevation={0} sx={{ p: 1, textAlign: 'center', background: '#f5f5f5', borderRadius: 2 }}>
                 <Typography variant="body2" fontWeight="bold" color="primary">
                   <DirectionsCarIcon fontSize="small" sx={{ mr: 1 }} />Tổng cộng
                 </Typography>
                 <Typography variant="body2" color="textSecondary">
-                  {displayedCars.length} xe · {deliveredCount} đã giao
+                  {pagination.total} xe · trang {pagination.page}/{pagination.totalPages}
+                  {statusFilter === 'delivered' && ` · ${deliveredCount} trên trang`}
                 </Typography>
               </Paper>
             </Grid>
@@ -560,6 +557,7 @@ const CarsPanel = ({
               size="small"
               value={searchPlate}
               onChange={(e) => onSearchPlateChange(e.target.value)}
+              helperText="Tìm trên toàn bộ lịch sử"
               fullWidth
             />
             <FormControl fullWidth size="small">
@@ -572,7 +570,7 @@ const CarsPanel = ({
                 onChange={(e) => onTableSupervisorChange(e.target.value)}
               >
                 <MenuItem value="">Tất cả giám sát</MenuItem>
-                {getSupervisorsFromCars(displayedCars).map((sup) => (
+                {(supervisors || []).map((sup) => (
                   <MenuItem key={sup._id} value={sup._id}>{sup.name}</MenuItem>
                 ))}
               </Select>
@@ -584,62 +582,110 @@ const CarsPanel = ({
                 id="cars-mobile-status-select"
                 value={statusFilter}
                 label="Trạng thái"
-                onChange={(e) => setStatusFilter(e.target.value)}
+                onChange={(e) => onStatusFilterChange(e.target.value)}
               >
                 {STATUS_FILTER_OPTIONS.map((opt) => (
                   <MenuItem key={opt.value} value={opt.value}>{opt.label}</MenuItem>
                 ))}
               </Select>
             </FormControl>
+            {statusFilter === 'delivered' && (
+              <TextField
+                label="Tháng giao xe"
+                type="month"
+                size="small"
+                fullWidth
+                value={filterMonth}
+                onChange={(e) => onFilterMonthChange(e.target.value)}
+                InputLabelProps={{ shrink: true }}
+              />
+            )}
           </Stack>
         </Box>
       )}
 
-      {isMobile ? (
-        <Box>
-          {finalFilteredCars.map((car) => (
-            <CarCard
-              key={car._id}
-              car={car}
-              canManage={canManage}
-              canDelete={canDelete}
-              canNotifyAdmin={canNotifyAdmin}
-              getStatusConfig={getStatusConfig}
-              renderStatusIcon={renderStatusIcon}
-              onStatusChange={onStatusChange}
-              onLoadRepairItems={onLoadRepairItems}
-              onEdit={onEdit}
-              onDelete={onDelete}
-              onOpenHistory={onOpenHistory}
-              onNotifyAdmin={onNotifyAdmin}
-              highlightCarId={highlightCarId}
-            />
-          ))}
+      <Box sx={{ position: 'relative', minHeight: 120 }}>
+        {loading && (
+          <Box
+            sx={{
+              position: 'absolute',
+              inset: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              bgcolor: 'rgba(255,255,255,0.6)',
+              zIndex: 2,
+            }}
+          >
+            <CircularProgress size={32} />
+          </Box>
+        )}
+
+        {isMobile ? (
+          <Box>
+            {displayedCars.length === 0 && !loading ? (
+              <Typography color="textSecondary" align="center" sx={{ py: 4 }}>
+                Không có xe phù hợp
+              </Typography>
+            ) : (
+              displayedCars.map((car) => (
+                <CarCard
+                  key={car._id}
+                  car={car}
+                  canManage={canManage}
+                  canDelete={canDelete}
+                  canNotifyAdmin={canNotifyAdmin}
+                  getStatusConfig={getStatusConfig}
+                  renderStatusIcon={renderStatusIcon}
+                  onStatusChange={onStatusChange}
+                  onLoadRepairItems={onLoadRepairItems}
+                  onEdit={onEdit}
+                  onDelete={onDelete}
+                  onOpenHistory={onOpenHistory}
+                  onNotifyAdmin={onNotifyAdmin}
+                  highlightCarId={highlightCarId}
+                />
+              ))
+            )}
+          </Box>
+        ) : (
+          <CarTable
+            cars={displayedCars}
+            hideSearch={hideSearch}
+            searchPlate={searchPlate}
+            tableSupervisor={tableSupervisor}
+            onSearchPlateChange={onSearchPlateChange}
+            onTableSupervisorChange={onTableSupervisorChange}
+            supervisors={supervisors}
+            canManage={canManage}
+            canDelete={canDelete}
+            canNotifyAdmin={canNotifyAdmin}
+            getStatusConfig={getStatusConfig}
+            renderStatusIcon={renderStatusIcon}
+            onStatusChange={onStatusChange}
+            onLoadRepairItems={onLoadRepairItems}
+            onEdit={onEdit}
+            onDelete={onDelete}
+            onOpenHistory={onOpenHistory}
+            onNotifyAdmin={onNotifyAdmin}
+            statusFilter={statusFilter}
+            onStatusFilterChange={onStatusFilterChange}
+            highlightCarId={highlightCarId}
+          />
+        )}
+      </Box>
+
+      {pagination.totalPages > 1 && (
+        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
+          <Pagination
+            count={pagination.totalPages}
+            page={page}
+            onChange={(_, value) => onPageChange(value)}
+            color="primary"
+            showFirstButton
+            showLastButton
+          />
         </Box>
-      ) : (
-        <CarTable
-          cars={displayedCars}
-          hideSearch={hideSearch}
-          filterDate={filterDate}
-          searchPlate={searchPlate}
-          tableSupervisor={tableSupervisor}
-          onSearchPlateChange={onSearchPlateChange}
-          onTableSupervisorChange={onTableSupervisorChange}
-          canManage={canManage}
-          canDelete={canDelete}
-          canNotifyAdmin={canNotifyAdmin}
-          getStatusConfig={getStatusConfig}
-          renderStatusIcon={renderStatusIcon}
-          onStatusChange={onStatusChange}
-          onLoadRepairItems={onLoadRepairItems}
-          onEdit={onEdit}
-          onDelete={onDelete}
-          onOpenHistory={onOpenHistory}
-          onNotifyAdmin={onNotifyAdmin}
-          statusFilter={statusFilter}
-          onStatusFilterChange={setStatusFilter}
-          highlightCarId={highlightCarId}
-        />
       )}
     </>
   );
