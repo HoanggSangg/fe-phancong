@@ -28,6 +28,7 @@ import { normalizeROKey } from '../../utils/carListHelpers';
 import PageLayout from '../common/PageLayout';
 import PageHeader from '../common/PageHeader';
 import EnablePushNotificationButton from '../common/EnablePushNotificationButton';
+import usePageVisible from '../../hooks/usePageVisible';
 
 const POLL_INTERVAL_MS = 15_000;
 
@@ -167,6 +168,7 @@ const KtvMessagesPage = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
+  const pageVisible = usePageVisible();
 
   const [statusFilter, setStatusFilter] = useState('unread');
   const [messages, setMessages] = useState([]);
@@ -181,6 +183,7 @@ const KtvMessagesPage = () => {
   const [settingsMessage, setSettingsMessage] = useState('');
 
   const fetchMessages = useCallback(async (silent = false) => {
+    if (silent && document.visibilityState === 'hidden') return;
     if (!silent) setLoading(true);
     setError('');
 
@@ -219,16 +222,29 @@ const KtvMessagesPage = () => {
   }, [isAdmin]);
 
   useEffect(() => {
-    fetchMessages();
+    let cancelled = false;
+    let intervalId;
 
-    const intervalId = setInterval(() => fetchMessages(true), POLL_INTERVAL_MS);
+    const start = async () => {
+      await fetchMessages();
+      if (cancelled || !pageVisible) return;
+      intervalId = setInterval(() => fetchMessages(true), POLL_INTERVAL_MS);
+    };
 
-    return () => clearInterval(intervalId);
-  }, [fetchMessages]);
+    start();
+    return () => {
+      cancelled = true;
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [fetchMessages, pageVisible]);
 
   useEffect(() => {
     if (!isAdmin || loading) return;
-    fetchSettings();
+    // Settings phụ — chỉ sau khi messages đã xong loading
+    const timer = window.setTimeout(() => {
+      fetchSettings();
+    }, 400);
+    return () => window.clearTimeout(timer);
   }, [isAdmin, loading, fetchSettings]);
 
   const handleMarkRead = async (id) => {

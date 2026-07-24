@@ -1,7 +1,16 @@
-import * as XLSX from 'xlsx';
+import {
+  loadWorkbookFromUrl,
+  downloadExcelBuffer,
+  money,
+  applyDataCellStyle,
+} from './excelTemplateUtils';
 import { CAR_STATUS_LABELS } from './permissions';
 import { getItemRevenueBaseAmount, getRevenueBaseLabel } from './revenueHelpers';
 import { getCarKey } from './repairHistory';
+
+const ADMIN_TEMPLATE = '/templates/LICH_SU_SUA_CHUA_TEMPLATE.xlsx';
+const KTV_TEMPLATE = '/templates/LICH_SU_SUA_CHUA_KTV_TEMPLATE.xlsx';
+const DATA_START_ROW = 5; // row 5 = first data style; row 6 alt; row 7 total style
 
 export const sumAssignmentsRevenue = (assignments = []) =>
   assignments.reduce((sum, a) => sum + Number(a.revenue || 0), 0);
@@ -74,33 +83,13 @@ const aggregateWorkersForCar = (car, isKtvUser = false) => {
 
 const getStatusLabel = (status) => CAR_STATUS_LABELS[status] || status || '';
 
-export const exportRepairHistoryToExcel = ({
-  carGroups = [],
-  fromDate,
-  toDate,
-  includeDeliveredDetails = false,
-  isKtvUser = false,
-  periodLabel = '',
-  revenueBase = 'amount',
+const buildExportRows = ({
+  carGroups,
+  includeDeliveredDetails,
+  isKtvUser,
+  revenueBase,
 }) => {
-  const valueColumnLabel = getRevenueBaseLabel(revenueBase);
-
-  const headers = isKtvUser
-    ? ['Biển số', 'Loại xe', 'Ngày', 'Trạng thái', 'Nhóm', 'Nội dung', valueColumnLabel, 'Thợ thực hiện']
-    : [
-        'Biển số',
-        'Loại xe',
-        'Ngày',
-        'Trạng thái',
-        'Nhóm',
-        'Nội dung',
-        valueColumnLabel,
-        'Thợ thực hiện',
-        'Doanh thu',
-        'Ghi chú',
-      ];
-
-  const rows = [headers];
+  const rows = [];
 
   carGroups.forEach((car) => {
     const statusLabel = getStatusLabel(car.carStatus);
@@ -116,7 +105,7 @@ export const exportRepairHistoryToExcel = ({
               statusLabel,
               'Tổng hợp',
               `${car.items.length} hạng mục (xe đã giao)`,
-              Number(car.totalAmount || 0),
+              money(car.totalAmount),
               aggregateWorkersForCar(car, true),
             ]
           : [
@@ -126,9 +115,9 @@ export const exportRepairHistoryToExcel = ({
               statusLabel,
               'Tổng hợp',
               `${car.items.length} hạng mục (xe đã giao)`,
-              Number(car.totalAmount || 0),
+              money(car.totalAmount),
               aggregateWorkersForCar(car, false),
-              Number(car.totalRevenue || 0),
+              money(car.totalRevenue),
               'Gom hạng mục',
             ]
       );
@@ -147,7 +136,7 @@ export const exportRepairHistoryToExcel = ({
               index === 0 ? statusLabel : '',
               item.groupName || 'Khác',
               item.content || '',
-              Number(itemValue || 0),
+              money(itemValue),
               formatWorkersCell(assignments, true),
             ]
           : [
@@ -157,7 +146,7 @@ export const exportRepairHistoryToExcel = ({
               index === 0 ? statusLabel : '',
               item.groupName || 'Khác',
               item.content || '',
-              Number(itemValue || 0),
+              money(itemValue),
               formatWorkersCell(assignments, false),
               sumAssignmentsRevenue(assignments),
               isDelivered ? 'Chi tiết xe đã giao' : '',
@@ -166,46 +155,103 @@ export const exportRepairHistoryToExcel = ({
     });
   });
 
-  const totalRevenue = carGroups.reduce((sum, car) => sum + car.totalRevenue, 0);
+  return rows;
+};
+
+const MONEY_COL_ADMIN = new Set([7, 9]);
+const MONEY_COL_KTV = new Set([7]);
+
+const fillRow = (excelRow, values, { alt, isTotal, isKtvUser }) => {
+  const moneyCols = isKtvUser ? MONEY_COL_KTV : MONEY_COL_ADMIN;
+  values.forEach((value, i) => {
+    const col = i + 1;
+    const cell = excelRow.getCell(col);
+    const isMoney = moneyCols.has(col) && typeof value === 'number';
+    applyDataCellStyle(cell, { alt, isMoney, isTotal });
+    cell.value = value === '' ? null : value;
+  });
+};
+
+export const exportRepairHistoryToExcel = async ({
+  carGroups = [],
+  fromDate,
+  toDate,
+  includeDeliveredDetails = false,
+  isKtvUser = false,
+  periodLabel = '',
+  revenueBase = 'amount',
+}) => {
+  const templateUrl = isKtvUser ? KTV_TEMPLATE : ADMIN_TEMPLATE;
+  const workbook = await loadWorkbookFromUrl(templateUrl);
+  const worksheet = workbook.worksheets[0];
+  if (!worksheet) throw new Error('Template lịch sử sửa chữa không hợp lệ');
+
+  const valueColumnLabel = getRevenueBaseLabel(revenueBase);
+  // Header row 4, cột 7 = Thành tiền / Giá vốn
+  worksheet.getCell(4, 7).value = valueColumnLabel;
+
+  worksheet.getCell(1, 1).value = 'LỊCH SỬ SỬA CHỮA — OTO BÁ THÀNH';
+  worksheet.getCell(2, 1).value = `Từ ngày ${fromDate} đến ngày ${toDate}${
+    periodLabel ? ` · ${periodLabel}` : ''
+  }`;
+
+  const dataRows = buildExportRows({
+    carGroups,
+    includeDeliveredDetails,
+    isKtvUser,
+    revenueBase,
+  });
+
+  // Xóa các dòng mẫu 5–7 trong template rồi ghi data từ row 5
+  // (giữ style bằng applyDataCellStyle)
+  const colCount = isKtvUser ? 8 : 10;
+
+  dataRows.forEach((values, index) => {
+    const rowNum = DATA_START_ROW + index;
+    const excelRow = worksheet.getRow(rowNum);
+    excelRow.height = 20;
+    fillRow(excelRow, values, {
+      alt: index % 2 === 1,
+      isTotal: false,
+      isKtvUser,
+    });
+    excelRow.commit();
+  });
+
   const totalAmount = carGroups.reduce((sum, car) => sum + car.totalAmount, 0);
-
-  rows.push([]);
-  rows.push(
-    isKtvUser
-      ? ['', '', '', '', '', 'TỔNG', totalAmount, `${carGroups.length} xe · ${rows.length - 2} dòng`]
-      : [
-          '',
-          '',
-          '',
-          '',
-          '',
-          'TỔNG',
-          totalAmount,
-          `${carGroups.length} xe`,
-          totalRevenue,
-          `${fromDate} → ${toDate}`,
-        ]
-  );
-
-  const ws = XLSX.utils.aoa_to_sheet(rows);
-  ws['!cols'] = isKtvUser
-    ? [{ wch: 14 }, { wch: 18 }, { wch: 12 }, { wch: 14 }, { wch: 16 }, { wch: 40 }, { wch: 14 }, { wch: 36 }]
+  const totalRevenue = carGroups.reduce((sum, car) => sum + car.totalRevenue, 0);
+  const totalRowNum = DATA_START_ROW + dataRows.length;
+  const totalValues = isKtvUser
+    ? ['', '', '', '', '', 'TỔNG', money(totalAmount), `${carGroups.length} xe`]
     : [
-        { wch: 14 },
-        { wch: 18 },
-        { wch: 12 },
-        { wch: 14 },
-        { wch: 16 },
-        { wch: 40 },
-        { wch: 14 },
-        { wch: 36 },
-        { wch: 14 },
-        { wch: 18 },
+        '',
+        '',
+        '',
+        '',
+        '',
+        'TỔNG',
+        money(totalAmount),
+        `${carGroups.length} xe`,
+        money(totalRevenue),
+        `${fromDate} → ${toDate}`,
       ];
 
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Lich su sua chua');
+  const totalRow = worksheet.getRow(totalRowNum);
+  totalRow.height = 22;
+  fillRow(totalRow, totalValues, { alt: false, isTotal: true, isKtvUser });
+  // clear unused sample rows below if template had extras
+  for (let r = totalRowNum + 1; r <= totalRowNum + 3; r += 1) {
+    const row = worksheet.getRow(r);
+    for (let c = 1; c <= colCount; c += 1) {
+      row.getCell(c).value = null;
+    }
+  }
 
+  worksheet.name = 'Lich su sua chua';
+
+  const buffer = await workbook.xlsx.writeBuffer();
   const label = periodLabel ? `_${periodLabel}` : '';
-  XLSX.writeFile(wb, `lich-su-sua-chua${label}_${fromDate}_${toDate}.xlsx`);
+  const filename = `LICH_SU_SUA_CHUA${label}_${fromDate}_${toDate}.xlsx`;
+  downloadExcelBuffer(buffer, filename);
+  return filename;
 };

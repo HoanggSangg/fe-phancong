@@ -38,6 +38,7 @@ import {
 } from '@mui/material';
 import { Edit, Delete, TrendingUp, Person, UploadFile } from '@mui/icons-material';
 import { filterWorkersByKeyword } from '../../utils/workerSearch';
+import useDebouncedValue from '../../hooks/useDebouncedValue';
 import PageLayout from '../common/PageLayout';
 import PageHeader from '../common/PageHeader';
 import useIsMobile from '../../hooks/useIsMobile';
@@ -127,6 +128,7 @@ const WorkersPage = () => {
   const canManageRevenue = canImportExcel;
   const [workers, setWorkers] = useState([]);
   const [filterKeyword, setFilterKeyword] = useState('');
+  const debouncedFilterKeyword = useDebouncedValue(filterKeyword, 300);
   const [importing, setImporting] = useState(false);
   const [importMessage, setImportMessage] = useState('');
   const [importError, setImportError] = useState('');
@@ -332,7 +334,7 @@ const WorkersPage = () => {
     }
   }, [performanceOpen, selectedWorker?._id, kpiPeriod, kpiFromDate, kpiToDate]);
 
-  const filteredWorkers = filterWorkersByKeyword(workers, filterKeyword);
+  const filteredWorkers = filterWorkersByKeyword(workers, debouncedFilterKeyword);
 
   const handleImportExcel = async (event) => {
     const file = event.target.files?.[0];
@@ -438,6 +440,20 @@ const WorkersPage = () => {
                   accept=".xlsx,.xls,.csv"
                   onChange={handleImportExcel}
                 />
+              </Button>
+              <Button
+                variant="text"
+                size="small"
+                href="/templates/MAU_IMPORT_THO.xlsx"
+                download="MAU_IMPORT_THO.xlsx"
+                sx={{
+                  fontWeight: 600,
+                  fontSize: 12,
+                  textTransform: 'none',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                Tải mẫu Excel
               </Button>
             </>
           )}

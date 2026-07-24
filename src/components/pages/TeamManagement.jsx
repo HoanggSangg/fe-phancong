@@ -3,6 +3,7 @@ import {
   Avatar,
   Box,
   Button,
+  Chip,
   Divider,
   FormControl,
   Grid,
@@ -26,6 +27,7 @@ import {
   updateTeam,
   deleteTeam,
   addWorkerToTeam,
+  updateWorkerTeamRole,
   removeWorkerFromTeam,
   getAllWorkers,
 } from '../apis/index';
@@ -41,6 +43,7 @@ const TeamManagement = () => {
   const [teamName, setTeamName] = useState('');
   const [editingTeamId, setEditingTeamId] = useState(null);
   const [selectedWorkerId, setSelectedWorkerId] = useState('');
+  const [selectedTeamRole, setSelectedTeamRole] = useState('KTV');
   const [loading, setLoading] = useState(false);
   const workersLoadedRef = useRef(false);
 
@@ -169,6 +172,7 @@ const TeamManagement = () => {
   const handleSelectTeam = async (teamId) => {
     await Promise.all([fetchTeamDetail(teamId), ensureWorkers()]);
     setSelectedWorkerId('');
+    setSelectedTeamRole('KTV');
   };
 
   const selectedTeamWorkerIds = useMemo(() => {
@@ -194,17 +198,37 @@ const TeamManagement = () => {
     }
 
     try {
-      await addWorkerToTeam(selectedTeam._id, selectedWorkerId);
+      await addWorkerToTeam(selectedTeam._id, selectedWorkerId, selectedTeamRole);
 
       await fetchTeams();
       await fetchWorkers();
       await fetchTeamDetail(selectedTeam._id);
 
       setSelectedWorkerId('');
-      alert('Thêm thợ vào tổ thành công');
+      setSelectedTeamRole('KTV');
+      alert(
+        selectedTeamRole === 'TT'
+          ? 'Đã thêm tổ trưởng (TT). Nếu tổ đã có TT khác, người đó chuyển về KTV.'
+          : 'Thêm thợ vào tổ thành công'
+      );
     } catch (error) {
       console.error(error);
       alert(error.response?.data?.message || 'Lỗi khi thêm thợ vào tổ');
+    }
+  };
+
+  const handleChangeWorkerRole = async (workerId, teamRole) => {
+    if (!selectedTeam) return;
+    try {
+      const res = await updateWorkerTeamRole(selectedTeam._id, workerId, teamRole);
+      await fetchTeams();
+      await fetchTeamDetail(selectedTeam._id);
+      if (res.data?.message) {
+        // soft feedback
+      }
+    } catch (error) {
+      console.error(error);
+      alert(error.response?.data?.message || 'Lỗi khi đổi chức vụ');
     }
   };
 
@@ -258,7 +282,7 @@ const TeamManagement = () => {
       <PageHeader
         icon={<GroupsIcon />}
         title="Quản lý tổ thợ"
-        subtitle="Tạo tổ, sửa tổ, thêm thợ vào tổ và xóa thợ khỏi tổ."
+        subtitle="Tạo tổ, thêm thợ, gán chức vụ TT/KTV (mỗi tổ chỉ 1 tổ trưởng)."
       />
 
       <Grid container spacing={2.5}>
@@ -373,6 +397,9 @@ const TeamManagement = () => {
                   <Typography variant="h5">{selectedTeam.name}</Typography>
                   <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
                     Số thợ trong tổ: {selectedTeam.workers?.length || 0}
+                    {' · '}
+                    Tổ trưởng:{' '}
+                    {selectedTeam.workers?.find((w) => w.teamRole === 'TT')?.name || 'Chưa có'}
                   </Typography>
                 </Paper>
 
@@ -380,6 +407,7 @@ const TeamManagement = () => {
                   direction={{ xs: 'column', sm: 'row' }}
                   spacing={1}
                   sx={{ mb: 2 }}
+                  alignItems={{ sm: 'flex-start' }}
                 >
                   <FormControl size="small" sx={{ ...WORKER_SELECT_SX, flex: '1 1 280px' }}>
                     <InputLabel id="add-worker-select-label">Chọn thợ</InputLabel>
@@ -398,6 +426,19 @@ const TeamManagement = () => {
                           {worker.name} - SBD: {worker.soBaoDanh}
                         </MenuItem>
                       ))}
+                    </Select>
+                  </FormControl>
+
+                  <FormControl size="small" sx={{ minWidth: 120 }}>
+                    <InputLabel id="add-role-label">Chức vụ</InputLabel>
+                    <Select
+                      labelId="add-role-label"
+                      label="Chức vụ"
+                      value={selectedTeamRole}
+                      onChange={(e) => setSelectedTeamRole(e.target.value)}
+                    >
+                      <MenuItem value="KTV">KTV</MenuItem>
+                      <MenuItem value="TT">TT (Tổ trưởng)</MenuItem>
                     </Select>
                   </FormControl>
 
@@ -423,7 +464,7 @@ const TeamManagement = () => {
                         sx={{
                           mb: 1,
                           border: 1,
-                          borderColor: 'divider',
+                          borderColor: worker.teamRole === 'TT' ? 'warning.main' : 'divider',
                           borderRadius: 2,
                           bgcolor: 'background.paper',
                           flexDirection: { xs: 'column', sm: 'row' },
@@ -432,15 +473,30 @@ const TeamManagement = () => {
                           p: 1,
                         }}
                         secondaryAction={
-                          <Button
-                            size="small"
-                            variant="contained"
-                            color="error"
-                            onClick={() => handleRemoveWorkerFromTeam(worker._id)}
-                            sx={{ alignSelf: { xs: 'flex-end', sm: 'center' } }}
+                          <Stack
+                            direction="row"
+                            spacing={0.75}
+                            sx={{ alignSelf: { xs: 'flex-end', sm: 'center' }, alignItems: 'center' }}
                           >
-                            Xóa khỏi tổ
-                          </Button>
+                            <FormControl size="small" sx={{ minWidth: 100 }}>
+                              <Select
+                                value={worker.teamRole === 'TT' ? 'TT' : 'KTV'}
+                                onChange={(e) => handleChangeWorkerRole(worker._id, e.target.value)}
+                                displayEmpty
+                              >
+                                <MenuItem value="KTV">KTV</MenuItem>
+                                <MenuItem value="TT">TT</MenuItem>
+                              </Select>
+                            </FormControl>
+                            <Button
+                              size="small"
+                              variant="contained"
+                              color="error"
+                              onClick={() => handleRemoveWorkerFromTeam(worker._id)}
+                            >
+                              Xóa
+                            </Button>
+                          </Stack>
                         }
                       >
                         <ListItemAvatar>
@@ -449,7 +505,16 @@ const TeamManagement = () => {
                           </Avatar>
                         </ListItemAvatar>
                         <ListItemText
-                          primary={worker.name}
+                          primary={(
+                            <Stack direction="row" spacing={1} alignItems="center">
+                              <span>{worker.name}</span>
+                              <Chip
+                                size="small"
+                                label={worker.teamRole === 'TT' ? 'TT' : 'KTV'}
+                                color={worker.teamRole === 'TT' ? 'warning' : 'default'}
+                              />
+                            </Stack>
+                          )}
                           secondary={
                             <>
                               MNV: {worker.soBaoDanh}
@@ -457,8 +522,8 @@ const TeamManagement = () => {
                               Trạng thái: {getWorkerStatusLabel(worker.status)}
                             </>
                           }
-                          sx={{ m: 0, pr: { sm: 14 } }}
-                          primaryTypographyProps={{ fontWeight: 600 }}
+                          sx={{ m: 0, pr: { sm: 22 } }}
+                          primaryTypographyProps={{ fontWeight: 600, component: 'div' }}
                         />
                       </ListItem>
                     ))}

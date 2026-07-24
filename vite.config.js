@@ -14,4 +14,20 @@ export default defineConfig({
       },
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('exceljs')) return 'exceljs';
+            if (id.includes('recharts') || id.includes('d3-')) return 'charts';
+            if (id.includes('@mui')) return 'mui';
+            if (id.includes('react-dom') || id.includes('/react/')) return 'react-vendor';
+            if (id.includes('@tanstack')) return 'query';
+          }
+          return undefined;
+        },
+      },
+    },
+  },
 })

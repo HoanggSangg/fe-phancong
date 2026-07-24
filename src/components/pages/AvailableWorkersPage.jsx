@@ -16,6 +16,8 @@ import { filterWorkersByKeyword } from '../../utils/workerSearch';
 import PageLayout from '../common/PageLayout';
 import PageHeader from '../common/PageHeader';
 import useIsMobile from '../../hooks/useIsMobile';
+import useDebouncedValue from '../../hooks/useDebouncedValue';
+import usePageVisible from '../../hooks/usePageVisible';
 
 const removeVietnameseTones = (str = '') =>
   str
@@ -91,12 +93,15 @@ const WorkerRow = ({ worker }) => (
 
 const AvailableWorkersPage = () => {
   const isMobile = useIsMobile();
+  const pageVisible = usePageVisible();
   const [workers, setWorkers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const debouncedSearchTerm = useDebouncedValue(searchTerm, 300);
   const [lastUpdated, setLastUpdated] = useState(null);
 
   const fetchAvailableWorkers = useCallback(async (silent = false) => {
+    if (silent && document.visibilityState === 'hidden') return;
     if (!silent) setLoading(true);
     try {
       const res = await getAvailableWorkers();
@@ -110,14 +115,25 @@ const AvailableWorkersPage = () => {
   }, []);
 
   useEffect(() => {
-    fetchAvailableWorkers();
-    const intervalId = setInterval(() => fetchAvailableWorkers(true), REFRESH_INTERVAL_MS);
-    return () => clearInterval(intervalId);
-  }, [fetchAvailableWorkers]);
+    let cancelled = false;
+    let intervalId;
+
+    const start = async () => {
+      await fetchAvailableWorkers();
+      if (cancelled || !pageVisible) return;
+      intervalId = setInterval(() => fetchAvailableWorkers(true), REFRESH_INTERVAL_MS);
+    };
+
+    start();
+    return () => {
+      cancelled = true;
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [fetchAvailableWorkers, pageVisible]);
 
   const filteredWorkers = useMemo(
-    () => filterWorkersByKeyword(workers, searchTerm),
-    [workers, searchTerm],
+    () => filterWorkersByKeyword(workers, debouncedSearchTerm),
+    [workers, debouncedSearchTerm],
   );
 
   const groupedWorkers = useMemo(() => {

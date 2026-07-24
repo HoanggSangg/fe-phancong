@@ -6,6 +6,7 @@ import {
 } from '../../components/apis/index';
 import { useAuth } from '../../context/AuthContext';
 import { queryKeys } from '../../lib/queryKeys';
+import useDeferredReady from '../useDeferredReady';
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 
@@ -26,6 +27,7 @@ const useHomeDashboard = () => {
   const enabled = isAuthenticated && !loading;
   const today = todayISO();
 
+  // 1) API chính: xe theo trạng thái trong ngày
   const carsQuery = useQuery({
     queryKey: [...queryKeys.homeDashboard, 'cars', today],
     queryFn: async () => {
@@ -44,20 +46,22 @@ const useHomeDashboard = () => {
     },
   });
 
-  const secondaryEnabled = enabled && carsQuery.isFetched;
-
-  const locationsQuery = useQuery({
-    queryKey: queryKeys.locations,
-    queryFn: async () => (await getAllLocations()).data || [],
-    enabled: secondaryEnabled,
-    staleTime: 5 * 60_000,
-  });
-
+  // 2) Sau khi cars xong + browser rảnh → overdue (đánh dấu trễ hẹn)
+  const overdueReady = useDeferredReady(enabled && carsQuery.isFetched, 400);
   const overdueQuery = useQuery({
     queryKey: queryKeys.overdueCars,
     queryFn: fetchOverdueCars,
-    enabled: secondaryEnabled,
+    enabled: overdueReady,
     staleTime: 30_000,
+  });
+
+  // 3) Cuối cùng → locations (filter phụ)
+  const locationsReady = useDeferredReady(overdueReady && overdueQuery.isFetched, 200);
+  const locationsQuery = useQuery({
+    queryKey: queryKeys.locations,
+    queryFn: async () => (await getAllLocations()).data || [],
+    enabled: locationsReady,
+    staleTime: 5 * 60_000,
   });
 
   const carStatusData = carsQuery.data || {};
@@ -93,7 +97,7 @@ const useHomeDashboard = () => {
   return {
     data,
     isLoading: carsQuery.isLoading,
-    filtersLoading: secondaryEnabled && locationsQuery.isLoading,
+    filtersLoading: locationsReady && locationsQuery.isLoading,
     isFetching: carsQuery.isFetching || locationsQuery.isFetching || overdueQuery.isFetching,
   };
 };

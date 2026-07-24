@@ -26,6 +26,7 @@ import HistoryIcon from '@mui/icons-material/History';
 import { getOperationLogs } from '../apis';
 import { ROLE_LABELS } from '../../utils/permissions';
 import usePeriodFilter from '../../hooks/usePeriodFilter';
+import usePageVisible from '../../hooks/usePageVisible';
 import PeriodFilterToolbar from '../common/PeriodFilterToolbar';
 import OperationVoiceControls from '../common/OperationVoiceControls';
 import useOperationVoiceMonitor from '../../hooks/useOperationVoiceMonitor';
@@ -89,6 +90,7 @@ const formatDateTime = (value) => {
 const OperationHistoryPage = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const pageVisible = usePageVisible();
   const { period, setPeriod, fromDate, setFromDate, toDate, setToDate } = usePeriodFilter('today');
 
   const [logs, setLogs] = useState([]);
@@ -149,14 +151,16 @@ const OperationHistoryPage = () => {
   }, [fetchLogs, resetTracking]);
 
   useEffect(() => {
-    if (page !== 0) return undefined;
+    // Poll phụ chỉ sau lần fetch đầu (tránh chồng API lúc mở trang)
+    if (page !== 0 || loading || !pageVisible) return undefined;
 
     const timer = window.setInterval(() => {
+      if (document.visibilityState === 'hidden') return;
       fetchLogs({ silent: true });
     }, POLL_INTERVAL_MS);
 
     return () => window.clearInterval(timer);
-  }, [fetchLogs, page]);
+  }, [fetchLogs, page, loading, pageVisible]);
 
   const handleSearch = () => {
     setPage(0);

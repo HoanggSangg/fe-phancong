@@ -90,14 +90,23 @@ const UserManagement = () => {
   useEffect(() => {
     const init = async () => {
       try {
+        // 1) API chính: users
         const usersRes = await getUsers();
         const nextUsers = usersRes.data || [];
         setUsers(nextUsers);
 
+        // 2) Workers chỉ khi danh sách users cần map thợ (sau khi users xong)
         const needsWorkers = nextUsers.some(
           (item) => item.role === 'ktv' || item.worker
         );
         if (needsWorkers) {
+          await new Promise((resolve) => {
+            if (typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function') {
+              window.requestIdleCallback(() => resolve(), { timeout: 1500 });
+            } else {
+              window.setTimeout(resolve, 300);
+            }
+          });
           await loadWorkers();
         }
       } catch {

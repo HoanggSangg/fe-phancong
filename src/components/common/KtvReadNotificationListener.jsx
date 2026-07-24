@@ -3,17 +3,21 @@ import { Alert, Snackbar } from '@mui/material';
 import { acknowledgeKtvMessageRead, getKtvSentMessages } from '../apis';
 import { isKtv } from '../../utils/permissions';
 import { showBrowserNotification } from '../../utils/browserNotifications';
+import useDeferredReady from '../../hooks/useDeferredReady';
+import usePageVisible from '../../hooks/usePageVisible';
 
 const POLL_INTERVAL_MS = 30_000;
 
 const useKtvReadNotifications = (user) => {
-  const enabled = isKtv(user);
+  const allowed = isKtv(user);
+  const enabled = useDeferredReady(allowed, 2500);
+  const pageVisible = usePageVisible();
   const [notice, setNotice] = useState(null);
   const knownIdsRef = useRef(new Set());
   const initialLoadRef = useRef(false);
 
   const pollNotices = useCallback(async () => {
-    if (!enabled) return;
+    if (!enabled || document.visibilityState === 'hidden') return;
 
     try {
       const res = await getKtvSentMessages({ pendingAck: '1' });
@@ -46,12 +50,12 @@ const useKtvReadNotifications = (user) => {
   }, [enabled]);
 
   useEffect(() => {
-    if (!enabled) return undefined;
+    if (!enabled || !pageVisible) return undefined;
 
     pollNotices();
     const intervalId = setInterval(pollNotices, POLL_INTERVAL_MS);
     return () => clearInterval(intervalId);
-  }, [enabled, pollNotices]);
+  }, [enabled, pageVisible, pollNotices]);
 
   const closeNotice = () => setNotice(null);
 

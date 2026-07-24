@@ -104,21 +104,27 @@ const AddCar = ({ onSuccess }) => {
   const [lookupError, setLookupError] = useState('');
 
   useEffect(() => {
+    let cancelled = false;
+
     const fetchFormMeta = async () => {
       try {
-        const [supervisorRes, locationRes] = await Promise.all([
-          getAllSupervisors(),
-          getAllLocations(),
-        ]);
-
-        setSupervisors(supervisorRes.data || []);
+        // Cascade: locations trước → supervisors sau (tránh 2 API lớn cùng lúc)
+        const locationRes = await getAllLocations();
+        if (cancelled) return;
         setLocations(locationRes.data || []);
+
+        const supervisorRes = await getAllSupervisors();
+        if (cancelled) return;
+        setSupervisors(supervisorRes.data || []);
       } catch (error) {
         console.error('Lỗi khi lấy dữ liệu form:', error);
       }
     };
 
     fetchFormMeta();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const ensureAvailableWorkers = useCallback(async () => {

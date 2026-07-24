@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "build:excel-templates": "node scripts/build-excel-templates.cjs"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
@@ -18,6 +19,7 @@
     "axios": "^1.10.0",
     "browser-image-compression": "^2.0.2",
     "dayjs": "^1.11.13",
+    "exceljs": "^4.4.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-router-dom": "^7.6.2",

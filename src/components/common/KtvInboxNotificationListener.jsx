@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef } from 'react';
 import { getKtvMessages } from '../apis';
 import { hasPermission } from '../../utils/permissions';
 import { showBrowserNotification } from '../../utils/browserNotifications';
+import useDeferredReady from '../../hooks/useDeferredReady';
+import usePageVisible from '../../hooks/usePageVisible';
 
 const POLL_INTERVAL_MS = 15_000;
 
@@ -12,12 +14,14 @@ const canReceiveKtvInbox = (user) => {
 };
 
 const KtvInboxNotificationListener = ({ user }) => {
-  const enabled = canReceiveKtvInbox(user);
+  const allowed = canReceiveKtvInbox(user);
+  const enabled = useDeferredReady(allowed, 1500);
+  const pageVisible = usePageVisible();
   const knownIdsRef = useRef(new Set());
   const initialLoadRef = useRef(false);
 
   const pollMessages = useCallback(async () => {
-    if (!enabled) return;
+    if (!enabled || document.visibilityState === 'hidden') return;
 
     try {
       const res = await getKtvMessages({ status: 'unread', limit: 50 });
@@ -47,12 +51,12 @@ const KtvInboxNotificationListener = ({ user }) => {
   }, [enabled]);
 
   useEffect(() => {
-    if (!enabled) return undefined;
+    if (!enabled || !pageVisible) return undefined;
 
     pollMessages();
     const intervalId = setInterval(pollMessages, POLL_INTERVAL_MS);
     return () => clearInterval(intervalId);
-  }, [enabled, pollMessages]);
+  }, [enabled, pageVisible, pollMessages]);
 
   return null;
 };

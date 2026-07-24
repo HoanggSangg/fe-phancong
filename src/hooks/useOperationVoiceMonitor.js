@@ -13,10 +13,12 @@ import {
   speakPlainText,
   unlockOperationAudio,
 } from '../utils/operationAlertSound';
+import usePageVisible from './usePageVisible';
 
 const POLL_INTERVAL_MS = 15_000;
 
 const useOperationVoiceMonitor = ({ poll = true, pollReady = true, onNewCarLogs } = {}) => {
+  const pageVisible = usePageVisible();
   const [voiceEnabled, setVoiceEnabled] = useState(() => initOperationVoiceSetting());
   const [latestLog, setLatestLog] = useState(null);
   const knownLogIdsRef = useRef(new Set());
@@ -93,11 +95,12 @@ const useOperationVoiceMonitor = ({ poll = true, pollReady = true, onNewCarLogs 
   }, [latestLog]);
 
   useEffect(() => {
-    if (!poll || !pollReady) return undefined;
+    if (!poll || !pollReady || !pageVisible) return undefined;
 
     const today = getTodayDate();
 
     const fetchVoiceLogs = async () => {
+      if (document.visibilityState === 'hidden') return;
       try {
         const res = await getOperationLogs({
           from: today,
@@ -114,7 +117,7 @@ const useOperationVoiceMonitor = ({ poll = true, pollReady = true, onNewCarLogs 
     fetchVoiceLogs();
     const timer = window.setInterval(fetchVoiceLogs, POLL_INTERVAL_MS);
     return () => window.clearInterval(timer);
-  }, [poll, pollReady, processLogs]);
+  }, [poll, pollReady, pageVisible, processLogs]);
 
   return {
     voiceEnabled,

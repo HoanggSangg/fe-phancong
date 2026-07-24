@@ -35,10 +35,8 @@ export const updateCarStatusWithWorker = (id, status, newWorkerId = null) =>
   api.put(`/cars/${id}/status`, { status, ...(newWorkerId && { newWorkerId }) });
 export const notifyAdminAboutCar = (id, message) =>
   api.post(`/cars/${id}/notify-admin`, { message });
-export const getCarStats = () => api.get('/cars/stats');
 export const getWorkingAndPendingCars = (date) =>
   api.get('/cars/working-pending', { params: date ? { date } : undefined });
-export const getCarsByLocation = (locationId) => api.get(`/cars/by-location/${locationId}`);
 export const getOverdueCars = () => api.get('/cars/overdue');
 export const getRepairHistory = (params) => api.get('/cars/repair-history', { params });
 export const getCarRepairItems = (carId) => api.get(`/cars/${carId}/repair-items`);
@@ -71,8 +69,10 @@ export const getTeamById = (teamId) => api.get(`/teams/${teamId}`);
 export const createTeam = (data) => api.post('/teams', data);
 export const updateTeam = (teamId, data) => api.put(`/teams/${teamId}`, data);
 export const deleteTeam = (teamId) => api.delete(`/teams/${teamId}`);
-export const addWorkerToTeam = (teamId, workerId) =>
-  api.post(`/teams/${teamId}/workers`, { workerId });
+export const addWorkerToTeam = (teamId, workerId, teamRole = 'KTV') =>
+  api.post(`/teams/${teamId}/workers`, { workerId, teamRole });
+export const updateWorkerTeamRole = (teamId, workerId, teamRole) =>
+  api.patch(`/teams/${teamId}/workers/${workerId}/role`, { teamRole });
 export const removeWorkerFromTeam = (teamId, workerId) =>
   api.delete(`/teams/${teamId}/workers/${workerId}`);
 export const addManualJobToWorker = (workerId, data) =>
@@ -94,3 +94,35 @@ export const getKtvSentMessages = (params) =>
   api.get('/ktv-messages/sent', { params });
 export const acknowledgeKtvMessageRead = (id) =>
   api.patch(`/ktv-messages/${id}/acknowledge`);
+
+export const getPayrollSettings = () => api.get('/payroll/settings');
+export const updatePayrollSettings = (payload) => api.put('/payroll/settings', payload);
+export const getMonthlyPayroll = (year, month) =>
+  api.get(`/payroll/${year}/${month}`);
+export const getAnnualPayroll = (year) =>
+  api.get(`/payroll/annual/${year}`);
+export const saveMonthlyPayroll = (year, month, payload) =>
+  api.put(`/payroll/${year}/${month}`, payload);
+export const refreshPayrollRevenue = (year, month) =>
+  api.post(`/payroll/${year}/${month}/refresh-revenue`);
+export const recalculatePayroll = (year, month) =>
+  api.post(`/payroll/${year}/${month}/recalculate`);
+
+// —— Lương ngày công / chấm công (module riêng, không gắn LNS) ——
+export const getAttendanceSettings = () => api.get('/attendance/settings');
+export const updateAttendanceSettings = (payload) =>
+  api.put('/attendance/settings', payload);
+export const getAttendanceWorkers = (params) =>
+  api.get('/attendance/workers', { params });
+export const getAttendanceCalendar = (workerId, year, month) =>
+  api.get(`/attendance/calendar/${workerId}/${year}/${month}`);
+export const upsertAttendanceDays = (workerId, year, month, payload) =>
+  api.put(`/attendance/calendar/${workerId}/${year}/${month}`, payload);
+export const deleteAttendanceDay = (workerId, date) =>
+  api.delete(`/attendance/calendar/${workerId}/${date}`);
+export const getDayWorkPayroll = (year, month) =>
+  api.get(`/attendance/payroll/${year}/${month}`);
+export const syncDayWorkPayroll = (year, month) =>
+  api.post(`/attendance/payroll/${year}/${month}/sync`);
+export const saveDayWorkPayroll = (year, month, payload) =>
+  api.put(`/attendance/payroll/${year}/${month}`, payload);

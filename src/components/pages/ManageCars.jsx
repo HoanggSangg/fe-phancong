@@ -56,6 +56,8 @@ import useOperationVoiceMonitor from '../../hooks/useOperationVoiceMonitor';
 import useManageCarsBootstrap from '../../hooks/useManageCarsBootstrap';
 import useManageCarsList from '../../hooks/useManageCarsList';
 import useRepairItems from '../../hooks/useRepairItems';
+import useDeferredReady from '../../hooks/useDeferredReady';
+import usePageVisible from '../../hooks/usePageVisible';
 import WorkerHistoryDialog from '../ManageCars/WorkerHistoryDialog';
 import StatusUpdateDialog from '../ManageCars/StatusUpdateDialog';
 import CarEditDialog from '../ManageCars/CarEditDialog';
@@ -116,6 +118,12 @@ const ManageCars = () => {
     searchPlate,
   });
 
+  // Sau list chính: filters → voice poll (không song song lúc mở trang)
+  const filtersReady = useDeferredReady(carsListQuery.isFetched, 450);
+  const voiceReady = useDeferredReady(carsListQuery.isFetched, 1100);
+  const pageVisible = usePageVisible();
+  const ktvSyncReady = useDeferredReady(isKtvUser && carsListQuery.isFetched, 2000);
+
   const {
     workers,
     setWorkers,
@@ -130,7 +138,7 @@ const ManageCars = () => {
     refreshAvailableWorkers,
     invalidateHomeDashboard,
   } = useManageCarsBootstrap(user, {
-    loadFilters: carsListQuery.isFetched,
+    loadFilters: filtersReady,
   });
 
   const handleRemoteCarChange = useCallback(async () => {
@@ -142,21 +150,22 @@ const ManageCars = () => {
 
   const { voiceEnabled, toggleVoice, testVoice } = useOperationVoiceMonitor({
     poll: canPollLogs,
-    pollReady: carsListQuery.isFetched,
+    pollReady: voiceReady,
     onNewCarLogs: handleRemoteCarChange,
   });
 
   useEffect(() => {
-    if (!isKtvUser) return undefined;
+    if (!ktvSyncReady || !pageVisible) return undefined;
 
     const syncCars = () => {
+      if (document.visibilityState === 'hidden') return;
       refreshManageCarsList().catch(() => {});
       invalidateHomeDashboard();
     };
 
     const timer = window.setInterval(syncCars, CAR_SYNC_INTERVAL_MS);
     return () => window.clearInterval(timer);
-  }, [isKtvUser, refreshManageCarsList, invalidateHomeDashboard]);
+  }, [ktvSyncReady, pageVisible, refreshManageCarsList, invalidateHomeDashboard]);
 
   const repair = useRepairItems({
     allWorkers,
@@ -244,6 +253,7 @@ const ManageCars = () => {
     if (openCarHandledRef.current) return;
 
     openCarHandledRef.current = true;
+    let cancelled = false;
 
     let storedTarget = null;
 
@@ -268,6 +278,7 @@ const ManageCars = () => {
     const roLabel = criteria.roNumber || criteria.roCode || criteria.roKey || '';
 
     const resolveOpenCar = async () => {
+      if (cancelled) return;
       try {
         const res = await getManageCarsList({
           plateNumber: criteria.plateNumber || undefined,
@@ -276,6 +287,8 @@ const ManageCars = () => {
           statusFilter: 'all',
           ...(isKtvUser ? { mine: '1' } : {}),
         });
+
+        if (cancelled) return;
 
         const matchedCar = findCarByPlateAndRO(res.data?.cars || [], criteria);
 
@@ -306,6 +319,7 @@ const ManageCars = () => {
           });
         }
       } catch {
+        if (cancelled) return;
         setSnackbar({
           open: true,
           message: `Không tìm thấy xe ${criteria.plateNumber || '—'}${roLabel ? ` — RO: ${roLabel}` : ''}`,
@@ -313,10 +327,15 @@ const ManageCars = () => {
         });
       }
 
-      setSearchParams({}, { replace: true });
+      if (!cancelled) {
+        setSearchParams({}, { replace: true });
+      }
     };
 
     resolveOpenCar();
+    return () => {
+      cancelled = true;
+    };
   }, [searchParams, setSearchParams, isKtvUser]);
 
   useEffect(() => {

@@ -24,6 +24,7 @@ import { useAuth } from '../../context/AuthContext';
 import { getNavGroupsForUser, ROLE_LABELS } from '../../utils/permissions';
 import { LAYOUT } from '../../constants/layout';
 import useOverdueCarsMarquee, { formatOverdueMarqueeLabel } from '../../hooks/queries/useOverdueCarsMarquee';
+import useDeferredReady from '../../hooks/useDeferredReady';
 
 const AppBarComponent = () => {
   const [openDrawer, setOpenDrawer] = useState(false);
@@ -35,7 +36,9 @@ const AppBarComponent = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
-  const { data: overdueCars = [] } = useOverdueCarsMarquee(!isMobile && isAuthenticated && !loading);
+  // Marquee không chặn first paint — tải sau khi trang chính load xong
+  const marqueeEnabled = useDeferredReady(!isMobile && isAuthenticated && !loading, 900);
+  const { data: overdueCars = [] } = useOverdueCarsMarquee(marqueeEnabled);
   const marqueeText = formatOverdueMarqueeLabel(overdueCars);
   const marqueeDuration = Math.max(12, Math.min(40, overdueCars.length * 4 + 8));
 
@@ -43,12 +46,21 @@ const AppBarComponent = () => {
 
   // ✅ Chỉ lấy 1 menu đang chọn, ưu tiên path dài nhất
   // Ví dụ: /cars/manage sẽ chọn /cars/manage, không chọn /cars
+  // Khu vực quản trị: activePaths gồm /admin và các trang con
   const selectedNavPath = useMemo(() => {
     const allItems = navGroups.flatMap((group) => group.items);
 
     const matchedItem = allItems
       .sort((a, b) => b.path.length - a.path.length)
       .find((item) => {
+        if (item.activePaths?.length) {
+          return item.activePaths.some(
+            (path) =>
+              location.pathname === path ||
+              location.pathname.startsWith(`${path}/`)
+          );
+        }
+
         if (item.path === '/') return location.pathname === '/';
 
         return (

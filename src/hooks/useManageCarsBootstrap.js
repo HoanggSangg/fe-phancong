@@ -9,6 +9,10 @@ import {
 import { queryKeys } from '../lib/queryKeys';
 import { isKtv } from '../utils/permissions';
 
+/**
+ * Filters phụ (locations → supervisors) chỉ chạy khi loadFilters=true.
+ * Workers chỉ fetch khi mở dialog (ensure*).
+ */
 const useManageCarsBootstrap = (user, { loadFilters = false } = {}) => {
   const queryClient = useQueryClient();
   const [workers, setWorkers] = useState([]);
@@ -17,6 +21,7 @@ const useManageCarsBootstrap = (user, { loadFilters = false } = {}) => {
   const isKtvUser = isKtv(user);
   const filtersEnabled = loadFilters && !isKtvUser;
 
+  // Cascade: locations trước, supervisors sau khi locations xong
   const locationsQuery = useQuery({
     queryKey: queryKeys.locations,
     queryFn: async () => (await getAllLocations()).data,
@@ -28,7 +33,7 @@ const useManageCarsBootstrap = (user, { loadFilters = false } = {}) => {
     queryKey: queryKeys.supervisors,
     queryFn: async () => (await getAllSupervisors()).data,
     staleTime: 5 * 60_000,
-    enabled: filtersEnabled,
+    enabled: filtersEnabled && locationsQuery.isFetched,
   });
 
   const ensureAvailableWorkers = useCallback(async () => {

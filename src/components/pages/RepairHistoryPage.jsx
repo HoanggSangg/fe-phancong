@@ -40,6 +40,7 @@ import {
 import useRepairHistory, { fetchRepairHistoryData } from '../../hooks/queries/useRepairHistory';
 import useRevenueSettings from '../../hooks/queries/useRevenueSettings';
 import useWorkers from '../../hooks/queries/useWorkers';
+import useDeferredReady from '../../hooks/useDeferredReady';
 import { REPAIR_HISTORY_PAGE_SIZE } from '../../utils/repairHistory';
 import { getItemRevenueBaseAmount, getRevenueBaseLabel } from '../../utils/revenueHelpers';
 import PageLayout from '../common/PageLayout';
@@ -87,7 +88,8 @@ const RepairHistoryPage = () => {
 
   const historyLoading = (canViewItemPrices && revenueSettingsLoading) || isLoading;
 
-  const { data: workers = [] } = useWorkers(canViewRevenue && !isKtvUser && isFetched);
+  const workersReady = useDeferredReady(canViewRevenue && !isKtvUser && isFetched, 400);
+  const { data: workers = [] } = useWorkers(workersReady);
 
   useEffect(() => {
     setPage(1);
@@ -142,7 +144,7 @@ const RepairHistoryPage = () => {
         return;
       }
 
-      exportRepairHistoryToExcel({
+      await exportRepairHistoryToExcel({
         carGroups: exportCarGroups,
         fromDate,
         toDate,
