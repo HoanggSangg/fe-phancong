@@ -16,7 +16,7 @@ import {
 
 const POLL_INTERVAL_MS = 15_000;
 
-const useOperationVoiceMonitor = ({ poll = true, onNewCarLogs } = {}) => {
+const useOperationVoiceMonitor = ({ poll = true, pollReady = true, onNewCarLogs } = {}) => {
   const [voiceEnabled, setVoiceEnabled] = useState(() => initOperationVoiceSetting());
   const [latestLog, setLatestLog] = useState(null);
   const knownLogIdsRef = useRef(new Set());
@@ -93,7 +93,7 @@ const useOperationVoiceMonitor = ({ poll = true, onNewCarLogs } = {}) => {
   }, [latestLog]);
 
   useEffect(() => {
-    if (!poll) return undefined;
+    if (!poll || !pollReady) return undefined;
 
     const today = getTodayDate();
 
@@ -114,7 +114,7 @@ const useOperationVoiceMonitor = ({ poll = true, onNewCarLogs } = {}) => {
     fetchVoiceLogs();
     const timer = window.setInterval(fetchVoiceLogs, POLL_INTERVAL_MS);
     return () => window.clearInterval(timer);
-  }, [poll, processLogs]);
+  }, [poll, pollReady, processLogs]);
 
   return {
     voiceEnabled,

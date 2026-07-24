@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   Alert,
   Box,
@@ -11,9 +12,13 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  FormControl,
+  FormControlLabel,
   Grid,
   IconButton,
   Paper,
+  Radio,
+  RadioGroup,
   Stack,
   Switch,
   Table,
@@ -35,14 +40,17 @@ import {
   updateRevenueSettings,
 } from '../apis/index';
 import { formatMoney } from '../../utils/dateFilters';
+import { getRevenueBaseLabel, normalizeRevenueBase } from '../../utils/revenueHelpers';
 import usePeriodFilter from '../../hooks/usePeriodFilter';
 import PeriodFilterToolbar from '../common/PeriodFilterToolbar';
 import PageLayout from '../common/PageLayout';
 import PageHeader from '../common/PageHeader';
 import FilterPanel from '../common/FilterPanel';
+import { hoverLiftSx } from '../common/AnimatedValue';
+import { queryKeys } from '../../lib/queryKeys';
 
 const StatCard = ({ label, value, color = '#1e293b', sub }) => (
-  <Card sx={{ height: '100%', border: '1px solid #e2e8f0' }}>
+  <Card sx={{ height: '100%', border: '1px solid #e2e8f0', ...hoverLiftSx }}>
     <CardContent sx={{ py: 1.25, px: 1.5, '&:last-child': { pb: 1.25 } }}>
       <Typography variant="caption" color="text.secondary" fontWeight={600}>
         {label}
@@ -60,12 +68,14 @@ const StatCard = ({ label, value, color = '#1e293b', sub }) => (
 );
 
 const AdminDashboardPage = () => {
+  const queryClient = useQueryClient();
   const { period, setPeriod, fromDate, setFromDate, toDate, setToDate } = usePeriodFilter('today');
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [deductions, setDeductions] = useState([]);
+  const [revenueBase, setRevenueBase] = useState('amount');
   const [savingSettings, setSavingSettings] = useState(false);
   const [settingsError, setSettingsError] = useState('');
 
@@ -82,6 +92,9 @@ const AdminDashboardPage = () => {
       setData(res.data);
       if (res.data?.deductions) {
         setDeductions(res.data.deductions);
+      }
+      if (res.data?.revenueBase) {
+        setRevenueBase(normalizeRevenueBase(res.data.revenueBase));
       }
     } catch (err) {
       setError(err.response?.data?.message || 'Không tải được dashboard');
@@ -100,6 +113,7 @@ const AdminDashboardPage = () => {
     try {
       const res = await getRevenueSettings();
       setDeductions(res.data?.deductions || []);
+      setRevenueBase(normalizeRevenueBase(res.data?.revenueBase));
       setSettingsOpen(true);
     } catch (err) {
       setSettingsError(err.response?.data?.message || 'Không tải cấu hình trừ DT');
@@ -110,9 +124,12 @@ const AdminDashboardPage = () => {
     setSavingSettings(true);
     setSettingsError('');
     try {
-      const res = await updateRevenueSettings(deductions);
+      const res = await updateRevenueSettings({ deductions, revenueBase });
       setDeductions(res.data?.deductions || deductions);
+      setRevenueBase(normalizeRevenueBase(res.data?.revenueBase || revenueBase));
       setSettingsOpen(false);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.revenueSettings });
+      await queryClient.invalidateQueries({ queryKey: ['repairHistory'] });
       await fetchDashboard();
     } catch (err) {
       setSettingsError(err.response?.data?.message || 'Lưu cấu hình thất bại');
@@ -145,6 +162,7 @@ const AdminDashboardPage = () => {
 
   const summary = data?.summary;
   const totalRate = summary?.totalDeductionRate ?? 0;
+  const revenueBaseLabel = getRevenueBaseLabel(data?.revenueBase || revenueBase);
 
   return (
     <PageLayout>
@@ -159,7 +177,7 @@ const AdminDashboardPage = () => {
             startIcon={<SettingsIcon />}
             onClick={openSettings}
           >
-            Cấu hình trừ DT
+            Cấu hình DT
           </Button>
         )}
       />
@@ -204,6 +222,13 @@ const AdminDashboardPage = () => {
               <Typography variant="subtitle2" fontWeight={800}>
                 Doanh thu thợ
               </Typography>
+              <Chip
+                size="small"
+                label={`Cơ sở DT: ${revenueBaseLabel}`}
+                color="info"
+                variant="outlined"
+                sx={{ mr: 1 }}
+              />
               <Chip
                 size="small"
                 label={`Tổng trừ: ${totalRate}%`}
@@ -308,8 +333,32 @@ const AdminDashboardPage = () => {
       )}
 
       <Dialog open={settingsOpen} onClose={() => setSettingsOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Cấu hình khoản trừ doanh thu thợ</DialogTitle>
+        <DialogTitle>Cấu hình doanh thu thợ</DialogTitle>
         <DialogContent>
+          <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>
+            Cơ sở tính doanh thu
+          </Typography>
+          <FormControl sx={{ mb: 2.5, width: '100%' }}>
+            <RadioGroup
+              value={revenueBase}
+              onChange={(e) => setRevenueBase(e.target.value)}
+            >
+              <FormControlLabel
+                value="amount"
+                control={<Radio size="small" />}
+                label="Thành tiền (giá bán trên báo giá)"
+              />
+              <FormControlLabel
+                value="cost"
+                control={<Radio size="small" />}
+                label="Giá vốn (costAmount từ API)"
+              />
+            </RadioGroup>
+          </FormControl>
+
+          <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>
+            Khoản trừ doanh thu
+          </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
             Các khoản trừ áp dụng cho tất cả thợ. Tổng tỷ lệ không vượt quá 100%.
           </Typography>

@@ -12,7 +12,8 @@ import {
   Alert,
   useMediaQuery,
   useTheme,
-} from '@mui/material';import BarChartIcon from '@mui/icons-material/BarChart';
+} from '@mui/material';
+import BarChartIcon from '@mui/icons-material/BarChart';
 import FullscreenIcon from '@mui/icons-material/Fullscreen';
 import {
   BarChart,
@@ -28,9 +29,9 @@ import {
   getWorkerRevenueChart,
   getWorkerWeeklyRevenueSummary,
 } from '../apis/index';
-import {
-  formatMoney,
-} from '../../utils/dateFilters';
+import { formatMoney } from '../../utils/dateFilters';
+import { getRevenueBaseLabel } from '../../utils/revenueHelpers';
+import useRevenueSettings from '../../hooks/queries/useRevenueSettings';
 import usePeriodFilter from '../../hooks/usePeriodFilter';
 import PeriodFilterToolbar from '../common/PeriodFilterToolbar';
 import FullscreenDialog from '../common/FullscreenDialog';
@@ -218,11 +219,16 @@ const WorkerRevenueChart = () => {
   const theme = useTheme();
   const isMdUp = useMediaQuery(theme.breakpoints.up('md'));
   const isSmUp = useMediaQuery(theme.breakpoints.up('sm'));
-  const { period, setPeriod, fromDate, setFromDate, toDate, setToDate } = usePeriodFilter('today');  const [data, setData] = useState([]);
+  const { period, setPeriod, fromDate, setFromDate, toDate, setToDate } = usePeriodFilter('today');
+  const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [weeklySummary, setWeeklySummary] = useState(null);
   const [weeklyLoading, setWeeklyLoading] = useState(false);
   const [chartFullscreen, setChartFullscreen] = useState(false);
+  const { data: revenueSettings } = useRevenueSettings();
+  const revenueBase = revenueSettings?.revenueBase || 'amount';
+
+  const revenueBaseLabel = getRevenueBaseLabel(revenueBase);
 
   const loadChart = async (from, to) => {
     try {
@@ -291,6 +297,9 @@ const WorkerRevenueChart = () => {
         icon={<BarChartIcon />}
         title="Biểu đồ doanh thu thợ"
         subtitle="Doanh thu theo hạng mục sửa chữa đã phân công cho từng thợ"
+        actions={
+          <Chip size="small" label={`Cơ sở DT: ${revenueBaseLabel}`} color="info" variant="outlined" />
+        }
       />
 
       <FilterPanel title="Khoảng thời gian">
@@ -455,7 +464,7 @@ const WorkerRevenueChart = () => {
 
       <Divider sx={{ my: 2 }} />
       <Typography variant="caption" color="text.secondary" display="block" textAlign="right">
-        Doanh thu = thành tiền hạng mục × % thực hiện × 75%
+        Doanh thu = {revenueBaseLabel.toLowerCase()} hạng mục × % thực hiện (sau trừ hoa hồng & các khoản trừ)
       </Typography>
     </PageLayout>
   );

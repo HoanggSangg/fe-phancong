@@ -13,6 +13,7 @@ import {
   Checkbox,
 } from '@mui/material';
 import { useAuth, REMEMBER_USERNAME_KEY } from '../../context/AuthContext';
+import { AuthPageShell } from '../common/AnimatedValue';
 
 const LoginPage = () => {
   const { login, isAuthenticated } = useAuth();
@@ -53,11 +54,12 @@ const LoginPage = () => {
         bgcolor: '#f5f5f5',
       }}
     >
+      <AuthPageShell>
       <Paper
         component="form"
         onSubmit={handleSubmit}
         elevation={1}
-        sx={{ p: { xs: 2.5, sm: 3 }, width: '100%', maxWidth: 400 }}
+        sx={{ p: { xs: 2.5, sm: 3 }, width: '100%' }}
       >
         <Stack spacing={1.5}>
           <Box textAlign="center">
@@ -112,6 +114,7 @@ const LoginPage = () => {
           </Typography>
         </Stack>
       </Paper>
+      </AuthPageShell>
     </Box>
   );
 };

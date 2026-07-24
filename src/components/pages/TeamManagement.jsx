@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import {
   Avatar,
   Box,
@@ -42,6 +42,7 @@ const TeamManagement = () => {
   const [editingTeamId, setEditingTeamId] = useState(null);
   const [selectedWorkerId, setSelectedWorkerId] = useState('');
   const [loading, setLoading] = useState(false);
+  const workersLoadedRef = useRef(false);
 
   const getDataArray = (res) => {
     if (Array.isArray(res.data)) return res.data;
@@ -65,16 +66,22 @@ const TeamManagement = () => {
     }
   };
 
-  const fetchWorkers = async () => {
+  const fetchWorkers = useCallback(async () => {
     try {
       const res = await getAllWorkers();
       const data = getDataArray(res);
       setWorkers(data);
+      workersLoadedRef.current = true;
     } catch (error) {
       console.error(error);
       alert('Lỗi khi lấy danh sách thợ');
     }
-  };
+  }, []);
+
+  const ensureWorkers = useCallback(async () => {
+    if (workersLoadedRef.current) return;
+    await fetchWorkers();
+  }, [fetchWorkers]);
 
   const fetchTeamDetail = async (teamId) => {
     try {
@@ -89,7 +96,6 @@ const TeamManagement = () => {
 
   useEffect(() => {
     fetchTeams();
-    fetchWorkers();
   }, []);
 
   const resetForm = () => {
@@ -161,7 +167,7 @@ const TeamManagement = () => {
   };
 
   const handleSelectTeam = async (teamId) => {
-    await fetchTeamDetail(teamId);
+    await Promise.all([fetchTeamDetail(teamId), ensureWorkers()]);
     setSelectedWorkerId('');
   };
 

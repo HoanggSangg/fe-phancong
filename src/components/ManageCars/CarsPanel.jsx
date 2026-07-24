@@ -278,6 +278,7 @@ const CarTable = ({
   statusFilter,
   onStatusFilterChange,
   highlightCarId = '',
+  filtersLoading = false,
 }) => (
   <Paper variant="outlined" sx={{ width: '100%', overflowX: 'auto', borderRadius: 3 }}>
     {!hideSearch && (
@@ -288,7 +289,6 @@ const CarTable = ({
           size="small"
           value={searchPlate}
           onChange={(e) => onSearchPlateChange(e.target.value)}
-          helperText="Tìm trên toàn bộ lịch sử"
           sx={{ maxWidth: 280, width: '100%' }}
         />
         <FormControl sx={{ minWidth: 180, maxWidth: 250, width: '100%' }} size="small">
@@ -299,6 +299,7 @@ const CarTable = ({
             value={tableSupervisor}
             label="Chọn giám sát"
             onChange={(e) => onTableSupervisorChange(e.target.value)}
+            disabled={filtersLoading}
           >
             <MenuItem value="">Tất cả giám sát</MenuItem>
             {(supervisors || []).map((sup) => (
@@ -347,7 +348,6 @@ const CarTable = ({
                 data-car-id={car._id}
                 sx={{
                   backgroundColor: isLate ? '#ffebee' : (idx % 2 === 0 ? '#fafafa' : '#fff'),
-                  transition: 'background 0.2s',
                   '&:hover': { backgroundColor: isLate ? '#ffcdd2' : '#e3f2fd' },
                   ...(isHighlighted ? HIGHLIGHT_ROW_SX : {}),
                 }}
@@ -437,6 +437,7 @@ const CarsPanel = ({
   page,
   onPageChange,
   loading = false,
+  filtersLoading = false,
   locations,
   supervisors = [],
   selectedLocation,
@@ -481,6 +482,7 @@ const CarsPanel = ({
                   value={selectedLocation}
                   onChange={(e) => onLocationChange(e.target.value)}
                   label="Địa điểm"
+                  disabled={filtersLoading}
                 >
                   <MenuItem value="all">
                     <Typography variant="body2" fontWeight="bold">Tất cả địa điểm</Typography>
@@ -568,6 +570,7 @@ const CarsPanel = ({
                 value={tableSupervisor}
                 label="Chọn giám sát"
                 onChange={(e) => onTableSupervisorChange(e.target.value)}
+                disabled={filtersLoading}
               >
                 <MenuItem value="">Tất cả giám sát</MenuItem>
                 {(supervisors || []).map((sup) => (
@@ -671,6 +674,7 @@ const CarsPanel = ({
             statusFilter={statusFilter}
             onStatusFilterChange={onStatusFilterChange}
             highlightCarId={highlightCarId}
+            filtersLoading={filtersLoading}
           />
         )}
       </Box>

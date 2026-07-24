@@ -72,14 +72,40 @@ const UserManagement = () => {
     [workers]
   );
 
-  const loadData = async () => {
-    const [usersRes, workersRes] = await Promise.all([getUsers(), getAllWorkers()]);
+  const loadUsers = async () => {
+    const usersRes = await getUsers();
     setUsers(usersRes.data || []);
+  };
+
+  const loadWorkers = async () => {
+    const workersRes = await getAllWorkers();
     setWorkers(workersRes.data || []);
   };
 
+  const loadData = async () => {
+    await loadUsers();
+    await loadWorkers();
+  };
+
   useEffect(() => {
-    loadData().catch(() => setMessage({ type: 'error', text: 'Không tải được dữ liệu' }));
+    const init = async () => {
+      try {
+        const usersRes = await getUsers();
+        const nextUsers = usersRes.data || [];
+        setUsers(nextUsers);
+
+        const needsWorkers = nextUsers.some(
+          (item) => item.role === 'ktv' || item.worker
+        );
+        if (needsWorkers) {
+          await loadWorkers();
+        }
+      } catch {
+        setMessage({ type: 'error', text: 'Không tải được dữ liệu' });
+      }
+    };
+
+    init();
   }, []);
 
   const filteredUsers = useMemo(() => {
@@ -94,13 +120,16 @@ const UserManagement = () => {
     });
   }, [users, search, roleFilter]);
 
-  const openCreate = () => {
+  const openCreate = async () => {
     setEditingUser(null);
     setForm({ username: '', password: '', fullName: '', role: 'ktv', workerId: '', isActive: true });
+    if (workers.length === 0) {
+      await loadWorkers().catch(() => {});
+    }
     setDialogOpen(true);
   };
 
-  const openEdit = (user) => {
+  const openEdit = async (user) => {
     setEditingUser(user);
     setForm({
       username: user.username,
@@ -110,6 +139,9 @@ const UserManagement = () => {
       workerId: user.worker?._id || user.worker || '',
       isActive: user.isActive !== false,
     });
+    if (workers.length === 0) {
+      await loadWorkers().catch(() => {});
+    }
     setDialogOpen(true);
   };
 

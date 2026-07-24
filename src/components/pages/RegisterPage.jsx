@@ -11,6 +11,7 @@ import {
   Stack,
 } from '@mui/material';
 import { useAuth } from '../../context/AuthContext';
+import { AuthPageShell } from '../common/AnimatedValue';
 
 const RegisterPage = () => {
   const { register, isAuthenticated } = useAuth();
@@ -67,11 +68,12 @@ const RegisterPage = () => {
         bgcolor: '#f5f5f5',
       }}
     >
+      <AuthPageShell sx={{ maxWidth: 420 }}>
       <Paper
         component="form"
         onSubmit={handleSubmit}
         elevation={1}
-        sx={{ p: { xs: 2.5, sm: 3 }, width: '100%', maxWidth: 420 }}
+        sx={{ p: { xs: 2.5, sm: 3 }, width: '100%' }}
       >
         <Stack spacing={1.5}>
           <Box textAlign="center">
@@ -102,6 +104,7 @@ const RegisterPage = () => {
           </Typography>
         </Stack>
       </Paper>
+      </AuthPageShell>
     </Box>
   );
 };

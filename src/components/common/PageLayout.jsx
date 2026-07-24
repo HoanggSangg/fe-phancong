@@ -1,9 +1,18 @@
 import React from 'react';
+import { useLocation } from 'react-router-dom';
 import { Box } from '@mui/material';
 import { LAYOUT } from '../../constants/layout';
+import { PageContent } from './AnimatedValue';
 
-const PageLayout = ({ children, maxWidth = 'full', sx = {} }) => {
+const PageLayout = ({ children, maxWidth = 'full', sx = {}, animate = true }) => {
+  const location = useLocation();
   const resolvedMaxWidth = LAYOUT.maxWidth[maxWidth];
+
+  const content = animate ? (
+    <PageContent animationKey={location.pathname}>{children}</PageContent>
+  ) : (
+    children
+  );
 
   return (
     <Box
@@ -18,7 +27,7 @@ const PageLayout = ({ children, maxWidth = 'full', sx = {} }) => {
         ...sx,
       }}
     >
-      {children}
+      {content}
     </Box>
   );
 };

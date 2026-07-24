@@ -1,5 +1,7 @@
 export const REPAIR_HISTORY_PAGE_SIZE = 50;
 
+export const getCarKey = (item) => `${item.plateNumber || ''}__${item.carDate || ''}`;
+
 export const parseRepairHistoryResponse = (data) => {
   if (Array.isArray(data)) {
     return {
@@ -9,7 +11,7 @@ export const parseRepairHistoryResponse = (data) => {
         revenueBeforeCommission: 0,
         revenueAfterCommission: 0,
         totalItems: data.length,
-        totalCars: new Set(data.map((item) => `${item.plateNumber}__${item.carDate}`)).size,
+        totalCars: new Set(data.map(getCarKey)).size,
       },
       pagination: null,
     };
@@ -17,6 +19,7 @@ export const parseRepairHistoryResponse = (data) => {
 
   return {
     items: data?.items || [],
+    revenueBase: data?.revenueBase || 'amount',
     summary: {
       totalRevenue: Number(data?.totalRevenue || data?.revenueAfterCommission || 0),
       revenueBeforeCommission: Number(data?.revenueBeforeCommission || 0),

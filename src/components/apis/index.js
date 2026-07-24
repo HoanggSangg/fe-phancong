@@ -29,6 +29,7 @@ export const getManageCarsList = (params) => api.get('/cars/manage-list', { para
 export const getCarById = (id, params) => api.get(`/cars/${id}`, { params });
 export const createCar = (data) => api.post('/cars', data);
 export const updateCar = (id, data) => api.put(`/cars/${id}`, data);
+export const syncCarFromExternal = (id) => api.post(`/cars/${id}/sync-external`);
 export const deleteCar = (id) => api.delete(`/cars/${id}`);
 export const updateCarStatusWithWorker = (id, status, newWorkerId = null) =>
   api.put(`/cars/${id}/status`, { status, ...(newWorkerId && { newWorkerId }) });
@@ -62,8 +63,8 @@ export const getWorkerKpi = (params) => api.get('/worker/kpi', { params });
 
 export const getDashboardOverview = (params) => api.get('/dashboard/overview', { params });
 export const getRevenueSettings = () => api.get('/dashboard/revenue-settings');
-export const updateRevenueSettings = (deductions) =>
-  api.put('/dashboard/revenue-settings', { deductions });
+export const updateRevenueSettings = (payload) =>
+  api.put('/dashboard/revenue-settings', payload);
 
 export const getAllTeams = () => api.get('/teams');
 export const getTeamById = (teamId) => api.get(`/teams/${teamId}`);

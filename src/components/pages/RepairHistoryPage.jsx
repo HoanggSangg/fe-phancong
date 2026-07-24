@@ -19,6 +19,7 @@ import {
   FormControlLabel,
   Checkbox,
   TablePagination,
+  Collapse,
 } from '@mui/material';
 import HistoryIcon from '@mui/icons-material/History';
 import DirectionsCarIcon from '@mui/icons-material/DirectionsCar';
@@ -37,13 +38,22 @@ import {
   sumAssignmentsRevenue,
 } from '../../utils/repairHistoryExcel';
 import useRepairHistory, { fetchRepairHistoryData } from '../../hooks/queries/useRepairHistory';
+import useRevenueSettings from '../../hooks/queries/useRevenueSettings';
 import useWorkers from '../../hooks/queries/useWorkers';
 import { REPAIR_HISTORY_PAGE_SIZE } from '../../utils/repairHistory';
+import { getItemRevenueBaseAmount, getRevenueBaseLabel } from '../../utils/revenueHelpers';
 import PageLayout from '../common/PageLayout';
 import PageHeader from '../common/PageHeader';
 import FilterPanel from '../common/FilterPanel';
+import { AnimatedListItem, AnimatedValue, listEnter, softPulse } from '../common/AnimatedValue';
 
 const isDeliveredCar = (car) => car.carStatus === 'delivered';
+
+const formatAnimatedMoney = (value, animationKey) => (
+  <AnimatedValue animationKey={animationKey}>
+    {formatMoney(value)}
+  </AnimatedValue>
+);
 
 const RepairHistoryPage = () => {
   const { user } = useAuth();
@@ -61,15 +71,23 @@ const RepairHistoryPage = () => {
 
   const workerIdParam = !isKtvUser && workerFilter ? workerFilter : undefined;
 
-  const { data, isLoading, isFetching, error } = useRepairHistory({
+  const { data: revenueSettings, isLoading: revenueSettingsLoading } = useRevenueSettings(
+    canViewItemPrices
+  );
+  const revenueBase = revenueSettings?.revenueBase || 'amount';
+  const revenueBaseLabel = getRevenueBaseLabel(revenueBase);
+
+  const { data, isLoading, isFetching, error, isFetched } = useRepairHistory({
     from: fromDate,
     to: toDate,
     workerId: workerIdParam,
     page,
-    enabled: Boolean(fromDate && toDate),
+    enabled: Boolean(fromDate && toDate && (!canViewItemPrices || !revenueSettingsLoading)),
   });
 
-  const { data: workers = [] } = useWorkers(canViewRevenue);
+  const historyLoading = (canViewItemPrices && revenueSettingsLoading) || isLoading;
+
+  const { data: workers = [] } = useWorkers(canViewRevenue && !isKtvUser && isFetched);
 
   useEffect(() => {
     setPage(1);
@@ -86,9 +104,14 @@ const RepairHistoryPage = () => {
   };
   const pagination = data?.pagination;
 
-  const carGroups = useMemo(() => buildCarGroups(items), [items]);
+  const carGroups = useMemo(
+    () => buildCarGroups(items, revenueBase),
+    [items, revenueBase]
+  );
   const totalRevenue = summary.revenueAfterCommission || summary.totalRevenue;
   const errorMessage = error?.response?.data?.message || (error ? 'Không tải được lịch sử sửa chữa' : '');
+  const contentAnimationKey = `${fromDate}-${toDate}-${page}-${workerIdParam || 'all'}-${revenueBase}`;
+  const isCostBase = revenueBase === 'cost';
 
   const isCarExpanded = (car) =>
     !isDeliveredCar(car) || expandedDeliveredCars.has(car.key);
@@ -113,7 +136,7 @@ const RepairHistoryPage = () => {
         paginate: false,
       });
 
-      const exportCarGroups = buildCarGroups(exportItems);
+      const exportCarGroups = buildCarGroups(exportItems, revenueBase);
       if (exportCarGroups.length === 0) {
         setExportError('Không có dữ liệu để xuất Excel trong khoảng đã chọn.');
         return;
@@ -125,6 +148,7 @@ const RepairHistoryPage = () => {
         toDate,
         includeDeliveredDetails,
         isKtvUser: !canViewRevenue,
+        revenueBase,
       });
     } catch (err) {
       console.error(err);
@@ -178,11 +202,13 @@ const RepairHistoryPage = () => {
       {canViewItemPrices && (
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mt: 1 }}>
           <Typography variant="body2">
-            Tổng thành tiền: <strong>{formatMoney(car.totalAmount)}</strong>
+            Tổng {revenueBaseLabel.toLowerCase()}:{' '}
+            <strong>{formatAnimatedMoney(car.totalAmount, `${car.key}-total-${revenueBase}`)}</strong>
           </Typography>
           {canViewRevenue && (
             <Typography variant="body2">
-              Doanh thu thợ: <strong>{formatMoney(car.totalRevenue)}</strong>
+              Doanh thu thợ:{' '}
+              <strong>{formatAnimatedMoney(car.totalRevenue, `${car.key}-rev-${revenueBase}`)}</strong>
             </Typography>
           )}
         </Stack>
@@ -196,7 +222,12 @@ const RepairHistoryPage = () => {
         <TableCell>{item.groupName || 'Khác'}</TableCell>
         <TableCell sx={{ minWidth: 200 }}>{item.content}</TableCell>
         {canViewItemPrices && (
-          <TableCell align="right">{formatMoney(item.amount)}</TableCell>
+          <TableCell align="right">
+            {formatAnimatedMoney(
+              getItemRevenueBaseAmount(item, revenueBase),
+              `${item._id}-val-${revenueBase}`
+            )}
+          </TableCell>
         )}
         {(canViewRevenue || isKtvUser) && (
           <TableCell>{renderWorkers(item.allAssignments || item.assignments)}</TableCell>
@@ -209,8 +240,9 @@ const RepairHistoryPage = () => {
       </TableRow>
     ));
 
-  const renderCarCard = (car) => (
-    <Card key={car.key} variant="outlined" sx={{ borderRadius: 2 }}>
+  const renderCarCard = (car, index) => (
+    <AnimatedListItem key={car.key} index={index}>
+    <Card variant="outlined" sx={{ borderRadius: 2, transition: 'box-shadow 0.25s ease', '&:hover': { boxShadow: 2 } }}>
       <CardContent sx={{ pb: 1 }}>
         <Stack direction="row" justifyContent="space-between" alignItems="flex-start" flexWrap="wrap" gap={1}>
           <Box>
@@ -232,21 +264,21 @@ const RepairHistoryPage = () => {
             {canViewItemPrices && (
               <Box textAlign="right">
                 <Typography variant="body2" color="text.secondary">
-                  Tổng thành tiền
+                  Tổng {revenueBaseLabel.toLowerCase()}
                 </Typography>
                 <Typography variant="subtitle1" fontWeight="bold">
-                  {formatMoney(car.totalAmount)}
+                  {formatAnimatedMoney(car.totalAmount, `${car.key}-card-total-${revenueBase}`)}
                 </Typography>
               </Box>
             )}
           </Stack>
         </Stack>
 
-        {isCarExpanded(car) ? (
+        <Collapse in={isCarExpanded(car)} timeout={320} unmountOnExit>
           <>
             <Divider sx={{ my: 1.5 }} />
             <Stack spacing={1.5}>
-              {car.items.map((item) => (
+              {car.items.map((item, itemIndex) => (
                 <Box
                   key={item._id}
                   sx={{
@@ -254,6 +286,10 @@ const RepairHistoryPage = () => {
                     borderRadius: 1.5,
                     bgcolor: '#f9fafb',
                     border: '1px solid #eee',
+                    transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+                    animation: `${listEnter} 0.35s cubic-bezier(0.22, 1, 0.36, 1) both`,
+                    animationDelay: isCarExpanded(car) ? `${itemIndex * 40}ms` : '0ms',
+                    '&:hover': { transform: 'translateY(-1px)', boxShadow: 1 },
                   }}
                 >
                   <Typography variant="subtitle2" fontWeight="bold">
@@ -264,7 +300,13 @@ const RepairHistoryPage = () => {
                   </Typography>
                   {canViewItemPrices && (
                     <Typography variant="body2">
-                      Thành tiền: <strong>{formatMoney(item.amount)}</strong>
+                      {revenueBaseLabel}:{' '}
+                      <strong>
+                        {formatAnimatedMoney(
+                          getItemRevenueBaseAmount(item, revenueBase),
+                          `${item._id}-card-val-${revenueBase}`
+                        )}
+                      </strong>
                     </Typography>
                   )}
                   {(canViewRevenue || isKtvUser) && (
@@ -274,15 +316,17 @@ const RepairHistoryPage = () => {
               ))}
             </Stack>
           </>
-        ) : (
-          renderDeliveredSummary(car)
-        )}
+        </Collapse>
+
+        {!isCarExpanded(car) && renderDeliveredSummary(car)}
       </CardContent>
     </Card>
+    </AnimatedListItem>
   );
 
-  const renderCarBlock = (car) => (
-    <Paper key={car.key} variant="outlined" sx={{ borderRadius: 2, overflow: 'hidden', mb: 2 }}>
+  const renderCarBlock = (car, index) => (
+    <AnimatedListItem key={car.key} index={index}>
+    <Paper variant="outlined" sx={{ borderRadius: 2, overflow: 'hidden', mb: 2, transition: 'box-shadow 0.25s ease', '&:hover': { boxShadow: 2 } }}>
       <Box
         sx={{
           px: 2,
@@ -312,10 +356,10 @@ const RepairHistoryPage = () => {
           <Stack direction="row" spacing={3} alignItems="center">
             <Box textAlign="right">
               <Typography variant="caption" color="text.secondary">
-                Tổng thành tiền
+                Tổng {revenueBaseLabel.toLowerCase()}
               </Typography>
               <Typography variant="body1" fontWeight="bold">
-                {formatMoney(car.totalAmount)}
+                {formatAnimatedMoney(car.totalAmount, `${car.key}-block-total-${revenueBase}`)}
               </Typography>
             </Box>
             {canViewRevenue && (
@@ -324,7 +368,7 @@ const RepairHistoryPage = () => {
                   Doanh thu thợ
                 </Typography>
                 <Typography variant="body1" fontWeight="bold" color="primary">
-                  {formatMoney(car.totalRevenue)}
+                  {formatAnimatedMoney(car.totalRevenue, `${car.key}-block-rev-${revenueBase}`)}
                 </Typography>
               </Box>
             )}
@@ -332,7 +376,7 @@ const RepairHistoryPage = () => {
         )}
       </Box>
 
-      {isCarExpanded(car) ? (
+      <Collapse in={isCarExpanded(car)} timeout={320} unmountOnExit>
         <Box sx={{ overflowX: 'auto' }}>
           <Table size="small">
             <TableHead>
@@ -341,7 +385,9 @@ const RepairHistoryPage = () => {
                 <TableCell sx={{ fontWeight: 'bold' }}>Nội dung</TableCell>
                 {canViewItemPrices && (
                   <TableCell sx={{ fontWeight: 'bold' }} align="right">
-                    Thành tiền
+                    <AnimatedValue animationKey={`col-${revenueBase}`}>
+                      {revenueBaseLabel}
+                    </AnimatedValue>
                   </TableCell>
                 )}
                 {(canViewRevenue || isKtvUser) && (
@@ -357,10 +403,11 @@ const RepairHistoryPage = () => {
             <TableBody>{renderItemRows(car.items)}</TableBody>
           </Table>
         </Box>
-      ) : (
-        renderDeliveredSummary(car)
-      )}
+      </Collapse>
+
+      {!isCarExpanded(car) && renderDeliveredSummary(car)}
     </Paper>
+    </AnimatedListItem>
   );
 
   const showPagination = pagination && pagination.totalPages > 1;
@@ -374,6 +421,18 @@ const RepairHistoryPage = () => {
           isKtvUser
             ? 'Hạng mục sửa chữa được phân công cho bạn, gom theo từng xe'
             : 'Hạng mục sửa chữa gom theo từng xe — xe đã giao mặc định thu gọn'
+        }
+        actions={
+          canViewItemPrices ? (
+            <Chip
+              key={revenueBase}
+              size="small"
+              label={`Cơ sở hiển thị: ${revenueBaseLabel}`}
+              color={isCostBase ? 'warning' : 'info'}
+              variant="outlined"
+              sx={{ transition: 'all 0.3s ease' }}
+            />
+          ) : null
         }
       />
 
@@ -390,7 +449,7 @@ const RepairHistoryPage = () => {
             variant="outlined"
             size="small"
             startIcon={exporting ? <CircularProgress size={16} /> : <FileDownloadIcon />}
-            disabled={exporting || isLoading || (summary.totalItems === 0 && items.length === 0)}
+            disabled={exporting || historyLoading || (summary.totalItems === 0 && items.length === 0)}
             onClick={handleExportExcel}
             sx={{ flexShrink: 0 }}
           >
@@ -435,24 +494,24 @@ const RepairHistoryPage = () => {
         </Alert>
       )}
 
-      {isLoading ? (
+      {historyLoading ? (
         <Box display="flex" justifyContent="center" py={6}>
           <CircularProgress />
         </Box>
       ) : carGroups.length === 0 ? (
         <Alert severity="info">Không có lịch sử sửa chữa trong khoảng ngày đã chọn.</Alert>
       ) : (
-        <>
+        <Box key={contentAnimationKey}>
           <Box sx={{ display: { xs: 'block', md: 'none' } }}>
             <Stack spacing={2}>{carGroups.map(renderCarCard)}</Stack>
           </Box>
           <Box sx={{ display: { xs: 'none', md: 'block' } }}>
             {carGroups.map(renderCarBlock)}
           </Box>
-        </>
+        </Box>
       )}
 
-      {showPagination && !isLoading && (
+      {showPagination && !historyLoading && (
         <TablePagination
           component="div"
           count={pagination.total}
@@ -465,26 +524,37 @@ const RepairHistoryPage = () => {
         />
       )}
 
-      {!isLoading && carGroups.length > 0 && (
+      {!historyLoading && carGroups.length > 0 && (
         <>
           <Divider sx={{ my: 2 }} />
           <Paper
+            key={`summary-${contentAnimationKey}`}
             elevation={2}
             sx={{
               p: 2,
               borderRadius: 2,
               textAlign: 'right',
-              bgcolor: '#e3f2fd',
-              opacity: isFetching ? 0.7 : 1,
+              bgcolor: isCostBase ? '#fffbeb' : '#e3f2fd',
+              border: '1px solid',
+              borderColor: isCostBase ? '#fde68a' : '#bbdefb',
+              transition: 'background-color 0.35s ease, border-color 0.35s ease, opacity 0.25s ease',
+              animation: isFetching ? `${softPulse} 1.2s ease-in-out infinite` : 'none',
             }}
           >
             {canViewRevenue && (
               <Typography variant="body2" color="text.secondary">
-                DT trước hoa hồng: {formatMoney(summary.revenueBeforeCommission)}
+                DT trước hoa hồng ({revenueBaseLabel}):{' '}
+                {formatAnimatedMoney(summary.revenueBeforeCommission, `gross-${revenueBase}-${summary.revenueBeforeCommission}`)}
               </Typography>
             )}
-            <Typography variant="h5" fontWeight="bold" color="primary">
-              {formatMoney(totalRevenue)}
+            <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
+              Cơ sở doanh thu:{' '}
+              <AnimatedValue animationKey={`base-label-${revenueBase}`}>
+                {revenueBaseLabel}
+              </AnimatedValue>
+            </Typography>
+            <Typography variant="h5" fontWeight="bold" color="primary" component="div">
+              {formatAnimatedMoney(totalRevenue, `net-${revenueBase}-${totalRevenue}`)}
             </Typography>
           </Paper>
         </>

@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import React, { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Box,
@@ -7,6 +7,7 @@ import {
   Card,
   CardContent,
   Chip,
+  CircularProgress,
   Divider,
   Paper,
   Stack,
@@ -45,7 +46,6 @@ import FilterPanel from "../common/FilterPanel";
 
 const WokerAssignment = () => {
   const { user } = useAuth();
-  const location = useLocation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [date, setDate] = useState("");
@@ -58,6 +58,12 @@ const WokerAssignment = () => {
   const canManageJobs = hasPermission(user, 'workers.woker') && !isKtvUser;
   const canViewCars = hasPermission(user, 'cars.manage');
 
+  const carsQuery = useQuery({
+    queryKey: isKtvUser ? queryKeys.carsMine : queryKeys.cars,
+    queryFn: async () => (await getAllCars(isKtvUser ? { mine: '1' } : undefined)).data,
+    staleTime: 45_000,
+  });
+
   const workersQuery = useQuery({
     queryKey: queryKeys.workers.all,
     queryFn: async () => {
@@ -66,16 +72,12 @@ const WokerAssignment = () => {
     },
     staleTime: 30_000,
     refetchInterval: 30_000,
-  });
-
-  const carsQuery = useQuery({
-    queryKey: isKtvUser ? queryKeys.carsMine : queryKeys.cars,
-    queryFn: async () => (await getAllCars(isKtvUser ? { mine: '1' } : undefined)).data,
-    staleTime: 45_000,
+    enabled: carsQuery.isFetched,
   });
 
   const workers = workersQuery.data || [];
   const cars = carsQuery.data || [];
+  const pageLoading = carsQuery.isLoading || workersQuery.isLoading;
 
   const reloadWorkers = async () => {
     await queryClient.invalidateQueries({ queryKey: queryKeys.workers.all });
@@ -88,10 +90,6 @@ const WokerAssignment = () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.cars }),
     ]);
   };
-
-  useEffect(() => {
-    reloadAll();
-  }, [location.pathname]);
 
   const formatDate = (value) => {
     if (!value) return "";
@@ -541,6 +539,14 @@ const WokerAssignment = () => {
   };
 
   const renderWorkerList = (hideSearch = false) => {
+    if (pageLoading) {
+      return (
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
+          <CircularProgress size={32} />
+        </Box>
+      );
+    }
+
     const rows = hideSearch ? allWorkerRows : workerRows;
 
     if (rows.length === 0) {

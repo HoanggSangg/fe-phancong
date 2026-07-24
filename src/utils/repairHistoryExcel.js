@@ -1,15 +1,12 @@
 import * as XLSX from 'xlsx';
 import { CAR_STATUS_LABELS } from './permissions';
-
-const getCarKey = (item) => `${item.plateNumber || ''}__${item.carDate || ''}`;
-
-const sumItemRevenue = (item) =>
-  (item.assignments || []).reduce((sum, a) => sum + Number(a.revenue || 0), 0);
+import { getItemRevenueBaseAmount, getRevenueBaseLabel } from './revenueHelpers';
+import { getCarKey } from './repairHistory';
 
 export const sumAssignmentsRevenue = (assignments = []) =>
   assignments.reduce((sum, a) => sum + Number(a.revenue || 0), 0);
 
-export const buildCarGroups = (items = []) => {
+export const buildCarGroups = (items = [], revenueBase = 'amount') => {
   const map = new Map();
 
   items.forEach((item) => {
@@ -30,8 +27,8 @@ export const buildCarGroups = (items = []) => {
 
     const group = map.get(key);
     group.items.push(item);
-    group.totalAmount += Number(item.amount || 0);
-    group.totalRevenue += sumItemRevenue(item);
+    group.totalAmount += getItemRevenueBaseAmount(item, revenueBase);
+    group.totalRevenue += sumAssignmentsRevenue(item.assignments);
   });
 
   return Array.from(map.values());
@@ -84,9 +81,12 @@ export const exportRepairHistoryToExcel = ({
   includeDeliveredDetails = false,
   isKtvUser = false,
   periodLabel = '',
+  revenueBase = 'amount',
 }) => {
+  const valueColumnLabel = getRevenueBaseLabel(revenueBase);
+
   const headers = isKtvUser
-    ? ['Biển số', 'Loại xe', 'Ngày', 'Trạng thái', 'Nhóm', 'Nội dung', 'Thành tiền', 'Thợ thực hiện']
+    ? ['Biển số', 'Loại xe', 'Ngày', 'Trạng thái', 'Nhóm', 'Nội dung', valueColumnLabel, 'Thợ thực hiện']
     : [
         'Biển số',
         'Loại xe',
@@ -94,7 +94,7 @@ export const exportRepairHistoryToExcel = ({
         'Trạng thái',
         'Nhóm',
         'Nội dung',
-        'Thành tiền',
+        valueColumnLabel,
         'Thợ thực hiện',
         'Doanh thu',
         'Ghi chú',
@@ -137,6 +137,7 @@ export const exportRepairHistoryToExcel = ({
 
     car.items.forEach((item, index) => {
       const assignments = item.allAssignments || item.assignments || [];
+      const itemValue = getItemRevenueBaseAmount(item, revenueBase);
       rows.push(
         isKtvUser
           ? [
@@ -146,7 +147,7 @@ export const exportRepairHistoryToExcel = ({
               index === 0 ? statusLabel : '',
               item.groupName || 'Khác',
               item.content || '',
-              Number(item.amount || 0),
+              Number(itemValue || 0),
               formatWorkersCell(assignments, true),
             ]
           : [
@@ -156,7 +157,7 @@ export const exportRepairHistoryToExcel = ({
               index === 0 ? statusLabel : '',
               item.groupName || 'Khác',
               item.content || '',
-              Number(item.amount || 0),
+              Number(itemValue || 0),
               formatWorkersCell(assignments, false),
               sumAssignmentsRevenue(assignments),
               isDelivered ? 'Chi tiết xe đã giao' : '',

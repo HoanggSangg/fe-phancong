@@ -31,9 +31,12 @@ import {
 import { formatMoney } from '../../utils/dateFilters';
 import {
   getItemWorkerTotalPercentage,
-  getWorkerRevenuePreview,
   isItemWorkerPercentageValid,
 } from '../../utils/manageCarsHelpers';
+import {
+  getWorkerRevenuePreview,
+  getRevenueBaseLabel,
+} from '../../utils/revenueHelpers';
 
 const COMPACT_INPUT_SX = {
   '& .MuiInputBase-root': { fontSize: 13, height: 32 },
@@ -301,6 +304,8 @@ const renderCompactRepairTableHead = (canManage, editable = false) => (
     <TableCell sx={{ fontWeight: 'bold', py: 0.75, px: 1, width: 72 }} align="right">SL</TableCell>
     <TableCell sx={{ fontWeight: 'bold', py: 0.75, px: 1, width: 120 }} align="right">ĐG</TableCell>
     <TableCell sx={{ fontWeight: 'bold', py: 0.75, px: 1, width: 120 }} align="right">TT</TableCell>
+    <TableCell sx={{ fontWeight: 'bold', py: 0.75, px: 1, width: 110 }} align="right">Giá vốn</TableCell>
+    <TableCell sx={{ fontWeight: 'bold', py: 0.75, px: 1, width: 110 }} align="right">TT vốn</TableCell>
     <TableCell sx={{ fontWeight: 'bold', py: 0.75, px: 1, minWidth: 450 }}>Thợ</TableCell>
     {editable && canManage && (
       <TableCell sx={{ fontWeight: 'bold', py: 0.75, px: 0.5, width: 36 }} />
@@ -380,6 +385,24 @@ const ManualRepairItemRow = React.memo(
             sx={{ width: 112, ...COMPACT_INPUT_SX }}
           />
         </TableCell>
+        <TableCell sx={{ py: 0.5, px: 1, verticalAlign: 'middle' }} align="right">
+          <DebouncedMoneyField
+            size="small"
+            disabled={!canManage}
+            value={item.unitCostPrice ?? 0}
+            onCommit={(val) => onManualFieldChange(item._id, 'unitCostPrice', val)}
+            sx={{ width: 112, ...COMPACT_INPUT_SX }}
+          />
+        </TableCell>
+        <TableCell sx={{ py: 0.5, px: 1, verticalAlign: 'middle' }} align="right">
+          <DebouncedMoneyField
+            size="small"
+            disabled={!canManage}
+            value={item.costAmount ?? 0}
+            onCommit={(val) => onManualFieldChange(item._id, 'costAmount', val)}
+            sx={{ width: 112, ...COMPACT_INPUT_SX }}
+          />
+        </TableCell>
         <TableCell sx={{ py: 0.5, px: 1, verticalAlign: 'middle' }}>
           <InlineWorkers
             item={item}
@@ -453,6 +476,12 @@ const ApiRepairItemRow = React.memo(
         <TableCell sx={{ py: 0.5, px: 1, verticalAlign: 'middle', fontSize: 13, whiteSpace: 'nowrap' }} align="right">
           {formatMoney(item.amount)}
         </TableCell>
+        <TableCell sx={{ py: 0.5, px: 1, verticalAlign: 'middle', fontSize: 13, whiteSpace: 'nowrap' }} align="right">
+          {formatMoney(item.unitCostPrice)}
+        </TableCell>
+        <TableCell sx={{ py: 0.5, px: 1, verticalAlign: 'middle', fontSize: 13, whiteSpace: 'nowrap' }} align="right">
+          {formatMoney(item.costAmount)}
+        </TableCell>
         <TableCell sx={{ py: 0.5, px: 1, verticalAlign: 'middle' }}>
           <InlineWorkers
             item={item}
@@ -487,6 +516,7 @@ const RepairItemsDialog = ({
   manualRepairItems,
   allWorkers,
   workersById,
+  revenueBase = 'amount',
   onSave,
   onRepairWorkerChange,
   onRepairPercentageChange,
@@ -501,10 +531,17 @@ const RepairItemsDialog = ({
     [repairItems]
   );
 
-  const revenuePreview = useMemo(
-    () => getWorkerRevenuePreview(repairItems, workersById),
-    [repairItems, workersById]
+  const totalCostAmount = useMemo(
+    () => repairItems.reduce((sum, item) => sum + Number(item.costAmount || 0), 0),
+    [repairItems]
   );
+
+  const revenuePreview = useMemo(
+    () => getWorkerRevenuePreview(repairItems, workersById, revenueBase),
+    [repairItems, workersById, revenueBase]
+  );
+
+  const revenueBaseLabel = getRevenueBaseLabel(revenueBase);
 
   return (
     <Dialog
@@ -551,7 +588,7 @@ const RepairItemsDialog = ({
                 </Alert>
               ) : (
                 <Paper variant="outlined" sx={{ overflowX: 'auto' }}>
-                  <Table size="small" sx={{ minWidth: 1210 }}>
+                  <Table size="small" sx={{ minWidth: 1430 }}>
                     <TableHead>{renderCompactRepairTableHead(canManage, false)}</TableHead>
                     <TableBody>
                       {apiRepairItems.map((item, index) => (
@@ -596,7 +633,7 @@ const RepairItemsDialog = ({
                 </Alert>
               ) : (
                 <Paper variant="outlined" sx={{ overflowX: 'auto', borderColor: '#fcd34d' }}>
-                  <Table size="small" sx={{ minWidth: 1210 }}>
+                  <Table size="small" sx={{ minWidth: 1430 }}>
                     <TableHead>{renderCompactRepairTableHead(canManage, true)}</TableHead>
                     <TableBody>
                       {manualRepairItems.map((item, index) => (
@@ -627,18 +664,21 @@ const RepairItemsDialog = ({
             <Typography variant="subtitle1" fontWeight="bold" textAlign="right">
               Tổng thành tiền hạng mục: {formatMoney(totalAmount)}
             </Typography>
+            <Typography variant="subtitle1" fontWeight="bold" textAlign="right" color="text.secondary">
+              Tổng giá vốn: {formatMoney(totalCostAmount)}
+            </Typography>
             <Typography variant="body2" color="text.secondary" textAlign="right" sx={{ mb: 1 }}>
-              Doanh thu thợ = thành tiền × % thực hiện × 75% (trừ hoa hồng).
+              Doanh thu thợ = {revenueBaseLabel.toLowerCase()} × % thực hiện (trước trừ hoa hồng).
             </Typography>
             {revenuePreview.length > 0 && (
               <Paper variant="outlined" sx={{ p: 2 }}>
                 <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
-                  Xem trước doanh thu theo thợ (chưa trừ hoa hồng)
+                  Xem trước doanh thu theo thợ — cơ sở: {revenueBaseLabel}
                 </Typography>
                 <Stack spacing={0.5}>
                   {revenuePreview.map((entry) => (
                     <Box
-                      key={entry.name}
+                      key={entry.id}
                       sx={{ display: 'flex', justifyContent: 'space-between' }}
                     >
                       <Typography variant="body2">{entry.name}</Typography>

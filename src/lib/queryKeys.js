@@ -9,6 +9,7 @@ export const queryKeys = {
   },
   supervisors: ['supervisors'],
   repairHistory: (params) => ['repairHistory', params],
+  revenueSettings: ['revenueSettings'],
   homeDashboard: ['homeDashboard'],
   overdueCars: ['overdueCars'],
 };

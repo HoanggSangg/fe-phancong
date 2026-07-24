@@ -220,12 +220,16 @@ const KtvMessagesPage = () => {
 
   useEffect(() => {
     fetchMessages();
-    fetchSettings();
 
     const intervalId = setInterval(() => fetchMessages(true), POLL_INTERVAL_MS);
 
     return () => clearInterval(intervalId);
-  }, [fetchMessages, fetchSettings]);
+  }, [fetchMessages]);
+
+  useEffect(() => {
+    if (!isAdmin || loading) return;
+    fetchSettings();
+  }, [isAdmin, loading, fetchSettings]);
 
   const handleMarkRead = async (id) => {
     setMarkingId(id);

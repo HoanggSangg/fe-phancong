@@ -7,6 +7,7 @@ import {
   notifyAdminAboutCar,
   getCarById,
   getManageCarsList,
+  syncCarFromExternal,
 } from '../apis/index';
 import {
   Button,
@@ -38,11 +39,13 @@ import {
   canPollOperationLogs,
   CAR_STATUS_LABELS,
   isKtv,
+  hasPermission,
 } from '../../utils/permissions';
 import { CAR_STATUS_COLORS, needsWorkerSelection } from '../../utils/carStatusConfig';
 import {
   patchCarInCache,
   removeCarFromCache,
+  patchCarInManageCarsList,
   invalidateWorkerJobCaches,
   invalidateManageCarsList,
 } from '../../lib/carCache';
@@ -73,19 +76,8 @@ const ManageCars = () => {
   const canHearVoice = canHearOperationVoice(user);
   const canPollLogs = canPollOperationLogs(user);
   const canManage = canEditManagedCars(user);
+  const canSyncExternal = hasPermission(user, 'cars.add');
   const isKtvUser = isKtv(user);
-
-  const {
-    workers,
-    setWorkers,
-    allWorkers,
-    availableWorkers,
-    supervisors,
-    locations,
-    refreshManageCarsList,
-    refreshAvailableWorkers,
-    invalidateHomeDashboard,
-  } = useManageCarsBootstrap(user);
 
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState('not_delivered');
@@ -94,6 +86,7 @@ const ManageCars = () => {
   const [searchPlateInput, setSearchPlateInput] = useState('');
   const [searchPlate, setSearchPlate] = useState('');
   const [editOpen, setEditOpen] = useState(false);
+  const [syncExternalLoading, setSyncExternalLoading] = useState(false);
   const [statusUpdateOpen, setStatusUpdateOpen] = useState(false);
   const [editData, setEditData] = useState({});
   const [statusUpdateData, setStatusUpdateData] = useState({});
@@ -113,6 +106,33 @@ const ManageCars = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const openCarHandledRef = useRef(false);
 
+  const carsListQuery = useManageCarsList(user, {
+    page,
+    statusFilter,
+    filterMonth,
+    filterDate,
+    selectedLocation,
+    tableSupervisor,
+    searchPlate,
+  });
+
+  const {
+    workers,
+    setWorkers,
+    allWorkers,
+    availableWorkers,
+    supervisors,
+    locations,
+    filtersLoading,
+    ensureAvailableWorkers,
+    ensureAllWorkers,
+    refreshManageCarsList,
+    refreshAvailableWorkers,
+    invalidateHomeDashboard,
+  } = useManageCarsBootstrap(user, {
+    loadFilters: carsListQuery.isFetched,
+  });
+
   const handleRemoteCarChange = useCallback(async () => {
     await refreshManageCarsList();
     await refreshAvailableWorkers();
@@ -122,6 +142,7 @@ const ManageCars = () => {
 
   const { voiceEnabled, toggleVoice, testVoice } = useOperationVoiceMonitor({
     poll: canPollLogs,
+    pollReady: carsListQuery.isFetched,
     onNewCarLogs: handleRemoteCarChange,
   });
 
@@ -138,23 +159,13 @@ const ManageCars = () => {
   }, [isKtvUser, refreshManageCarsList, invalidateHomeDashboard]);
 
   const repair = useRepairItems({
-    canManage,
     allWorkers,
+    ensureAllWorkers,
     setSnackbar,
   });
 
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-
-  const carsListQuery = useManageCarsList(user, {
-    page,
-    statusFilter,
-    filterMonth,
-    filterDate,
-    selectedLocation,
-    tableSupervisor,
-    searchPlate,
-  });
 
   const displayedCars = carsListQuery.data?.cars || [];
   const pagination = carsListQuery.data?.pagination || {
@@ -349,9 +360,12 @@ const ManageCars = () => {
 
   const handleEditClick = async (car) => {
     try {
-      const fullCar = await loadCarDetail(car);
+      const [fullCar, workersList] = await Promise.all([
+        loadCarDetail(car),
+        ensureAvailableWorkers(),
+      ]);
 
-      let merged = [...availableWorkers];
+      let merged = [...workersList];
 
       fullCar.workers.forEach(({ worker }) => {
         if (!merged.find((w) => w._id === worker._id)) {
@@ -379,6 +393,56 @@ const ManageCars = () => {
     } catch (err) {
       console.error('Lỗi khi tải chi tiết xe:', err);
       setSnackbar({ open: true, message: 'Không tải được chi tiết xe', severity: 'error' });
+    }
+  };
+
+  const handleSyncExternal = async () => {
+    if (!editData._id) return;
+
+    setSyncExternalLoading(true);
+    try {
+      const res = await syncCarFromExternal(editData._id);
+      const car = res.data?.car;
+      const repairSync = res.data?.repairSync || {};
+
+      if (car) {
+        setEditData((prev) => ({
+          ...prev,
+          plateNumber: car.plateNumber ?? prev.plateNumber,
+          externalCarTypeName: car.externalCarTypeName ?? prev.externalCarTypeName,
+          advisorName: car.advisorName ?? prev.advisorName,
+          deliveryTime: car.deliveryTime ?? prev.deliveryTime,
+          roNumber: car.roNumber ?? prev.roNumber,
+          roCode: car.roCode ?? prev.roCode,
+          roKey: car.roKey ?? prev.roKey,
+        }));
+
+        patchCarInCache(car);
+      }
+
+      invalidateManageCarsList();
+
+      const parts = [];
+      if (repairSync.updated) parts.push(`${repairSync.updated} hạng mục cập nhật`);
+      if (repairSync.created) parts.push(`${repairSync.created} hạng mục mới`);
+      if (repairSync.removed) parts.push(`${repairSync.removed} hạng mục đã xóa`);
+
+      setSnackbar({
+        open: true,
+        message: parts.length > 0
+          ? `Đã tải lại từ API — ${parts.join(', ')}`
+          : (res.data?.message || 'Đã tải lại dữ liệu từ API'),
+        severity: 'success',
+      });
+    } catch (err) {
+      console.error('Lỗi khi tải lại dữ liệu API:', err);
+      setSnackbar({
+        open: true,
+        message: err.response?.data?.message || 'Không tải được dữ liệu từ API',
+        severity: 'error',
+      });
+    } finally {
+      setSyncExternalLoading(false);
     }
   };
 
@@ -433,10 +497,12 @@ const ManageCars = () => {
   const handleStatusChangeClick = async (car, newStatus) => {
     if (needsWorkerSelection(car.status, newStatus)) {
       try {
-        const fullCar = await loadCarDetail(car);
+        const [fullCar] = await Promise.all([
+          loadCarDetail(car),
+          ensureAvailableWorkers(),
+        ]);
         setStatusUpdateData({ car: fullCar, newStatus, needsWorker: true });
         setSelectedNewWorker('');
-        refreshAvailableWorkers();
         setStatusUpdateOpen(true);
       } catch (err) {
         console.error('Lỗi khi tải chi tiết xe:', err);
@@ -453,6 +519,7 @@ const ManageCars = () => {
 
       if (res.data?.car) {
         patchCarInCache(res.data.car);
+        patchCarInManageCarsList(res.data.car);
       }
 
       invalidateManageCarsList();
@@ -534,7 +601,8 @@ const ManageCars = () => {
     pagination,
     page,
     onPageChange: setPage,
-    loading: carsListQuery.isFetching,
+    loading: carsListQuery.isLoading,
+    filtersLoading,
     locations,
     supervisors,
     selectedLocation,
@@ -602,10 +670,12 @@ const ManageCars = () => {
         onClose={() => setEditOpen(false)}
         editData={editData}
         supervisors={supervisors}
-        workers={workers}
         mergeSelectedWorkers={mergeSelectedWorkers}
         onChange={handleChange}
         onSave={handleEditSave}
+        onSyncExternal={handleSyncExternal}
+        syncExternalLoading={syncExternalLoading}
+        canSyncExternal={canSyncExternal}
       />
 
       <StatusUpdateDialog
@@ -632,6 +702,7 @@ const ManageCars = () => {
         manualRepairItems={repair.manualRepairItems}
         allWorkers={allWorkers}
         workersById={repair.workersById}
+        revenueBase={repair.revenueBase}
         onSave={repair.handleSaveRepairAssignments}
         onRepairWorkerChange={repair.handleRepairWorkerChange}
         onRepairPercentageChange={repair.handleRepairPercentageChange}

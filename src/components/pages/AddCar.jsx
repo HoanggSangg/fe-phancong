@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useRef, useState, useEffect } from 'react';
 import {
   TextField,
   Button,
@@ -96,30 +96,49 @@ const AddCar = ({ onSuccess }) => {
   const [availableWorkers, setAvailableWorkers] = useState([]);
   const [supervisors, setSupervisors] = useState([]);
   const [locations, setLocations] = useState([]);
+  const [workersLoaded, setWorkersLoaded] = useState(false);
+  const workersLoadingRef = useRef(false);
 
   const [externalData, setExternalData] = useState(null);
   const [lookupLoading, setLookupLoading] = useState(false);
   const [lookupError, setLookupError] = useState('');
 
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchFormMeta = async () => {
       try {
-        const [workerRes, supervisorRes, locationRes] = await Promise.all([
-          getAvailableWorkers(),
+        const [supervisorRes, locationRes] = await Promise.all([
           getAllSupervisors(),
           getAllLocations(),
         ]);
 
-        setAvailableWorkers(workerRes.data || []);
         setSupervisors(supervisorRes.data || []);
         setLocations(locationRes.data || []);
       } catch (error) {
-        console.error('Lỗi khi lấy dữ liệu:', error);
+        console.error('Lỗi khi lấy dữ liệu form:', error);
       }
     };
 
-    fetchData();
+    fetchFormMeta();
   }, []);
+
+  const ensureAvailableWorkers = useCallback(async () => {
+    if (workersLoaded) return availableWorkers;
+    if (workersLoadingRef.current) return availableWorkers;
+
+    workersLoadingRef.current = true;
+    try {
+      const workerRes = await getAvailableWorkers();
+      const data = workerRes.data || [];
+      setAvailableWorkers(data);
+      setWorkersLoaded(true);
+      return data;
+    } catch (error) {
+      console.error('Lỗi khi lấy thợ rảnh:', error);
+      return [];
+    } finally {
+      workersLoadingRef.current = false;
+    }
+  }, [availableWorkers, workersLoaded]);
 
   const searchExternalData = async (keyword, searchType = 'plate') => {
     const cleanKeyword = cleanText(keyword);
@@ -152,6 +171,8 @@ const AddCar = ({ onSuccess }) => {
           ? Number(ctx.header.gioDuKienHoanThanh.split(':')[0])
           : prev.deliveryHour,
       }));
+
+      ensureAvailableWorkers();
     } catch (err) {
       console.error(err);
       setLookupError(
@@ -167,13 +188,19 @@ const AddCar = ({ onSuccess }) => {
   const buildRepairItems = () => {
     const { chiTiet } = getExternalContext(externalData);
 
-    return chiTiet.map((item) => ({
-      groupName: item.khoanMucSuaChua || 'Khác',
-      content: item.noiDung || '',
-      quantity: item.soLuong || 1,
-      unit: item.donViTinh || '',
-      unitPrice: item.donGia || 0,
-      amount: item.thanhTien || 0,
+    return chiTiet.map((item) => {
+      const quantity = item.soLuong || 1;
+      const unitCostPrice = Number(item.giaVon || 0);
+
+      return {
+        groupName: item.khoanMucSuaChua || 'Khác',
+        content: item.noiDung || '',
+        quantity,
+        unit: item.donViTinh || '',
+        unitPrice: item.donGia || 0,
+        unitCostPrice,
+        costAmount: Math.round(unitCostPrice * Number(quantity || 1)),
+        amount: item.thanhTien || 0,
       taxRate: item.tyLeThue || 0,
       taxAmount: item.tienThue || 0,
       discountRate: item.tyLeChietKhau || 0,
@@ -182,7 +209,8 @@ const AddCar = ({ onSuccess }) => {
       itemType: item.loai || 0,
       externalItemId: item.khoa || '',
       raw: item,
-    }));
+    };
+    });
   };
 
   const handleSubmit = async (e) => {
@@ -476,6 +504,7 @@ const AddCar = ({ onSuccess }) => {
             )}
             getOptionLabel={(option) => option.name || ''}
             value={formData.mainWorkers}
+            onOpen={ensureAvailableWorkers}
             onChange={(e, value) =>
               setFormData((prev) => ({ ...prev, mainWorkers: value }))
             }
@@ -491,6 +520,7 @@ const AddCar = ({ onSuccess }) => {
             )}
             getOptionLabel={(option) => option.name || ''}
             value={formData.subWorkers}
+            onOpen={ensureAvailableWorkers}
             onChange={(e, value) =>
               setFormData((prev) => ({ ...prev, subWorkers: value }))
             }

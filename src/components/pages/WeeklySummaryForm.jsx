@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { Box, Paper, Stack, Typography, Avatar } from '@mui/material';
+import { Box, Paper, Stack, Typography, Avatar, CircularProgress } from '@mui/material';
 import { Person } from '@mui/icons-material';
 import { getWorkerWeeklyRevenueSummary } from '../apis/index';
 import { formatMoney, getYesterdayDate } from '../../utils/dateFilters';
+import { PageContent } from '../common/AnimatedValue';
 
 const VARIANTS = {
   praise: {
@@ -87,6 +88,7 @@ const WeeklySummaryForm = ({ variant = 'praise' }) => {
         py: { xs: 2, sm: 3, md: 5 },
       }}
     >
+      <PageContent animationKey={variant}>
       <Paper
         elevation={0}
         sx={{
@@ -102,6 +104,8 @@ const WeeklySummaryForm = ({ variant = 'praise' }) => {
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'center',
+          transition: 'transform 0.25s ease, box-shadow 0.25s ease',
+          '&:hover': { transform: 'translateY(-2px)' },
         }}
       >
         <Typography
@@ -118,16 +122,18 @@ const WeeklySummaryForm = ({ variant = 'praise' }) => {
         </Typography>
 
         {loading ? (
-          <Typography
-            sx={{
-              textAlign: 'center',
-              fontSize: { xs: 18, sm: 22 },
-              fontWeight: 700,
-              color: config.loadingColor,
-            }}
-          >
-            Đang tải dữ liệu...
-          </Typography>
+            <Box sx={{ textAlign: 'center', py: 4 }}>
+              <CircularProgress sx={{ color: config.loadingColor, mb: 2 }} />
+              <Typography
+                sx={{
+                  fontSize: { xs: 18, sm: 22 },
+                  fontWeight: 700,
+                  color: config.loadingColor,
+                }}
+              >
+                Đang tải dữ liệu...
+              </Typography>
+            </Box>
         ) : (
           <Stack
             direction={{ xs: 'column', md: 'row' }}
@@ -241,6 +247,7 @@ const WeeklySummaryForm = ({ variant = 'praise' }) => {
           </Stack>
         )}
       </Paper>
+      </PageContent>
     </Box>
   );
 };

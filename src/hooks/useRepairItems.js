@@ -1,9 +1,10 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import {
   assignRepairItemWorkers,
   getCarRepairItems,
   saveManualRepairItems,
 } from '../components/apis/index';
+import useRevenueSettings from './queries/useRevenueSettings';
 import {
   mapRepairItemToState,
   createEmptyManualItem,
@@ -11,12 +12,16 @@ import {
   getItemWorkerTotalPercentage,
 } from '../utils/manageCarsHelpers';
 
-const useRepairItems = ({ canManage, allWorkers, setSnackbar }) => {
+const useRepairItems = ({ allWorkers, ensureAllWorkers, setSnackbar }) => {
   const [repairDialogOpen, setRepairDialogOpen] = useState(false);
   const [repairCar, setRepairCar] = useState(null);
   const [repairItems, setRepairItems] = useState([]);
   const [repairLoading, setRepairLoading] = useState(false);
   const [repairSaving, setRepairSaving] = useState(false);
+  const initialManualCountRef = useRef(0);
+
+  const { data: revenueSettings } = useRevenueSettings(repairDialogOpen);
+  const revenueBase = revenueSettings?.revenueBase || 'amount';
 
   const workersById = useMemo(
     () => Object.fromEntries((allWorkers || []).map((worker) => [worker._id, worker])),
@@ -40,8 +45,14 @@ const useRepairItems = ({ canManage, allWorkers, setSnackbar }) => {
       setRepairDialogOpen(true);
       setRepairItems([]);
 
-      const res = await getCarRepairItems(car._id);
-      setRepairItems((res.data || []).map(mapRepairItemToState));
+      if (ensureAllWorkers) {
+        await ensureAllWorkers();
+      }
+
+      const itemsRes = await getCarRepairItems(car._id);
+      const mappedItems = (itemsRes.data || []).map(mapRepairItemToState);
+      initialManualCountRef.current = mappedItems.filter((item) => item.isManual).length;
+      setRepairItems(mappedItems);
     } catch (err) {
       console.error('Lỗi khi tải chi tiết sửa chữa:', err);
       setSnackbar({
@@ -53,7 +64,7 @@ const useRepairItems = ({ canManage, allWorkers, setSnackbar }) => {
     } finally {
       setRepairLoading(false);
     }
-  }, [setSnackbar]);
+  }, [ensureAllWorkers, setSnackbar]);
 
   const handleRepairWorkerChange = useCallback((itemId, rowIndex, worker) => {
     setRepairItems((prev) =>
@@ -128,8 +139,16 @@ const useRepairItems = ({ canManage, allWorkers, setSnackbar }) => {
             (Number(next.quantity) || 0) * (Number(next.unitPrice) || 0)
           );
         }
+        if (field === 'quantity' || field === 'unitCostPrice') {
+          next.costAmount = Math.round(
+            (Number(next.quantity) || 0) * (Number(next.unitCostPrice) || 0)
+          );
+        }
         if (field === 'amount') {
           next.amount = Math.max(Number(value) || 0, 0);
+        }
+        if (field === 'costAmount') {
+          next.costAmount = Math.max(Number(value) || 0, 0);
         }
         return next;
       })
@@ -188,21 +207,29 @@ const useRepairItems = ({ canManage, allWorkers, setSnackbar }) => {
         );
       }
 
-      const res = await saveManualRepairItems(
-        repairCar._id,
-        manualRepairItems.map((item) => ({
-          _id: item._id,
-          groupName: item.groupName,
-          content: item.content,
-          quantity: item.quantity,
-          unitPrice: item.unitPrice,
-          amount: item.amount,
-          unit: item.unit,
-          workers: buildWorkersPayload(item),
-        }))
-      );
+      const shouldSaveManual = manualRepairItems.length > 0 || initialManualCountRef.current > 0;
+      const res = shouldSaveManual
+        ? await saveManualRepairItems(
+          repairCar._id,
+          manualRepairItems.map((item) => ({
+            _id: item._id,
+            groupName: item.groupName,
+            content: item.content,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice,
+            amount: item.amount,
+            unitCostPrice: item.unitCostPrice,
+            costAmount: item.costAmount,
+            unit: item.unit,
+            workers: buildWorkersPayload(item),
+          }))
+        )
+        : { data: null };
 
-      setRepairItems((res.data || []).map(mapRepairItemToState));
+      if (res.data) {
+        setRepairItems((res.data || []).map(mapRepairItemToState));
+        initialManualCountRef.current = (res.data || []).filter((item) => item.isManual).length;
+      }
 
       setSnackbar({
         open: true,
@@ -238,6 +265,7 @@ const useRepairItems = ({ canManage, allWorkers, setSnackbar }) => {
     workersById,
     apiRepairItems,
     manualRepairItems,
+    revenueBase,
     handleLoadRepairItems,
     handleRepairWorkerChange,
     handleRepairPercentageChange,

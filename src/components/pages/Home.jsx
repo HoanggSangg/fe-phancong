@@ -34,13 +34,14 @@ import useHomeDashboard from '../../hooks/queries/useHomeDashboard';
 import PageLayout from '../common/PageLayout';
 import PageHeader from '../common/PageHeader';
 import FilterPanel from '../common/FilterPanel';
+import { AnimatedListItem, hoverLiftSx } from '../common/AnimatedValue';
 
 const Home = () => {
   const [selectedLocation, setSelectedLocation] = useState('');
   const [selectedSectionKey, setSelectedSectionKey] = useState('');
   const [selectedSupervisor, setSelectedSupervisor] = useState('');
 
-  const { data, isLoading } = useHomeDashboard();
+  const { data, isLoading, filtersLoading } = useHomeDashboard();
 
   const carsToday = data?.carsToday || [];
   const overdueCars = data?.overdueCars || [];
@@ -117,7 +118,8 @@ const Home = () => {
     const { mainWorkers, subWorkers } = getWorkersByRole(car.workers);
     const color = getColor(car);
     return (
-      <Paper key={car._id} sx={{ p: 1.5, borderRadius: 2, border: color !== 'inherit' ? `2px solid ${color}` : undefined }}>
+      <AnimatedListItem key={car._id} index={index}>
+      <Paper sx={{ p: 1.5, borderRadius: 2, border: color !== 'inherit' ? `2px solid ${color}` : undefined, ...hoverLiftSx }}>
         <Stack direction="row" alignItems="center" spacing={1} mb={1}>
           <DirectionsCarIcon fontSize="small" color={color === '#d32f2f' ? 'error' : color === 'green' ? 'success' : 'primary'} />
           <Typography variant="subtitle1" fontWeight="bold" sx={{ color }}>{car.plateNumber}</Typography>
@@ -136,6 +138,7 @@ const Home = () => {
           <Typography variant="caption" color="text.secondary">GS: {car.supervisor?.name || '---'}</Typography>
         </Stack>
       </Paper>
+      </AnimatedListItem>
     );
   };
 
@@ -214,6 +217,7 @@ const Home = () => {
               value={selectedLocation}
               label="Địa điểm"
               onChange={(e) => setSelectedLocation(e.target.value)}
+              disabled={filtersLoading}
             >
               <MenuItem value="">Tất cả địa điểm</MenuItem>
               {locations.map((loc) => (

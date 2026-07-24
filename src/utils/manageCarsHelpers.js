@@ -35,6 +35,8 @@ export const createEmptyManualItem = () => ({
   quantity: 1,
   unitPrice: 0,
   amount: 0,
+  unitCostPrice: 0,
+  costAmount: 0,
   unit: '',
   selectedWorkers: [{ worker: null, percentage: 100 }],
 });
@@ -48,29 +50,6 @@ export const isItemWorkerPercentageValid = (item) => {
   const workers = (item.selectedWorkers || []).filter((entry) => entry.worker);
   if (workers.length === 0) return true;
   return getItemWorkerTotalPercentage(item) <= 100.01;
-};
-
-export const getWorkerRevenuePreview = (repairItems, workersById = {}) => {
-  const preview = {};
-
-  repairItems.forEach((item) => {
-    const amount = Number(item.amount || 0);
-    (item.selectedWorkers || []).forEach((entry) => {
-      if (!entry.worker?._id) return;
-
-      const workerMeta = workersById[entry.worker._id] || entry.worker;
-      if (workerMeta.countRevenue === false) return;
-
-      const share = amount * ((Number(entry.percentage) || 0) / 100);
-      const key = entry.worker._id;
-      preview[key] = {
-        name: entry.worker.name,
-        total: (preview[key]?.total || 0) + share,
-      };
-    });
-  });
-
-  return Object.values(preview);
 };
 
 export const formatHistoryNote = (note = '') =>
