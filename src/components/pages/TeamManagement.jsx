@@ -34,8 +34,10 @@ import {
 import PageLayout from '../common/PageLayout';
 import PageHeader from '../common/PageHeader';
 import { WORKER_SELECT_SX } from '../../constants/layout';
+import { useToast } from '../../context/ToastContext';
 
 const TeamManagement = () => {
+  const toast = useToast();
   const [teams, setTeams] = useState([]);
   const [workers, setWorkers] = useState([]);
   const [selectedTeam, setSelectedTeam] = useState(null);
@@ -65,7 +67,7 @@ const TeamManagement = () => {
       }
     } catch (error) {
       console.error(error);
-      alert('Lỗi khi lấy danh sách tổ');
+      toast.error('Lỗi khi lấy danh sách tổ');
     }
   };
 
@@ -77,9 +79,9 @@ const TeamManagement = () => {
       workersLoadedRef.current = true;
     } catch (error) {
       console.error(error);
-      alert('Lỗi khi lấy danh sách thợ');
+      toast.error('Lỗi khi lấy danh sách thợ');
     }
-  }, []);
+  }, [toast]);
 
   const ensureWorkers = useCallback(async () => {
     if (workersLoadedRef.current) return;
@@ -93,7 +95,7 @@ const TeamManagement = () => {
       setSelectedTeam(data);
     } catch (error) {
       console.error(error);
-      alert('Lỗi khi lấy chi tiết tổ');
+      toast.error('Lỗi khi lấy chi tiết tổ');
     }
   };
 
@@ -110,7 +112,7 @@ const TeamManagement = () => {
     e.preventDefault();
 
     if (!teamName.trim()) {
-      alert('Vui lòng nhập tên tổ');
+      toast.error('Vui lòng nhập tên tổ');
       return;
     }
 
@@ -122,19 +124,19 @@ const TeamManagement = () => {
           name: teamName,
           status: 'active',
         });
-        alert('Cập nhật tổ thành công');
+        toast.success('Cập nhật tổ thành công');
       } else {
         await createTeam({
           name: teamName,
         });
-        alert('Tạo tổ thành công');
+        toast.success('Tạo tổ thành công');
       }
 
       resetForm();
       await fetchTeams();
     } catch (error) {
       console.error(error);
-      alert(error.response?.data?.message || 'Lỗi khi lưu tổ');
+      toast.error(error.response?.data?.message || 'Lỗi khi lưu tổ');
     } finally {
       setLoading(false);
     }
@@ -162,10 +164,10 @@ const TeamManagement = () => {
       await fetchTeams();
       await fetchWorkers();
 
-      alert('Xóa tổ thành công');
+      toast.success('Xóa tổ thành công');
     } catch (error) {
       console.error(error);
-      alert(error.response?.data?.message || 'Lỗi khi xóa tổ');
+      toast.error(error.response?.data?.message || 'Lỗi khi xóa tổ');
     }
   };
 
@@ -188,12 +190,12 @@ const TeamManagement = () => {
 
   const handleAddWorkerToTeam = async () => {
     if (!selectedTeam) {
-      alert('Vui lòng chọn tổ trước');
+      toast.error('Vui lòng chọn tổ trước');
       return;
     }
 
     if (!selectedWorkerId) {
-      alert('Vui lòng chọn thợ');
+      toast.error('Vui lòng chọn thợ');
       return;
     }
 
@@ -206,14 +208,14 @@ const TeamManagement = () => {
 
       setSelectedWorkerId('');
       setSelectedTeamRole('KTV');
-      alert(
+      toast.success(
         selectedTeamRole === 'TT'
           ? 'Đã thêm tổ trưởng (TT). Nếu tổ đã có TT khác, người đó chuyển về KTV.'
           : 'Thêm thợ vào tổ thành công'
       );
     } catch (error) {
       console.error(error);
-      alert(error.response?.data?.message || 'Lỗi khi thêm thợ vào tổ');
+      toast.error(error.response?.data?.message || 'Lỗi khi thêm thợ vào tổ');
     }
   };
 
@@ -228,7 +230,7 @@ const TeamManagement = () => {
       }
     } catch (error) {
       console.error(error);
-      alert(error.response?.data?.message || 'Lỗi khi đổi chức vụ');
+      toast.error(error.response?.data?.message || 'Lỗi khi đổi chức vụ');
     }
   };
 
@@ -246,10 +248,10 @@ const TeamManagement = () => {
       await fetchWorkers();
       await fetchTeamDetail(selectedTeam._id);
 
-      alert('Xóa thợ khỏi tổ thành công');
+      toast.success('Xóa thợ khỏi tổ thành công');
     } catch (error) {
       console.error(error);
-      alert(error.response?.data?.message || 'Lỗi khi xóa thợ khỏi tổ');
+      toast.error(error.response?.data?.message || 'Lỗi khi xóa thợ khỏi tổ');
     }
   };
 

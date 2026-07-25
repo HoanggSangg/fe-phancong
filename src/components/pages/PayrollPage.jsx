@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Alert,
   Box,
   Button,
   Chip,
@@ -40,6 +39,7 @@ import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import SettingsIcon from '@mui/icons-material/Settings';
 import CloseIcon from '@mui/icons-material/Close';
 import PageLayout from '../common/PageLayout';
+import { useToast } from '../../context/ToastContext';
 import PageHeader from '../common/PageHeader';
 import FilterPanel from '../common/FilterPanel';
 import {
@@ -94,6 +94,7 @@ const penaltyFields = [
 const numVal = (v) => (v === '' || v == null ? '' : Number(v));
 
 const PayrollPage = () => {
+  const toast = useToast();
   const [view, setView] = useState('month'); // month | year
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
@@ -103,7 +104,6 @@ const PayrollPage = () => {
   const [status, setStatus] = useState('draft');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState({ type: '', text: '' });
   const [selectedIdx, setSelectedIdx] = useState(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsForm, setSettingsForm] = useState({});
@@ -118,7 +118,6 @@ const PayrollPage = () => {
 
   const loadPayroll = useCallback(async () => {
     setLoading(true);
-    setMessage({ type: '', text: '' });
     try {
       const res = await getMonthlyPayroll(year, month);
       setRows(res.data?.data?.rows || []);
@@ -129,10 +128,7 @@ const PayrollPage = () => {
         res.data?.from && res.data?.to ? `${res.data.from} → ${res.data.to}` : ''
       );
     } catch (err) {
-      setMessage({
-        type: 'error',
-        text: err.response?.data?.message || 'Không tải được bảng lương',
-      });
+      toast.error(err.response?.data?.message || 'Không tải được bảng lương');
       setRows([]);
     } finally {
       setLoading(false);
@@ -141,17 +137,13 @@ const PayrollPage = () => {
 
   const loadAnnual = useCallback(async () => {
     setAnnualLoading(true);
-    setMessage({ type: '', text: '' });
     try {
       const res = await getAnnualPayroll(year);
       setAnnualRows(res.data?.data?.rows || []);
       setAnnualTotals(res.data?.data?.totals || { months: {}, luongThucNhan: 0 });
       setMonthsAvailable(res.data?.monthsAvailable || []);
     } catch (err) {
-      setMessage({
-        type: 'error',
-        text: err.response?.data?.message || 'Không tải được tổng lương năm',
-      });
+      toast.error(err.response?.data?.message || 'Không tải được tổng lương năm');
       setAnnualRows([]);
       setAnnualTotals({ months: {}, luongThucNhan: 0 });
       setMonthsAvailable([]);
@@ -180,7 +172,6 @@ const PayrollPage = () => {
 
   const handleSave = async () => {
     setSaving(true);
-    setMessage({ type: '', text: '' });
     try {
       const res = await saveMonthlyPayroll(year, month, {
         status: 'saved',
@@ -189,12 +180,9 @@ const PayrollPage = () => {
       setRows(res.data?.data?.rows || []);
       setTotals(res.data?.data?.totals || {});
       setStatus(res.data?.data?.status || 'saved');
-      setMessage({ type: 'success', text: 'Đã lưu bảng lương (đã đồng bộ hồ sơ thợ)' });
+      toast.success('Đã lưu bảng lương (đã đồng bộ hồ sơ thợ)');
     } catch (err) {
-      setMessage({
-        type: 'error',
-        text: err.response?.data?.message || 'Lưu thất bại',
-      });
+      toast.error(err.response?.data?.message || 'Lưu thất bại');
     } finally {
       setSaving(false);
     }
@@ -202,17 +190,13 @@ const PayrollPage = () => {
 
   const handleRefresh = async () => {
     setSaving(true);
-    setMessage({ type: '', text: '' });
     try {
       const res = await refreshPayrollRevenue(year, month);
       setRows(res.data?.data?.rows || []);
       setTotals(res.data?.data?.totals || {});
-      setMessage({ type: 'success', text: 'Đã cập nhật doanh thu tháng' });
+      toast.success('Đã cập nhật doanh thu tháng');
     } catch (err) {
-      setMessage({
-        type: 'error',
-        text: err.response?.data?.message || 'Refresh DT thất bại',
-      });
+      toast.error(err.response?.data?.message || 'Refresh DT thất bại');
     } finally {
       setSaving(false);
     }
@@ -220,34 +204,26 @@ const PayrollPage = () => {
 
   const handleRecalc = async () => {
     setSaving(true);
-    setMessage({ type: '', text: '' });
     try {
       // Lưu nháp trước rồi tính lại để giữ input
       await saveMonthlyPayroll(year, month, { status: status || 'draft', rows });
       const res = await recalculatePayroll(year, month);
       setRows(res.data?.data?.rows || []);
       setTotals(res.data?.data?.totals || {});
-      setMessage({ type: 'success', text: 'Đã tính lại lương' });
+      toast.success('Đã tính lại lương');
     } catch (err) {
-      setMessage({
-        type: 'error',
-        text: err.response?.data?.message || 'Tính lại thất bại',
-      });
+      toast.error(err.response?.data?.message || 'Tính lại thất bại');
     } finally {
       setSaving(false);
     }
   };
 
   const handleExport = async () => {
-    setMessage({ type: '', text: '' });
     try {
       await exportPayrollToExcel({ year, month, rows, totals });
-      setMessage({ type: 'success', text: 'Đã xuất Excel theo file mẫu' });
+      toast.success('Đã xuất Excel theo file mẫu');
     } catch (err) {
-      setMessage({
-        type: 'error',
-        text: err.message || 'Xuất Excel thất bại',
-      });
+      toast.error(err.message || 'Xuất Excel thất bại');
     }
   };
 
@@ -257,10 +233,7 @@ const PayrollPage = () => {
       setSettingsForm(res.data?.data || {});
       setSettingsOpen(true);
     } catch (err) {
-      setMessage({
-        type: 'error',
-        text: err.response?.data?.message || 'Không tải cấu hình',
-      });
+      toast.error(err.response?.data?.message || 'Không tải cấu hình');
     }
   };
 
@@ -269,12 +242,9 @@ const PayrollPage = () => {
       const res = await updatePayrollSettings(settingsForm);
       setSettings(res.data?.data);
       setSettingsOpen(false);
-      setMessage({ type: 'success', text: 'Đã lưu cấu hình lương' });
+      toast.success('Đã lưu cấu hình lương');
     } catch (err) {
-      setMessage({
-        type: 'error',
-        text: err.response?.data?.message || 'Lưu cấu hình thất bại',
-      });
+      toast.error(err.response?.data?.message || 'Lưu cấu hình thất bại');
     }
   };
 
@@ -427,12 +397,6 @@ const PayrollPage = () => {
           )}
         </Stack>
       </FilterPanel>
-
-      {message.text && (
-        <Alert severity={message.type || 'info'} sx={{ mb: 1.5 }} onClose={() => setMessage({ type: '', text: '' })}>
-          {message.text}
-        </Alert>
-      )}
 
       <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mb: 1.5 }}>
         {(isYearView ? annualSummaryChips : summaryChips).map((item) => (

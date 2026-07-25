@@ -24,6 +24,7 @@ import {
 import { Edit, Delete, LocationOn, Lock } from '@mui/icons-material';
 import PageLayout from '../common/PageLayout';
 import PageHeader from '../common/PageHeader';
+import { useToast } from '../../context/ToastContext';
 
 const LocationRow = ({ location, index, onEdit, onDelete }) => (
   <Paper
@@ -84,6 +85,7 @@ const LocationRow = ({ location, index, onEdit, onDelete }) => (
 );
 
 const LocationManager = () => {
+  const toast = useToast();
   const [locations, setLocations] = useState([]);
   const [newName, setNewName] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
@@ -315,7 +317,7 @@ const LocationManager = () => {
                 setPassword('');
                 proceedDelete(deleteTargetId);
               } else {
-                alert('Sai mật khẩu!');
+                toast.error('Sai mật khẩu!');
               }
             }}
           >

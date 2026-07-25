@@ -30,6 +30,7 @@ import {
 } from '@mui/icons-material';
 import { getUsers, updateUser } from '../apis';
 import { useAuth } from '../../context/AuthContext';
+import { useToast } from '../../context/ToastContext';
 import useIsMobile from '../../hooks/useIsMobile';
 import {
   getDefaultPermissionsForRole,
@@ -51,13 +52,13 @@ const roleColor = {
 
 const AccountPermissionsPage = () => {
   const { user: currentUser, refreshUser } = useAuth();
+  const toast = useToast();
   const isMobile = useIsMobile();
   const [users, setUsers] = useState([]);
   const [selectedUserId, setSelectedUserId] = useState('');
   const [draftPermissions, setDraftPermissions] = useState([]);
   const [useCustom, setUseCustom] = useState(false);
   const [search, setSearch] = useState('');
-  const [message, setMessage] = useState({ type: '', text: '' });
   const [saving, setSaving] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState({});
 
@@ -75,7 +76,7 @@ const AccountPermissionsPage = () => {
   };
 
   useEffect(() => {
-    loadUsers().catch(() => setMessage({ type: 'error', text: 'Không tải được danh sách tài khoản' }));
+    loadUsers().catch(() => toast.error('Không tải được danh sách tài khoản'));
   }, []);
 
   const filteredUsers = useMemo(() => {
@@ -139,16 +140,10 @@ const AccountPermissionsPage = () => {
       if (currentUser?._id === selectedUser._id) {
         await refreshUser();
       }
-      setMessage({
-        type: 'success',
-        text: `Đã lưu phân quyền cho ${selectedUser.fullName}`,
-      });
+      toast.success(`Đã lưu phân quyền cho ${selectedUser.fullName}`);
       await loadUsers();
     } catch (err) {
-      setMessage({
-        type: 'error',
-        text: err.response?.data?.message || 'Lưu phân quyền thất bại',
-      });
+      toast.error(err.response?.data?.message || 'Lưu phân quyền thất bại');
     } finally {
       setSaving(false);
     }
@@ -190,12 +185,6 @@ const AccountPermissionsPage = () => {
           />
         }
       />
-
-      {message.text && (
-        <Alert severity={message.type || 'info'} sx={{ mb: 2 }} onClose={() => setMessage({ type: '', text: '' })}>
-          {message.text}
-        </Alert>
-      )}
 
       <FilterPanel title="Tìm kiếm">
         <TextField

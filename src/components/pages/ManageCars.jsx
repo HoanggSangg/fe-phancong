@@ -12,8 +12,6 @@ import {
 import {
   Button,
   Box,
-  Snackbar,
-  Alert,
   useMediaQuery,
   useTheme,
 } from '@mui/material';
@@ -32,6 +30,7 @@ import dayjs from 'dayjs';
 import customParseFormat from 'dayjs/plugin/customParseFormat';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { useToast } from '../../context/ToastContext';
 import {
   canDeleteCars,
   canHearOperationVoice,
@@ -74,6 +73,7 @@ const CAR_SYNC_INTERVAL_MS = 15_000;
 
 const ManageCars = () => {
   const { user } = useAuth();
+  const toast = useToast();
   const canDelete = canDeleteCars(user);
   const canHearVoice = canHearOperationVoice(user);
   const canPollLogs = canPollOperationLogs(user);
@@ -94,7 +94,6 @@ const ManageCars = () => {
   const [statusUpdateData, setStatusUpdateData] = useState({});
   const [selectedLocation, setSelectedLocation] = useState('all');
   const [selectedNewWorker, setSelectedNewWorker] = useState('');
-  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyData, setHistoryData] = useState(null);
@@ -170,7 +169,7 @@ const ManageCars = () => {
   const repair = useRepairItems({
     allWorkers,
     ensureAllWorkers,
-    setSnackbar,
+    setSnackbar: toast.fromSnackbar,
   });
 
   const theme = useTheme();
@@ -301,7 +300,7 @@ const ManageCars = () => {
           setSearchPlate(matchedCar.plateNumber || criteria.plateNumber);
           setPage(1);
           setHighlightCarId(String(matchedCar._id));
-          setSnackbar({
+          toast.fromSnackbar({
             open: true,
             message: `Đã tìm thấy xe ${matchedCar.plateNumber}${getCarROLabel(matchedCar) ? ` — RO: ${getCarROLabel(matchedCar)}` : ''}`,
             severity: 'success',
@@ -312,7 +311,7 @@ const ManageCars = () => {
             setSearchPlate(criteria.plateNumber);
           }
 
-          setSnackbar({
+          toast.fromSnackbar({
             open: true,
             message: `Không tìm thấy xe ${criteria.plateNumber || '—'}${roLabel ? ` — RO: ${roLabel}` : ''}`,
             severity: 'warning',
@@ -320,7 +319,7 @@ const ManageCars = () => {
         }
       } catch {
         if (cancelled) return;
-        setSnackbar({
+        toast.fromSnackbar({
           open: true,
           message: `Không tìm thấy xe ${criteria.plateNumber || '—'}${roLabel ? ` — RO: ${roLabel}` : ''}`,
           severity: 'warning',
@@ -411,7 +410,7 @@ const ManageCars = () => {
       setEditOpen(true);
     } catch (err) {
       console.error('Lỗi khi tải chi tiết xe:', err);
-      setSnackbar({ open: true, message: 'Không tải được chi tiết xe', severity: 'error' });
+      toast.fromSnackbar({ open: true, message: 'Không tải được chi tiết xe', severity: 'error' });
     }
   };
 
@@ -446,7 +445,7 @@ const ManageCars = () => {
       if (repairSync.created) parts.push(`${repairSync.created} hạng mục mới`);
       if (repairSync.removed) parts.push(`${repairSync.removed} hạng mục đã xóa`);
 
-      setSnackbar({
+      toast.fromSnackbar({
         open: true,
         message: parts.length > 0
           ? `Đã tải lại từ API — ${parts.join(', ')}`
@@ -455,7 +454,7 @@ const ManageCars = () => {
       });
     } catch (err) {
       console.error('Lỗi khi tải lại dữ liệu API:', err);
-      setSnackbar({
+      toast.fromSnackbar({
         open: true,
         message: err.response?.data?.message || 'Không tải được dữ liệu từ API',
         severity: 'error',
@@ -487,10 +486,10 @@ const ManageCars = () => {
       await refreshAvailableWorkers();
       invalidateHomeDashboard();
       invalidateWorkerJobCaches();
-      setSnackbar({ open: true, message: 'Cập nhật xe thành công', severity: 'success' });
+      toast.fromSnackbar({ open: true, message: 'Cập nhật xe thành công', severity: 'success' });
     } catch (err) {
       console.error('Lỗi khi cập nhật xe:', err);
-      setSnackbar({ open: true, message: 'Cập nhật xe thất bại', severity: 'error' });
+      toast.fromSnackbar({ open: true, message: 'Cập nhật xe thất bại', severity: 'error' });
     }
   };
 
@@ -504,11 +503,11 @@ const ManageCars = () => {
           await refreshAvailableWorkers();
           invalidateHomeDashboard();
           invalidateWorkerJobCaches();
-          setSnackbar({ open: true, message: 'Xoá xe thành công', severity: 'success' });
+          toast.fromSnackbar({ open: true, message: 'Xoá xe thành công', severity: 'success' });
         })
         .catch((err) => {
           console.error('Lỗi khi xoá xe:', err);
-          setSnackbar({ open: true, message: 'Xoá xe thất bại', severity: 'error' });
+          toast.fromSnackbar({ open: true, message: 'Xoá xe thất bại', severity: 'error' });
         });
     }
   };
@@ -525,7 +524,7 @@ const ManageCars = () => {
         setStatusUpdateOpen(true);
       } catch (err) {
         console.error('Lỗi khi tải chi tiết xe:', err);
-        setSnackbar({ open: true, message: 'Không tải được chi tiết xe', severity: 'error' });
+        toast.fromSnackbar({ open: true, message: 'Không tải được chi tiết xe', severity: 'error' });
       }
     } else {
       handleChangeStatus(car._id, newStatus);
@@ -546,14 +545,14 @@ const ManageCars = () => {
       invalidateHomeDashboard();
       invalidateWorkerJobCaches();
 
-      setSnackbar({
+      toast.fromSnackbar({
         open: true,
         message: res.data.message || 'Cập nhật trạng thái thành công',
         severity: 'success',
       });
     } catch (err) {
       console.error('Lỗi khi cập nhật trạng thái xe:', err);
-      setSnackbar({
+      toast.fromSnackbar({
         open: true,
         message: err.response?.data?.message || 'Cập nhật trạng thái thất bại',
         severity: 'error',
@@ -597,14 +596,14 @@ const ManageCars = () => {
       const res = await notifyAdminAboutCar(notifyCar._id, message);
       setNotifyDialogOpen(false);
       setNotifyCar(null);
-      setSnackbar({
+      toast.fromSnackbar({
         open: true,
         message: res.data?.message || 'Đã gửi thông báo cho admin',
         severity: 'success',
       });
     } catch (err) {
       console.error('Lỗi khi gửi thông báo cho admin:', err);
-      setSnackbar({
+      toast.fromSnackbar({
         open: true,
         message: err.response?.data?.message || 'Gửi thông báo thất bại',
         severity: 'error',
@@ -762,20 +761,6 @@ const ManageCars = () => {
         <CarsPanel hideSearch {...panelProps} />
       </FullscreenDialog>
 
-      <Snackbar
-        open={snackbar.open}
-        autoHideDuration={3000}
-        onClose={() => setSnackbar((prev) => ({ ...prev, open: false }))}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      >
-        <Alert
-          onClose={() => setSnackbar((prev) => ({ ...prev, open: false }))}
-          severity={snackbar.severity}
-          sx={{ width: '100%' }}
-        >
-          {snackbar.message}
-        </Alert>
-      </Snackbar>
     </PageLayout>
   );
 };

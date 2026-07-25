@@ -38,6 +38,7 @@ import {
   getAllWorkers,
 } from '../apis';
 import { ROLE_LABELS, ROLE_DESCRIPTIONS } from '../../utils/permissions';
+import { useToast } from '../../context/ToastContext';
 import PageLayout from '../common/PageLayout';
 import PageHeader from '../common/PageHeader';
 import FilterPanel from '../common/FilterPanel';
@@ -50,6 +51,7 @@ const roleColor = {
 
 const UserManagement = () => {
   const theme = useTheme();
+  const toast = useToast();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [users, setUsers] = useState([]);
   const [workers, setWorkers] = useState([]);
@@ -65,7 +67,6 @@ const UserManagement = () => {
     workerId: '',
     isActive: true,
   });
-  const [message, setMessage] = useState({ type: '', text: '' });
 
   const workerMap = useMemo(
     () => Object.fromEntries(workers.map((w) => [w._id, w.name])),
@@ -110,7 +111,7 @@ const UserManagement = () => {
           await loadWorkers();
         }
       } catch {
-        setMessage({ type: 'error', text: 'Không tải được dữ liệu' });
+        toast.error('Không tải được dữ liệu');
       }
     };
 
@@ -168,30 +169,27 @@ const UserManagement = () => {
         await updateUser(editingUser._id, payload);
       } else {
         if (!form.username || !form.password) {
-          setMessage({ type: 'error', text: 'Vui lòng nhập tên đăng nhập và mật khẩu' });
+          toast.error('Vui lòng nhập tên đăng nhập và mật khẩu');
           return;
         }
         await createUser({ ...payload, username: form.username, password: form.password });
       }
 
       setDialogOpen(false);
-      setMessage({ type: 'success', text: 'Lưu tài khoản thành công' });
+      toast.success('Lưu tài khoản thành công');
       loadData();
     } catch (err) {
-      setMessage({ type: 'error', text: err.response?.data?.message || 'Lưu thất bại' });
+      toast.error(err.response?.data?.message || 'Lưu thất bại');
     }
   };
 
   const handleToggleActive = async (user) => {
     try {
       await updateUser(user._id, { isActive: !user.isActive });
-      setMessage({
-        type: 'success',
-        text: user.isActive ? 'Đã khóa tài khoản' : 'Đã mở khóa tài khoản',
-      });
+      toast.success(user.isActive ? 'Đã khóa tài khoản' : 'Đã mở khóa tài khoản');
       loadData();
     } catch (err) {
-      setMessage({ type: 'error', text: err.response?.data?.message || 'Cập nhật thất bại' });
+      toast.error(err.response?.data?.message || 'Cập nhật thất bại');
     }
   };
 
@@ -200,10 +198,10 @@ const UserManagement = () => {
     if (!window.confirm(`Đổi vai trò ${user.fullName} thành ${ROLE_LABELS[role]}?`)) return;
     try {
       await updateUser(user._id, { role });
-      setMessage({ type: 'success', text: 'Đã cập nhật vai trò' });
+      toast.success('Đã cập nhật vai trò');
       loadData();
     } catch (err) {
-      setMessage({ type: 'error', text: err.response?.data?.message || 'Cập nhật thất bại' });
+      toast.error(err.response?.data?.message || 'Cập nhật thất bại');
     }
   };
 
@@ -211,10 +209,10 @@ const UserManagement = () => {
     if (!window.confirm('Xóa tài khoản này?')) return;
     try {
       await deleteUser(id);
-      setMessage({ type: 'success', text: 'Đã xóa tài khoản' });
+      toast.success('Đã xóa tài khoản');
       loadData();
     } catch (err) {
-      setMessage({ type: 'error', text: err.response?.data?.message || 'Xóa thất bại' });
+      toast.error(err.response?.data?.message || 'Xóa thất bại');
     }
   };
 
@@ -279,12 +277,6 @@ const UserManagement = () => {
           </Button>
         }
       />
-
-      {message.text && (
-        <Alert severity={message.type || 'info'} sx={{ mb: 2 }} onClose={() => setMessage({ type: '', text: '' })}>
-          {message.text}
-        </Alert>
-      )}
 
       <FilterPanel title="Tìm kiếm">
         <Grid container spacing={2}>

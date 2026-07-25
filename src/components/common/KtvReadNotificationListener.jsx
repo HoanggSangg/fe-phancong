@@ -1,18 +1,18 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, Snackbar } from '@mui/material';
+import { useCallback, useEffect, useRef } from 'react';
 import { acknowledgeKtvMessageRead, getKtvSentMessages } from '../apis';
 import { isKtv } from '../../utils/permissions';
 import { showBrowserNotification } from '../../utils/browserNotifications';
+import { useToast } from '../../context/ToastContext';
 import useDeferredReady from '../../hooks/useDeferredReady';
 import usePageVisible from '../../hooks/usePageVisible';
 
 const POLL_INTERVAL_MS = 30_000;
 
-const useKtvReadNotifications = (user) => {
+const KtvReadNotificationListener = ({ user }) => {
+  const toast = useToast();
   const allowed = isKtv(user);
   const enabled = useDeferredReady(allowed, 2500);
   const pageVisible = usePageVisible();
-  const [notice, setNotice] = useState(null);
   const knownIdsRef = useRef(new Set());
   const initialLoadRef = useRef(false);
 
@@ -27,9 +27,10 @@ const useKtvReadNotifications = (user) => {
 
       if (initialLoadRef.current && freshItems.length > 0) {
         const latest = freshItems[0];
-        setNotice(latest);
-
         const readerName = latest.readByName || 'Admin';
+        const text = `${readerName} đã xem tin nhắn của bạn về xe ${latest.plateNumber}`;
+
+        toast.success(text, { duration: 8000 });
         showBrowserNotification({
           title: 'Admin đã xem tin nhắn',
           body: `${readerName} đã xem tin về xe ${latest.plateNumber}`,
@@ -47,7 +48,7 @@ const useKtvReadNotifications = (user) => {
     } catch (err) {
       console.error('Lỗi khi kiểm tra thông báo đã xem:', err);
     }
-  }, [enabled]);
+  }, [enabled, toast]);
 
   useEffect(() => {
     if (!enabled || !pageVisible) return undefined;
@@ -57,31 +58,7 @@ const useKtvReadNotifications = (user) => {
     return () => clearInterval(intervalId);
   }, [enabled, pageVisible, pollNotices]);
 
-  const closeNotice = () => setNotice(null);
-
-  return { notice, closeNotice };
-};
-
-const KtvReadNotificationListener = ({ user }) => {
-  const { notice, closeNotice } = useKtvReadNotifications(user);
-
-  if (!notice) return null;
-
-  const readerName = notice.readByName || 'Admin';
-  const text = `${readerName} đã xem tin nhắn của bạn về xe ${notice.plateNumber}`;
-
-  return (
-    <Snackbar
-      open
-      autoHideDuration={8000}
-      onClose={closeNotice}
-      anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
-    >
-      <Alert onClose={closeNotice} severity="success" variant="filled" sx={{ width: '100%' }}>
-        {text}
-      </Alert>
-    </Snackbar>
-  );
+  return null;
 };
 
 export default KtvReadNotificationListener;

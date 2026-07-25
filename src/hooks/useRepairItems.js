@@ -12,6 +12,7 @@ import {
   getItemWorkerTotalPercentage,
 } from '../utils/manageCarsHelpers';
 
+/** setSnackbar: legacy ({ open, message, severity }) — dùng toast.fromSnackbar */
 const useRepairItems = ({ allWorkers, ensureAllWorkers, setSnackbar }) => {
   const [repairDialogOpen, setRepairDialogOpen] = useState(false);
   const [repairCar, setRepairCar] = useState(null);

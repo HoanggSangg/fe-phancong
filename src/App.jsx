@@ -8,6 +8,8 @@ import LoginPage from './components/pages/LoginPage';
 import RegisterPage from './components/pages/RegisterPage';
 import KtvReadNotificationListener from './components/common/KtvReadNotificationListener';
 import KtvInboxNotificationListener from './components/common/KtvInboxNotificationListener';
+import MaintenanceGate from './components/common/MaintenanceGate';
+import MaintenanceNoticeListener from './components/common/MaintenanceNoticeListener';
 import {
   hasPermission,
   getFirstAllowedPath,
@@ -36,6 +38,7 @@ const OperationHistoryPage = lazy(() => import('./components/pages/OperationHist
 const KtvMessagesPage = lazy(() => import('./components/pages/KtvMessagesPage'));
 const PayrollPage = lazy(() => import('./components/pages/PayrollPage'));
 const AttendancePayrollPage = lazy(() => import('./components/pages/AttendancePayrollPage'));
+const SystemSettingsPage = lazy(() => import('./components/pages/SystemSettingsPage'));
 
 const RouteFallback = () => (
   <Box display="flex" justifyContent="center" alignItems="center" minHeight="40vh">
@@ -104,6 +107,7 @@ const AppShell = () => {
   return (
     <>
       <AppBarComponent />
+      <MaintenanceNoticeListener />
       <KtvReadNotificationListener user={user} />
       <KtvInboxNotificationListener user={user} />
       <Box component="main">
@@ -167,6 +171,7 @@ const AppLayout = () => (
       <Route path="/account-permissions" element={<Navigate to="/admin/account-permissions" replace />} />
       <Route path="/audit-logs" element={<Navigate to="/admin/audit-logs" replace />} />
       <Route path="/ktv-messages" element={<Navigate to="/admin/ktv-messages" replace />} />
+      <Route path="/settings" element={<Navigate to="/admin/settings" replace />} />
       <Route path="/payroll" element={<Navigate to="/admin/payroll" replace />} />
       <Route path="/attendance-payroll" element={<Navigate to="/admin/attendance-payroll" replace />} />
 
@@ -179,40 +184,43 @@ function App() {
   return (
     <AuthProvider>
       <Router>
-        <Routes>
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/register" element={<RegisterPage />} />
-          <Route
-            path="/admin"
-            element={(
-              <RequireAuth>
-                <AdminShell />
-              </RequireAuth>
-            )}
-          >
-            <Route index element={<Navigate to="/admin/dashboard" replace />} />
-            <Route path="dashboard" element={withSuspense(<PermissionRoute permission="reports.dashboard"><AdminDashboardPage /></PermissionRoute>)} />
-            <Route path="workers" element={withSuspense(<PermissionRoute permission="workers.main"><MainWorkersPage /></PermissionRoute>)} />
-            <Route path="teams" element={withSuspense(<PermissionRoute permission="teams.manage"><TeamManagement /></PermissionRoute>)} />
-            <Route path="locations" element={withSuspense(<PermissionRoute permission="system.locations"><LocationManager /></PermissionRoute>)} />
-            <Route path="supervisors" element={withSuspense(<PermissionRoute permission="system.supervisors"><SupervisorsPage /></PermissionRoute>)} />
-            <Route path="users" element={withSuspense(<PermissionRoute permission="system.users"><UserManagement /></PermissionRoute>)} />
-            <Route path="account-permissions" element={withSuspense(<PermissionRoute permission="system.permissions"><AccountPermissionsPage /></PermissionRoute>)} />
-            <Route path="audit-logs" element={withSuspense(<PermissionRoute permission="system.audit-logs"><OperationHistoryPage /></PermissionRoute>)} />
-            <Route path="ktv-messages" element={withSuspense(<PermissionRoute permission="system.ktv-messages"><KtvMessagesPage /></PermissionRoute>)} />
-            <Route path="payroll" element={withSuspense(<PermissionRoute permission="payroll.manage"><PayrollPage /></PermissionRoute>)} />
-            <Route path="attendance-payroll" element={withSuspense(<PermissionRoute permission="payroll.day-work"><AttendancePayrollPage /></PermissionRoute>)} />
-            <Route path="*" element={<Navigate to="/admin" replace />} />
-          </Route>
-          <Route
-            path="/*"
-            element={(
-              <RequireAuth>
-                <AppLayout />
-              </RequireAuth>
-            )}
-          />
-        </Routes>
+        <MaintenanceGate>
+          <Routes>
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/register" element={<RegisterPage />} />
+            <Route
+              path="/admin"
+              element={(
+                <RequireAuth>
+                  <AdminShell />
+                </RequireAuth>
+              )}
+            >
+              <Route index element={<Navigate to="/admin/dashboard" replace />} />
+              <Route path="dashboard" element={withSuspense(<PermissionRoute permission="reports.dashboard"><AdminDashboardPage /></PermissionRoute>)} />
+              <Route path="workers" element={withSuspense(<PermissionRoute permission="workers.main"><MainWorkersPage /></PermissionRoute>)} />
+              <Route path="teams" element={withSuspense(<PermissionRoute permission="teams.manage"><TeamManagement /></PermissionRoute>)} />
+              <Route path="locations" element={withSuspense(<PermissionRoute permission="system.locations"><LocationManager /></PermissionRoute>)} />
+              <Route path="supervisors" element={withSuspense(<PermissionRoute permission="system.supervisors"><SupervisorsPage /></PermissionRoute>)} />
+              <Route path="users" element={withSuspense(<PermissionRoute permission="system.users"><UserManagement /></PermissionRoute>)} />
+              <Route path="account-permissions" element={withSuspense(<PermissionRoute permission="system.permissions"><AccountPermissionsPage /></PermissionRoute>)} />
+              <Route path="audit-logs" element={withSuspense(<PermissionRoute permission="system.audit-logs"><OperationHistoryPage /></PermissionRoute>)} />
+              <Route path="ktv-messages" element={withSuspense(<PermissionRoute permission="system.ktv-messages"><KtvMessagesPage /></PermissionRoute>)} />
+              <Route path="settings" element={withSuspense(<PermissionRoute permission="system.settings"><SystemSettingsPage /></PermissionRoute>)} />
+              <Route path="payroll" element={withSuspense(<PermissionRoute permission="payroll.manage"><PayrollPage /></PermissionRoute>)} />
+              <Route path="attendance-payroll" element={withSuspense(<PermissionRoute permission="payroll.day-work"><AttendancePayrollPage /></PermissionRoute>)} />
+              <Route path="*" element={<Navigate to="/admin" replace />} />
+            </Route>
+            <Route
+              path="/*"
+              element={(
+                <RequireAuth>
+                  <AppLayout />
+                </RequireAuth>
+              )}
+            />
+          </Routes>
+        </MaintenanceGate>
       </Router>
     </AuthProvider>
   );

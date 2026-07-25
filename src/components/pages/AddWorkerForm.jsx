@@ -2,8 +2,10 @@ import { useState } from 'react';
 import { createWorker } from '../apis/index';
 import { TextField, Button, Box } from '@mui/material';
 import imageCompression from 'browser-image-compression';
+import { useToast } from '../../context/ToastContext';
 
 const AddWorkerForm = ({ onSuccess, embedded = false }) => {
+  const toast = useToast();
   const [workerName, setWorkerName] = useState('');
   const [soBaoDanh, setSoBaoDanh] = useState('');
   const [loading, setLoading] = useState(false);
@@ -22,12 +24,12 @@ const AddWorkerForm = ({ onSuccess, embedded = false }) => {
     e.preventDefault();
 
     if (!workerName.trim()) {
-      alert('Vui lòng nhập tên thợ');
+      toast.error('Vui lòng nhập tên thợ');
       return;
     }
 
     if (!soBaoDanh.trim()) {
-      alert('Vui lòng nhập số báo danh');
+      toast.error('Vui lòng nhập số báo danh');
       return;
     }
 
@@ -45,6 +47,7 @@ const AddWorkerForm = ({ onSuccess, embedded = false }) => {
         countRevenue: true,
       });
 
+      toast.success('Đã thêm thợ thành công');
       onSuccess?.();
       setWorkerName('');
       setSoBaoDanh('');
@@ -52,7 +55,7 @@ const AddWorkerForm = ({ onSuccess, embedded = false }) => {
       setAvatarPreview('');
     } catch (err) {
       console.error('Lỗi khi tạo thợ:', err);
-      alert(err.response?.data?.message || 'Lỗi khi tạo thợ');
+      toast.error(err.response?.data?.message || 'Lỗi khi tạo thợ');
     } finally {
       setLoading(false);
     }

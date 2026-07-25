@@ -23,6 +23,7 @@ import {
   updateKtvMessageSettings,
 } from '../apis';
 import { useAuth } from '../../context/AuthContext';
+import { useToast } from '../../context/ToastContext';
 import { ROLE_LABELS } from '../../utils/permissions';
 import { normalizeROKey } from '../../utils/carListHelpers';
 import PageLayout from '../common/PageLayout';
@@ -169,23 +170,21 @@ const KtvMessagesPage = () => {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
   const pageVisible = usePageVisible();
+  const toast = useToast();
 
   const [statusFilter, setStatusFilter] = useState('unread');
   const [messages, setMessages] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
   const [markingId, setMarkingId] = useState('');
   const [settingsLoading, setSettingsLoading] = useState(false);
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [eligibleUsers, setEligibleUsers] = useState([]);
   const [selectedReceivers, setSelectedReceivers] = useState([]);
-  const [settingsMessage, setSettingsMessage] = useState('');
 
   const fetchMessages = useCallback(async (silent = false) => {
     if (silent && document.visibilityState === 'hidden') return;
     if (!silent) setLoading(true);
-    setError('');
 
     try {
       const res = await getKtvMessages({
@@ -196,11 +195,11 @@ const KtvMessagesPage = () => {
       setMessages(res.data.items || []);
       setUnreadCount(res.data.unreadCount || 0);
     } catch (err) {
-      setError(err.response?.data?.message || 'Không tải được tin nhắn KTV');
+      if (!silent) toast.error(err.response?.data?.message || 'Không tải được tin nhắn KTV');
     } finally {
       if (!silent) setLoading(false);
     }
-  }, [statusFilter]);
+  }, [statusFilter, toast]);
 
   const fetchSettings = useCallback(async () => {
     if (!isAdmin) return;
@@ -215,7 +214,7 @@ const KtvMessagesPage = () => {
       setEligibleUsers(users);
       setSelectedReceivers(users.filter((item) => selectedIds.has(String(item._id))));
     } catch (err) {
-      setSettingsMessage(err.response?.data?.message || 'Không tải được cấu hình nhận tin');
+      toast.error(err.response?.data?.message || 'Không tải được cấu hình nhận tin');
     } finally {
       setSettingsLoading(false);
     }
@@ -254,7 +253,7 @@ const KtvMessagesPage = () => {
       await markKtvMessageRead(id);
       await fetchMessages(true);
     } catch (err) {
-      setError(err.response?.data?.message || 'Không đánh dấu được đã xem');
+      toast.error(err.response?.data?.message || 'Không đánh dấu được đã xem');
     } finally {
       setMarkingId('');
     }
@@ -294,14 +293,13 @@ const KtvMessagesPage = () => {
 
   const handleSaveSettings = async () => {
     setSettingsSaving(true);
-    setSettingsMessage('');
 
     try {
       const res = await updateKtvMessageSettings(selectedReceivers.map((item) => item._id));
-      setSettingsMessage(res.data.message || 'Đã lưu cấu hình');
+      toast.success(res.data.message || 'Đã lưu cấu hình');
       await fetchMessages(true);
     } catch (err) {
-      setSettingsMessage(err.response?.data?.message || 'Lưu cấu hình thất bại');
+      toast.error(err.response?.data?.message || 'Lưu cấu hình thất bại');
     } finally {
       setSettingsSaving(false);
     }
@@ -380,11 +378,6 @@ const KtvMessagesPage = () => {
                 </Button>
               </Box>
 
-              {settingsMessage && (
-                <Alert severity="info" onClose={() => setSettingsMessage('')}>
-                  {settingsMessage}
-                </Alert>
-              )}
             </Stack>
           )}
         </Paper>
@@ -406,12 +399,6 @@ const KtvMessagesPage = () => {
           />
         ))}
       </Stack>
-
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>
-          {error}
-        </Alert>
-      )}
 
       {loading ? (
         <Box display="flex" justifyContent="center" py={4}>

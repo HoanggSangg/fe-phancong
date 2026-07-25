@@ -24,6 +24,7 @@ import {
 import { Edit, Delete, SupervisorAccount } from '@mui/icons-material';
 import PageLayout from '../common/PageLayout';
 import PageHeader from '../common/PageHeader';
+import { useToast } from '../../context/ToastContext';
 
 const SupervisorRow = ({ supervisor, index, onEdit, onDelete }) => (
   <Paper
@@ -75,6 +76,7 @@ const SupervisorRow = ({ supervisor, index, onEdit, onDelete }) => (
 );
 
 const SupervisorsPage = () => {
+  const toast = useToast();
   const [supervisors, setSupervisors] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [editOpen, setEditOpen] = useState(false);
@@ -151,7 +153,7 @@ const SupervisorsPage = () => {
   const handleAddSupervisor = async (e) => {
     e.preventDefault();
     if (!newSupervisor.name.trim()) {
-      alert('Vui lòng nhập tên giám sát');
+      toast.error('Vui lòng nhập tên giám sát');
       return;
     }
     try {
@@ -297,7 +299,7 @@ const SupervisorsPage = () => {
                 setPassword('');
                 proceedDelete(deleteTargetId);
               } else {
-                alert('Sai mật khẩu!');
+                toast.error('Sai mật khẩu!');
               }
             }}
           >

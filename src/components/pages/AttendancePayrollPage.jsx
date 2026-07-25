@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Alert,
   Button,
   Chip,
   FormControl,
@@ -17,6 +16,7 @@ import SaveIcon from '@mui/icons-material/Save';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import SettingsIcon from '@mui/icons-material/Settings';
 import PageLayout from '../common/PageLayout';
+import { useToast } from '../../context/ToastContext';
 import PageHeader from '../common/PageHeader';
 import FilterPanel from '../common/FilterPanel';
 import AttendanceCalendarTab from '../AttendancePayroll/AttendanceCalendarTab';
@@ -39,6 +39,7 @@ import { exportDayWorkPayrollToExcel } from '../../utils/dayWorkPayrollExcel';
 import { parseDayListInput } from '../../utils/attendanceUi';
 
 const AttendancePayrollPage = () => {
+  const toast = useToast();
   const [tab, setTab] = useState('calendar');
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
@@ -49,7 +50,6 @@ const AttendancePayrollPage = () => {
 
   const [calendarData, setCalendarData] = useState(null);
   const [calLoading, setCalLoading] = useState(false);
-  const [message, setMessage] = useState({ type: '', text: '' });
 
   const [selectedDates, setSelectedDates] = useState([]);
   const [multiMode, setMultiMode] = useState(false);
@@ -88,23 +88,19 @@ const AttendancePayrollPage = () => {
         return list[0]?._id || '';
       });
     } catch {
-      setMessage({ type: 'error', text: 'Không tải được danh sách thợ' });
+      toast.error('Không tải được danh sách thợ');
     }
   }, [teamId]);
 
   const loadCalendar = useCallback(async () => {
     if (!workerId) return;
     setCalLoading(true);
-    setMessage({ type: '', text: '' });
     try {
       const res = await getAttendanceCalendar(workerId, year, month);
       setCalendarData(res.data);
       setSelectedDates([]);
     } catch (err) {
-      setMessage({
-        type: 'error',
-        text: err.response?.data?.message || 'Không tải lịch chấm công',
-      });
+      toast.error(err.response?.data?.message || 'Không tải lịch chấm công');
       setCalendarData(null);
     } finally {
       setCalLoading(false);
@@ -113,7 +109,6 @@ const AttendancePayrollPage = () => {
 
   const loadPayroll = useCallback(async () => {
     setPayrollLoading(true);
-    setMessage({ type: '', text: '' });
     try {
       const res = await getDayWorkPayroll(year, month);
       setPayrollRows(res.data?.data?.rows || []);
@@ -124,10 +119,7 @@ const AttendancePayrollPage = () => {
         hoursPerDay: res.data?.data?.hoursPerDay,
       });
     } catch (err) {
-      setMessage({
-        type: 'error',
-        text: err.response?.data?.message || 'Không tải bảng lương ngày công',
-      });
+      toast.error(err.response?.data?.message || 'Không tải bảng lương ngày công');
       setPayrollRows([]);
     } finally {
       setPayrollLoading(false);
@@ -190,15 +182,12 @@ const AttendancePayrollPage = () => {
     setSaving(true);
     try {
       await upsertAttendanceDays(workerId, year, month, payload);
-      setMessage({ type: 'success', text: 'Đã lưu chấm công' });
+      toast.success('Đã lưu chấm công');
       setDayDialog(null);
       setSelectedDates([]);
       await loadCalendar();
     } catch (err) {
-      setMessage({
-        type: 'error',
-        text: err.response?.data?.message || 'Lưu chấm công thất bại',
-      });
+      toast.error(err.response?.data?.message || 'Lưu chấm công thất bại');
     } finally {
       setSaving(false);
     }
@@ -246,7 +235,7 @@ const AttendancePayrollPage = () => {
       return;
     }
     if (!dates.length) {
-      setMessage({ type: 'warning', text: 'Chọn ngày hoặc nhập danh sách ngày' });
+      toast.warning('Chọn ngày hoặc nhập danh sách ngày');
       return;
     }
     applyPayload({ dates, status: applyStatus });
@@ -258,7 +247,7 @@ const AttendancePayrollPage = () => {
       setSettingsForm(res.data?.data || {});
       setSettingsOpen(true);
     } catch {
-      setMessage({ type: 'error', text: 'Không tải cấu hình' });
+      toast.error('Không tải cấu hình');
     }
   };
 
@@ -266,10 +255,10 @@ const AttendancePayrollPage = () => {
     try {
       await updateAttendanceSettings(settingsForm);
       setSettingsOpen(false);
-      setMessage({ type: 'success', text: 'Đã lưu cấu hình chấm công' });
+      toast.success('Đã lưu cấu hình chấm công');
       if (tab === 'calendar') loadCalendar();
     } catch (err) {
-      setMessage({ type: 'error', text: err.response?.data?.message || 'Lưu thất bại' });
+      toast.error(err.response?.data?.message || 'Lưu thất bại');
     }
   };
 
@@ -280,9 +269,9 @@ const AttendancePayrollPage = () => {
       setPayrollRows(res.data?.data?.rows || []);
       setPayrollTotals(res.data?.data?.totals || {});
       setPayrollStatus(res.data?.data?.status || 'draft');
-      setMessage({ type: 'success', text: 'Đã đồng bộ từ chấm công' });
+      toast.success('Đã đồng bộ từ chấm công');
     } catch (err) {
-      setMessage({ type: 'error', text: err.response?.data?.message || 'Đồng bộ thất bại' });
+      toast.error(err.response?.data?.message || 'Đồng bộ thất bại');
     } finally {
       setSaving(false);
     }
@@ -298,9 +287,9 @@ const AttendancePayrollPage = () => {
       setPayrollRows(res.data?.data?.rows || []);
       setPayrollTotals(res.data?.data?.totals || {});
       setPayrollStatus(res.data?.data?.status || 'saved');
-      setMessage({ type: 'success', text: 'Đã lưu bảng lương ngày công' });
+      toast.success('Đã lưu bảng lương ngày công');
     } catch (err) {
-      setMessage({ type: 'error', text: err.response?.data?.message || 'Lưu thất bại' });
+      toast.error(err.response?.data?.message || 'Lưu thất bại');
     } finally {
       setSaving(false);
     }
@@ -314,9 +303,9 @@ const AttendancePayrollPage = () => {
         rows: payrollRows,
         totals: payrollTotals,
       });
-      setMessage({ type: 'success', text: 'Đã xuất Excel' });
+      toast.success('Đã xuất Excel');
     } catch (err) {
-      setMessage({ type: 'error', text: err.message || 'Xuất Excel thất bại' });
+      toast.error(err.message || 'Xuất Excel thất bại');
     }
   };
 
@@ -423,12 +412,6 @@ const AttendancePayrollPage = () => {
           )}
         </Stack>
       </FilterPanel>
-
-      {message.text && (
-        <Alert severity={message.type || 'info'} sx={{ mb: 1.5 }} onClose={() => setMessage({ type: '', text: '' })}>
-          {message.text}
-        </Alert>
-      )}
 
       {tab === 'calendar' && (
         <AttendanceCalendarTab

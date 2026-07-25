@@ -36,6 +36,7 @@ import {
 } from "../apis/index";
 import { queryKeys } from "../../lib/queryKeys";
 import { useAuth } from "../../context/AuthContext";
+import { useToast } from "../../context/ToastContext";
 import { ACTIVE_CAR_STATUSES, BUSY_CAR_STATUSES, CAR_STATUS_LABELS, hasPermission, isKtv } from "../../utils/permissions";
 import { filterWorkersByKeyword } from "../../utils/workerSearch";
 import useIsMobile from "../../hooks/useIsMobile";
@@ -49,6 +50,7 @@ import FilterPanel from "../common/FilterPanel";
 
 const WokerAssignment = () => {
   const { user } = useAuth();
+  const toast = useToast();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [date, setDate] = useState("");
@@ -187,7 +189,7 @@ const WokerAssignment = () => {
     const detail = jobInputs[worker._id]?.trim();
 
     if (!detail) {
-      alert("Vui lòng nhập chi tiết công việc");
+      toast.error("Vui lòng nhập chi tiết công việc");
       return;
     }
 
@@ -199,10 +201,10 @@ const WokerAssignment = () => {
 
       setJobInputs((prev) => ({ ...prev, [worker._id]: "" }));
       await reloadWorkers();
-      alert("Đã giao việc cho thợ");
+      toast.success("Đã giao việc cho thợ");
     } catch (err) {
       console.log(err);
-      alert(err.response?.data?.message || "Lỗi khi giao việc");
+      toast.error(err.response?.data?.message || "Lỗi khi giao việc");
     }
   };
 
@@ -212,10 +214,10 @@ const WokerAssignment = () => {
     try {
       await removeManualJobFromWorker(workerId, jobId);
       await reloadWorkers();
-      alert("Đã xóa công việc");
+      toast.success("Đã xóa công việc");
     } catch (err) {
       console.log(err);
-      alert(err.response?.data?.message || "Lỗi khi xóa công việc");
+      toast.error(err.response?.data?.message || "Lỗi khi xóa công việc");
     }
   };
 

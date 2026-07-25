@@ -23,6 +23,7 @@ import PageLayout from '../common/PageLayout';
 import PageHeader from '../common/PageHeader';
 import { invalidateWorkerJobCaches } from '../../lib/carCache';
 import { queryKeys } from '../../lib/queryKeys';
+import { useToast } from '../../context/ToastContext';
 
 dayjs.extend(customParseFormat);
 
@@ -78,6 +79,7 @@ const getExternalContext = (externalData) => {
 };
 
 const AddCar = ({ onSuccess }) => {
+  const toast = useToast();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
@@ -225,7 +227,7 @@ const AddCar = ({ onSuccess }) => {
     const ctx = getExternalContext(externalData);
 
     if (!ctx.externalCarTypeName) {
-      alert('Chưa có loại xe từ dữ liệu API. Vui lòng tra biển số/RO trước.');
+      toast.error('Chưa có loại xe từ dữ liệu API. Vui lòng tra biển số/RO trước.');
       return;
     }
 
@@ -264,7 +266,7 @@ const AddCar = ({ onSuccess }) => {
     const roCode = cleanText(header.khoa || externalData?.selectedRO || '');
 
     if (!roNumber && !roCode) {
-      alert('Thiếu số RO. Vui lòng tra cứu biển số hoặc RO trước khi thêm xe.');
+      toast.error('Thiếu số RO. Vui lòng tra cứu biển số hoặc RO trước khi thêm xe.');
       return;
     }
 
@@ -310,7 +312,7 @@ const AddCar = ({ onSuccess }) => {
     } catch (error) {
       const errorMsg =
         error.response?.data?.message || 'Đã xảy ra lỗi khi thêm xe';
-      alert(errorMsg);
+      toast.error(errorMsg);
       console.error('Lỗi khi thêm xe:', error);
     }
   };

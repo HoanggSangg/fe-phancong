@@ -6,15 +6,16 @@ import {
   Paper,
   TextField,
   Typography,
-  Alert,
   Link,
   Stack,
 } from '@mui/material';
 import { useAuth } from '../../context/AuthContext';
+import { useToast } from '../../context/ToastContext';
 import { AuthPageShell } from '../common/AnimatedValue';
 
 const RegisterPage = () => {
   const { register, isAuthenticated } = useAuth();
+  const toast = useToast();
   const navigate = useNavigate();
   const [form, setForm] = useState({
     username: '',
@@ -22,7 +23,6 @@ const RegisterPage = () => {
     confirmPassword: '',
     fullName: '',
   });
-  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
   if (isAuthenticated) {
@@ -35,10 +35,9 @@ const RegisterPage = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError('');
 
     if (form.password !== form.confirmPassword) {
-      setError('Mật khẩu xác nhận không khớp');
+      toast.error('Mật khẩu xác nhận không khớp');
       return;
     }
 
@@ -51,7 +50,7 @@ const RegisterPage = () => {
       });
       navigate('/cars');
     } catch (err) {
-      setError(err.response?.data?.message || 'Đăng ký thất bại');
+      toast.error(err.response?.data?.message || 'Đăng ký thất bại');
     } finally {
       setLoading(false);
     }
@@ -85,7 +84,6 @@ const RegisterPage = () => {
             </Typography>
           </Box>
 
-          {error && <Alert severity="error">{error}</Alert>}
 
           <TextField label="Họ tên" value={form.fullName} onChange={handleChange('fullName')} required fullWidth />
           <TextField label="Tên đăng nhập" value={form.username} onChange={handleChange('username')} required fullWidth />

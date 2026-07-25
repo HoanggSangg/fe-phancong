@@ -112,6 +112,10 @@ export const recalculatePayroll = (year, month) =>
 export const getAttendanceSettings = () => api.get('/attendance/settings');
 export const updateAttendanceSettings = (payload) =>
   api.put('/attendance/settings', payload);
+
+export const getSystemStatus = () => api.get('/system/status');
+export const getSystemSettings = () => api.get('/system/settings');
+export const updateSystemSettings = (payload) => api.put('/system/settings', payload);
 export const getAttendanceWorkers = (params) =>
   api.get('/attendance/workers', { params });
 export const getAttendanceCalendar = (workerId, year, month) =>

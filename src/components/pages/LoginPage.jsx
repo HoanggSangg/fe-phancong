@@ -6,22 +6,22 @@ import {
   Paper,
   TextField,
   Typography,
-  Alert,
   Link,
   Stack,
   FormControlLabel,
   Checkbox,
 } from '@mui/material';
 import { useAuth, REMEMBER_USERNAME_KEY } from '../../context/AuthContext';
+import { useToast } from '../../context/ToastContext';
 import { AuthPageShell } from '../common/AnimatedValue';
 
 const LoginPage = () => {
   const { login, isAuthenticated } = useAuth();
+  const toast = useToast();
   const navigate = useNavigate();
   const [username, setUsername] = useState(() => localStorage.getItem(REMEMBER_USERNAME_KEY) || '');
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(() => !!localStorage.getItem(REMEMBER_USERNAME_KEY));
-  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
   if (isAuthenticated) {
@@ -30,14 +30,13 @@ const LoginPage = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError('');
     setLoading(true);
 
     try {
       await login({ username, password }, rememberMe);
       navigate('/cars');
     } catch (err) {
-      setError(err.response?.data?.message || 'Đăng nhập thất bại');
+      toast.error(err.response?.data?.message || 'Đăng nhập thất bại');
     } finally {
       setLoading(false);
     }
@@ -71,7 +70,6 @@ const LoginPage = () => {
             </Typography>
           </Box>
 
-          {error && <Alert severity="error">{error}</Alert>}
 
           <TextField
             label="Tên đăng nhập"

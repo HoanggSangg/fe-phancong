@@ -157,6 +157,17 @@ export const PERMISSION_CATALOG = [
     defaultRoles: ['admin'],
   },
   {
+    key: 'system.settings',
+    label: 'Cài đặt',
+    group: 'Hệ thống',
+    path: '/settings',
+    adminPath: '/admin/settings',
+    adminArea: true,
+    adminGroup: 'Hệ thống',
+    hideFromNav: true,
+    defaultRoles: ['admin'],
+  },
+  {
     key: 'payroll.manage',
     label: 'Tính lương tháng',
     group: 'Báo cáo',

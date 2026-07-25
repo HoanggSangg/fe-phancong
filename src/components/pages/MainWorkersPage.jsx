@@ -12,6 +12,7 @@ import { PERIOD_OPTIONS, getDateRangeForPeriod, formatMoney, getTodayDate } from
 import AddWorkerForm from './AddWorkerForm';
 import { parseWorkersFromExcelFile } from '../../utils/workerExcel';
 import { useAuth } from '../../context/AuthContext';
+import { useToast } from '../../context/ToastContext';
 import { hasPermission } from '../../utils/permissions';
 import {
   Typography,
@@ -31,7 +32,6 @@ import {
   Paper,
   Avatar,
   Tooltip,
-  Alert,
   Switch,
   ToggleButton,
   ToggleButtonGroup,
@@ -124,14 +124,13 @@ const WorkerRow = ({
 const WorkersPage = () => {
   const isMobile = useIsMobile();
   const { user } = useAuth();
+  const toast = useToast();
   const canImportExcel = hasPermission(user, 'workers.main');
   const canManageRevenue = canImportExcel;
   const [workers, setWorkers] = useState([]);
   const [filterKeyword, setFilterKeyword] = useState('');
   const debouncedFilterKeyword = useDebouncedValue(filterKeyword, 300);
   const [importing, setImporting] = useState(false);
-  const [importMessage, setImportMessage] = useState('');
-  const [importError, setImportError] = useState('');
   const [togglingRevenueId, setTogglingRevenueId] = useState(null);
   const [editOpen, setEditOpen] = useState(false);
   const [editSaving, setEditSaving] = useState(false);
@@ -235,17 +234,17 @@ const WorkersPage = () => {
       }));
     } catch (error) {
       console.error('Lỗi nén ảnh:', error);
-      alert('Không thể xử lý ảnh. Vui lòng thử ảnh khác.');
+      toast.error('Không thể xử lý ảnh. Vui lòng thử ảnh khác.');
     }
   };
 
   const handleEditSave = async () => {
     if (!editData.name.trim()) {
-      alert('Vui lòng nhập tên thợ');
+      toast.error('Vui lòng nhập tên thợ');
       return;
     }
     if (!editData.soBaoDanh.trim()) {
-      alert('Vui lòng nhập số báo danh');
+      toast.error('Vui lòng nhập số báo danh');
       return;
     }
 
@@ -265,7 +264,7 @@ const WorkersPage = () => {
       fetchWorkers();
     } catch (error) {
       console.error('Lỗi khi cập nhật thợ:', error);
-      alert(error.response?.data?.message || 'Lỗi khi cập nhật thợ');
+      toast.error(error.response?.data?.message || 'Lỗi khi cập nhật thợ');
     } finally {
       setEditSaving(false);
     }
@@ -283,7 +282,7 @@ const WorkersPage = () => {
       );
     } catch (error) {
       console.error('Lỗi khi cập nhật trạng thái tính doanh thu:', error);
-      alert(error.response?.data?.message || 'Không thể cập nhật trạng thái tính doanh thu');
+      toast.error(error.response?.data?.message || 'Không thể cập nhật trạng thái tính doanh thu');
     } finally {
       setTogglingRevenueId(null);
     }
@@ -341,24 +340,21 @@ const WorkersPage = () => {
     event.target.value = '';
     if (!file) return;
 
-    setImportMessage('');
-    setImportError('');
-
     try {
       setImporting(true);
       const parsedWorkers = await parseWorkersFromExcelFile(file);
 
       if (parsedWorkers.length === 0) {
-        setImportError('Không tìm thấy dòng thợ hợp lệ (cần cột STT và Tên nhân viên).');
+        toast.error('Không tìm thấy dòng thợ hợp lệ (cần cột STT và Tên nhân viên).');
         return;
       }
 
       const res = await importWorkersBulk(parsedWorkers);
-      setImportMessage(res.data.message || `Đã import ${parsedWorkers.length} thợ`);
+      toast.success(res.data.message || `Đã import ${parsedWorkers.length} thợ`);
       await fetchWorkers();
     } catch (err) {
       console.error('Lỗi import Excel:', err);
-      setImportError(err.response?.data?.message || err.message || 'Import Excel thất bại');
+      toast.error(err.response?.data?.message || err.message || 'Import Excel thất bại');
     } finally {
       setImporting(false);
     }
@@ -387,7 +383,7 @@ const WorkersPage = () => {
           border: 1,
           borderColor: 'divider',
           p: { xs: 1.5, sm: 2.5 },
-          mb: importMessage || importError ? 1 : 2,
+          mb: 2,
           width: '100%',
         }}
       >
@@ -472,16 +468,6 @@ const WorkersPage = () => {
         </Box>
       </Box>
 
-      {(importMessage || importError) && (
-        <Box sx={{ mb: 2, width: '100%' }}>
-          {importMessage && <Alert severity="success">{importMessage}</Alert>}
-          {importError && (
-            <Alert severity="error" sx={{ mt: importMessage ? 1 : 0 }}>
-              {importError}
-            </Alert>
-          )}
-        </Box>
-      )}
 
       <Grid container spacing={1} sx={{ mt: 1, width: '100%', mx: 0 }}>
         {filteredWorkers.map((w) => (
@@ -630,7 +616,7 @@ const WorkersPage = () => {
                 setPassword('');
                 proceedDelete(deleteTargetId);
               } else {
-                alert('❌ Sai mật khẩu!');
+                toast.error('Sai mật khẩu!');
               }
             }}
             sx={{ bgcolor: '#dc2626', px: 3 }}

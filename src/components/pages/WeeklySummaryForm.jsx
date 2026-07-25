@@ -4,6 +4,7 @@ import { Person } from '@mui/icons-material';
 import { getWorkerWeeklyRevenueSummary } from '../apis/index';
 import { formatMoney, getYesterdayDate } from '../../utils/dateFilters';
 import { PageContent } from '../common/AnimatedValue';
+import { useToast } from '../../context/ToastContext';
 
 const VARIANTS = {
   praise: {
@@ -55,6 +56,7 @@ const VARIANTS = {
 };
 
 const WeeklySummaryForm = ({ variant = 'praise' }) => {
+  const toast = useToast();
   const config = VARIANTS[variant] || VARIANTS.praise;
   const [worker, setWorker] = useState(null);
   const [week, setWeek] = useState(null);
@@ -70,13 +72,13 @@ const WeeklySummaryForm = ({ variant = 'praise' }) => {
         setWeek(res.data.week);
       } catch (error) {
         console.error(`Lỗi lấy dữ liệu ${config.errorLabel}:`, error);
-        alert(error.response?.data?.message || `Lỗi lấy dữ liệu ${config.errorLabel}`);
+        toast.error(error.response?.data?.message || `Lỗi lấy dữ liệu ${config.errorLabel}`);
       } finally {
         setLoading(false);
       }
     };
     load();
-  }, [variant]);
+  }, [variant, toast]);
 
   return (
     <Box

@@ -27,6 +27,7 @@ import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import { useAuth } from '../../context/AuthContext';
+import { useToast } from '../../context/ToastContext';
 import { CAR_STATUS_LABELS, isKtv, hasPermission } from '../../utils/permissions';
 import WorkerSearchSelect from '../common/WorkerSearchSelect';
 import { formatMoney } from '../../utils/dateFilters';
@@ -58,12 +59,12 @@ const formatAnimatedMoney = (value, animationKey) => (
 
 const RepairHistoryPage = () => {
   const { user } = useAuth();
+  const toast = useToast();
   const isKtvUser = isKtv(user?.role);
   const canViewRevenue = hasPermission(user, 'reports.revenue');
   const canViewItemPrices = isKtvUser || canViewRevenue;
 
   const [page, setPage] = useState(1);
-  const [exportError, setExportError] = useState('');
   const [exporting, setExporting] = useState(false);
   const [includeDeliveredDetails, setIncludeDeliveredDetails] = useState(false);
   const [expandedDeliveredCars, setExpandedDeliveredCars] = useState(() => new Set());
@@ -112,6 +113,11 @@ const RepairHistoryPage = () => {
   );
   const totalRevenue = summary.revenueAfterCommission || summary.totalRevenue;
   const errorMessage = error?.response?.data?.message || (error ? 'Không tải được lịch sử sửa chữa' : '');
+
+  useEffect(() => {
+    if (errorMessage) toast.error(errorMessage);
+  }, [errorMessage, toast]);
+
   const contentAnimationKey = `${fromDate}-${toDate}-${page}-${workerIdParam || 'all'}-${revenueBase}`;
   const isCostBase = revenueBase === 'cost';
 
@@ -128,7 +134,6 @@ const RepairHistoryPage = () => {
   };
 
   const handleExportExcel = async () => {
-    setExportError('');
     setExporting(true);
     try {
       const { items: exportItems } = await fetchRepairHistoryData({
@@ -140,7 +145,7 @@ const RepairHistoryPage = () => {
 
       const exportCarGroups = buildCarGroups(exportItems, revenueBase);
       if (exportCarGroups.length === 0) {
-        setExportError('Không có dữ liệu để xuất Excel trong khoảng đã chọn.');
+        toast.warning('Không có dữ liệu để xuất Excel trong khoảng đã chọn.');
         return;
       }
 
@@ -154,7 +159,7 @@ const RepairHistoryPage = () => {
       });
     } catch (err) {
       console.error(err);
-      setExportError(err.response?.data?.message || err.message || 'Xuất Excel thất bại');
+      toast.error(err.response?.data?.message || err.message || 'Xuất Excel thất bại');
     } finally {
       setExporting(false);
     }
@@ -483,18 +488,6 @@ const RepairHistoryPage = () => {
           </Typography>
         </PeriodFilterToolbar>
       </FilterPanel>
-
-      {errorMessage && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {errorMessage}
-        </Alert>
-      )}
-
-      {exportError && (
-        <Alert severity="warning" sx={{ mb: 2 }} onClose={() => setExportError('')}>
-          {exportError}
-        </Alert>
-      )}
 
       {historyLoading ? (
         <Box display="flex" justifyContent="center" py={6}>

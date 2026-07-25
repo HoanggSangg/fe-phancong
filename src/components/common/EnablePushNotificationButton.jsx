@@ -10,8 +10,10 @@ import {
   setPushEnabled,
   showBrowserNotification,
 } from '../../utils/browserNotifications';
+import { useToast } from '../../context/ToastContext';
 
 const EnablePushNotificationButton = ({ size = 'small', sx }) => {
+  const toast = useToast();
   const supported = isNotificationSupported();
   const [enabled, setEnabled] = useState(isPushEnabled());
   const [loading, setLoading] = useState(false);
@@ -23,7 +25,7 @@ const EnablePushNotificationButton = ({ size = 'small', sx }) => {
 
   const handleClick = async () => {
     if (denied) {
-      window.alert('Trình duyệt đã chặn thông báo. Vào cài đặt trình duyệt để bật lại.');
+      toast.warning('Trình duyệt đã chặn thông báo. Vào cài đặt trình duyệt để bật lại.');
       return;
     }
 

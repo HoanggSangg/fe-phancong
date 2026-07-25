@@ -48,6 +48,7 @@ import PageHeader from '../common/PageHeader';
 import FilterPanel from '../common/FilterPanel';
 import { hoverLiftSx } from '../common/AnimatedValue';
 import { queryKeys } from '../../lib/queryKeys';
+import { useToast } from '../../context/ToastContext';
 
 const StatCard = ({ label, value, color = '#1e293b', sub }) => (
   <Card sx={{ height: '100%', border: '1px solid #e2e8f0', ...hoverLiftSx }}>
@@ -68,20 +69,18 @@ const StatCard = ({ label, value, color = '#1e293b', sub }) => (
 );
 
 const AdminDashboardPage = () => {
+  const toast = useToast();
   const queryClient = useQueryClient();
   const { period, setPeriod, fromDate, setFromDate, toDate, setToDate } = usePeriodFilter('today');
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [deductions, setDeductions] = useState([]);
   const [revenueBase, setRevenueBase] = useState('amount');
   const [savingSettings, setSavingSettings] = useState(false);
-  const [settingsError, setSettingsError] = useState('');
 
   const fetchDashboard = useCallback(async () => {
     setLoading(true);
-    setError('');
     try {
       const params = { period };
       if (period === 'custom') {
@@ -97,32 +96,30 @@ const AdminDashboardPage = () => {
         setRevenueBase(normalizeRevenueBase(res.data.revenueBase));
       }
     } catch (err) {
-      setError(err.response?.data?.message || 'Không tải được dashboard');
+      toast.error(err.response?.data?.message || 'Không tải được dashboard');
       setData(null);
     } finally {
       setLoading(false);
     }
-  }, [period, fromDate, toDate]);
+  }, [period, fromDate, toDate, toast]);
 
   useEffect(() => {
     fetchDashboard();
   }, [fetchDashboard]);
 
   const openSettings = async () => {
-    setSettingsError('');
     try {
       const res = await getRevenueSettings();
       setDeductions(res.data?.deductions || []);
       setRevenueBase(normalizeRevenueBase(res.data?.revenueBase));
       setSettingsOpen(true);
     } catch (err) {
-      setSettingsError(err.response?.data?.message || 'Không tải cấu hình trừ DT');
+      toast.error(err.response?.data?.message || 'Không tải cấu hình trừ DT');
     }
   };
 
   const handleSaveSettings = async () => {
     setSavingSettings(true);
-    setSettingsError('');
     try {
       const res = await updateRevenueSettings({ deductions, revenueBase });
       setDeductions(res.data?.deductions || deductions);
@@ -132,7 +129,7 @@ const AdminDashboardPage = () => {
       await queryClient.invalidateQueries({ queryKey: ['repairHistory'] });
       await fetchDashboard();
     } catch (err) {
-      setSettingsError(err.response?.data?.message || 'Lưu cấu hình thất bại');
+      toast.error(err.response?.data?.message || 'Lưu cấu hình thất bại');
     } finally {
       setSavingSettings(false);
     }
@@ -192,9 +189,6 @@ const AdminDashboardPage = () => {
           onToDateChange={setToDate}
         />
       </FilterPanel>
-
-      {error && <Alert severity="error" sx={{ mb: 1.5 }}>{error}</Alert>}
-      {settingsError && !settingsOpen && <Alert severity="error" sx={{ mb: 1.5 }}>{settingsError}</Alert>}
 
       {loading ? (
         <Box display="flex" justifyContent="center" py={4}>
@@ -362,7 +356,6 @@ const AdminDashboardPage = () => {
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
             Các khoản trừ áp dụng cho tất cả thợ. Tổng tỷ lệ không vượt quá 100%.
           </Typography>
-          {settingsError && <Alert severity="error" sx={{ mb: 1.5 }}>{settingsError}</Alert>}
           <Stack spacing={1.5}>
             {deductions.map((item, index) => (
               <Paper key={`${item.key}-${index}`} variant="outlined" sx={{ p: 1.25 }}>

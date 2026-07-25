@@ -25,6 +25,7 @@ import ManageSearchIcon from '@mui/icons-material/ManageSearch';
 import HistoryIcon from '@mui/icons-material/History';
 import { getOperationLogs } from '../apis';
 import { ROLE_LABELS } from '../../utils/permissions';
+import { useToast } from '../../context/ToastContext';
 import usePeriodFilter from '../../hooks/usePeriodFilter';
 import usePageVisible from '../../hooks/usePageVisible';
 import PeriodFilterToolbar from '../common/PeriodFilterToolbar';
@@ -88,6 +89,7 @@ const formatDateTime = (value) => {
 };
 
 const OperationHistoryPage = () => {
+  const toast = useToast();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const pageVisible = usePageVisible();
@@ -96,7 +98,6 @@ const OperationHistoryPage = () => {
   const [logs, setLogs] = useState([]);
   const [pagination, setPagination] = useState({ page: 1, limit: 50, total: 0, totalPages: 1 });
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
   const [search, setSearch] = useState('');
   const [moduleFilter, setModuleFilter] = useState('');
   const [actionFilter, setActionFilter] = useState('');
@@ -129,7 +130,6 @@ const OperationHistoryPage = () => {
   const fetchLogs = useCallback(async ({ silent = false } = {}) => {
     if (!silent) {
       setLoading(true);
-      setError('');
     }
 
     try {
@@ -137,13 +137,13 @@ const OperationHistoryPage = () => {
       applyLogs(res.data?.items, res.data?.pagination, { announceNew: silent && page === 0 });
     } catch {
       if (!silent) {
-        setError('Không tải được lịch sử thao tác');
+        toast.error('Không tải được lịch sử thao tác');
         setLogs([]);
       }
     } finally {
       if (!silent) setLoading(false);
     }
-  }, [applyLogs, buildQueryParams, page]);
+  }, [applyLogs, buildQueryParams, page, toast]);
 
   useEffect(() => {
     resetTracking();
@@ -339,8 +339,6 @@ const OperationHistoryPage = () => {
           </Stack>
         </PeriodFilterToolbar>
       </FilterPanel>
-
-      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
       {loading ? (
         <Box display="flex" justifyContent="center" py={6}>
