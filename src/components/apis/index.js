@@ -116,6 +116,9 @@ export const updateAttendanceSettings = (payload) =>
 export const getSystemStatus = () => api.get('/system/status');
 export const getSystemSettings = () => api.get('/system/settings');
 export const updateSystemSettings = (payload) => api.put('/system/settings', payload);
+export const getSystemVersion = () => api.get('/system/version');
+export const getOnlineClients = () => api.get('/system/online-clients');
+export const publishSystemUpdate = (payload) => api.post('/system/publish-update', payload);
 export const getAttendanceWorkers = (params) =>
   api.get('/attendance/workers', { params });
 export const getAttendanceCalendar = (workerId, year, month) =>

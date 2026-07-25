@@ -31,6 +31,7 @@ import customParseFormat from 'dayjs/plugin/customParseFormat';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
+import { useUnsavedChanges } from '../../context/UnsavedChangesContext';
 import {
   canDeleteCars,
   canHearOperationVoice,
@@ -74,6 +75,7 @@ const CAR_SYNC_INTERVAL_MS = 15_000;
 const ManageCars = () => {
   const { user } = useAuth();
   const toast = useToast();
+  const { setHasUnsavedChanges } = useUnsavedChanges();
   const canDelete = canDeleteCars(user);
   const canHearVoice = canHearOperationVoice(user);
   const canPollLogs = canPollOperationLogs(user);
@@ -171,6 +173,12 @@ const ManageCars = () => {
     ensureAllWorkers,
     setSnackbar: toast.fromSnackbar,
   });
+
+  useEffect(() => {
+    const dirty = editOpen || statusUpdateOpen || repair.repairDialogOpen || notifyDialogOpen;
+    setHasUnsavedChanges(dirty, 'manage-cars');
+    return () => setHasUnsavedChanges(false, 'manage-cars');
+  }, [editOpen, statusUpdateOpen, repair.repairDialogOpen, notifyDialogOpen, setHasUnsavedChanges]);
 
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));

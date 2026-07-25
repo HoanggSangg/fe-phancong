@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -37,6 +37,7 @@ import {
 import { queryKeys } from "../../lib/queryKeys";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../context/ToastContext";
+import { useUnsavedChanges } from "../../context/UnsavedChangesContext";
 import { ACTIVE_CAR_STATUSES, BUSY_CAR_STATUSES, CAR_STATUS_LABELS, hasPermission, isKtv } from "../../utils/permissions";
 import { filterWorkersByKeyword } from "../../utils/workerSearch";
 import useIsMobile from "../../hooks/useIsMobile";
@@ -51,6 +52,7 @@ import FilterPanel from "../common/FilterPanel";
 const WokerAssignment = () => {
   const { user } = useAuth();
   const toast = useToast();
+  const { setHasUnsavedChanges } = useUnsavedChanges();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [date, setDate] = useState("");
@@ -59,6 +61,12 @@ const WokerAssignment = () => {
   const [jobInputs, setJobInputs] = useState({});
   const [pageFullscreen, setPageFullscreen] = useState(false);
   const isMobile = useIsMobile();
+
+  useEffect(() => {
+    const dirty = Object.values(jobInputs).some((value) => String(value || "").trim());
+    setHasUnsavedChanges(dirty, "woker-assignment");
+    return () => setHasUnsavedChanges(false, "woker-assignment");
+  }, [jobInputs, setHasUnsavedChanges]);
 
   const isKtvUser = isKtv(user);
   const canManageJobs = hasPermission(user, 'workers.woker') && !isKtvUser;

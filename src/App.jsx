@@ -10,6 +10,7 @@ import KtvReadNotificationListener from './components/common/KtvReadNotification
 import KtvInboxNotificationListener from './components/common/KtvInboxNotificationListener';
 import MaintenanceGate from './components/common/MaintenanceGate';
 import MaintenanceNoticeListener from './components/common/MaintenanceNoticeListener';
+import SystemUpdateListener from './components/common/SystemUpdateListener';
 import {
   hasPermission,
   getFirstAllowedPath,
@@ -185,6 +186,7 @@ function App() {
     <AuthProvider>
       <Router>
         <MaintenanceGate>
+          <SystemUpdateListener />
           <Routes>
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />

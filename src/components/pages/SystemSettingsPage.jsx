@@ -16,6 +16,8 @@ import {
   Stack,
   TextField,
   Typography,
+  FormControlLabel,
+  Checkbox,
 } from '@mui/material';
 import SettingsIcon from '@mui/icons-material/Settings';
 import StopCircleIcon from '@mui/icons-material/StopCircle';
@@ -25,11 +27,24 @@ import CloudDoneIcon from '@mui/icons-material/CloudDone';
 import CloudOffIcon from '@mui/icons-material/CloudOff';
 import CampaignIcon from '@mui/icons-material/Campaign';
 import NotificationsOffIcon from '@mui/icons-material/NotificationsOff';
-import { getSystemSettings, updateSystemSettings } from '../apis';
+import SystemUpdateAltIcon from '@mui/icons-material/SystemUpdateAlt';
+import {
+  getSystemSettings,
+  updateSystemSettings,
+  publishSystemUpdate,
+} from '../apis';
 import { useToast } from '../../context/ToastContext';
 import { API_BASE } from '../apis/axios';
 import PageLayout from '../common/PageLayout';
 import PageHeader from '../common/PageHeader';
+
+const buildDefaultVersion = () => {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  return `${y}.${m}.${d}.1`;
+};
 
 const formatDateTime = (value) => {
   if (!value) return '—';
@@ -109,6 +124,11 @@ const SystemSettingsPage = () => {
   const [message, setMessage] = useState('');
   const [noticeMessage, setNoticeMessage] = useState('');
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [publishVersion, setPublishVersion] = useState(buildDefaultVersion);
+  const [publishMessage, setPublishMessage] = useState('Hệ thống vừa được cập nhật. Vui lòng tải lại trang.');
+  const [forceReload, setForceReload] = useState(false);
+  const [publishConfirmOpen, setPublishConfirmOpen] = useState(false);
+  const [publishing, setPublishing] = useState(false);
 
   const fetchSettings = useCallback(async () => {
     setLoading(true);
@@ -118,6 +138,16 @@ const SystemSettingsPage = () => {
       setData(payload);
       setMessage(payload?.maintenanceMessage || '');
       setNoticeMessage(payload?.maintenanceNoticeMessage || '');
+      if (payload?.appVersion?.version) {
+        // gợi ý bản tiếp theo cùng ngày
+        const current = String(payload.appVersion.version);
+        const base = buildDefaultVersion().replace(/\.1$/, '');
+        if (current.startsWith(base)) {
+          const parts = current.split('.');
+          const last = Number(parts[parts.length - 1]) || 0;
+          setPublishVersion(`${base}.${last + 1}`);
+        }
+      }
     } catch (err) {
       toast.error(err.response?.data?.message || 'Không tải được cấu hình hệ thống');
       setData(null);
@@ -139,7 +169,16 @@ const SystemSettingsPage = () => {
     try {
       const res = await updateSystemSettings(payload);
       const next = res.data?.data || null;
-      setData(next);
+      setData((prev) => ({
+        ...(prev || {}),
+        ...(next || {}),
+        online: next?.online || prev?.online,
+        appVersion: {
+          ...(prev?.appVersion || {}),
+          ...(next?.appVersion || {}),
+          updatedByUser: next?.appVersion?.updatedByUser || prev?.appVersion?.updatedByUser || null,
+        },
+      }));
       if (next?.maintenanceMessage != null) setMessage(next.maintenanceMessage);
       if (next?.maintenanceNoticeMessage != null) setNoticeMessage(next.maintenanceNoticeMessage);
       toast.success(res.data?.message || fallbackSuccess);
@@ -181,6 +220,28 @@ const SystemSettingsPage = () => {
     setConfirmOpen(true);
   };
 
+  const handlePublishUpdate = async () => {
+    if (publishing) return;
+    setPublishing(true);
+    try {
+      const res = await publishSystemUpdate({
+        version: publishVersion.trim(),
+        message: publishMessage.trim() || 'Hệ thống vừa được cập nhật.',
+        forceReload: Boolean(forceReload),
+      });
+      toast.success(res.data?.message || 'Đã phát hành cập nhật');
+      setPublishConfirmOpen(false);
+      await fetchSettings();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Phát hành cập nhật thất bại');
+    } finally {
+      setPublishing(false);
+    }
+  };
+
+  const appVersion = data?.appVersion || {};
+  const online = data?.online || {};
+
   return (
     <PageLayout>
       <PageHeader
@@ -193,7 +254,7 @@ const SystemSettingsPage = () => {
             size="small"
             startIcon={<RefreshIcon />}
             onClick={fetchSettings}
-            disabled={loading || saving}
+            disabled={loading || saving || publishing}
           >
             Làm mới
           </Button>
@@ -355,6 +416,92 @@ const SystemSettingsPage = () => {
             </Paper>
           </Grid>
 
+          <Grid size={{ xs: 12 }}>
+            <Paper
+              elevation={0}
+              sx={{
+                p: { xs: 2, sm: 2.5 },
+                borderRadius: 2,
+                border: '1px solid #bfdbfe',
+                bgcolor: '#eff6ff',
+              }}
+            >
+              <Stack
+                direction={{ xs: 'column', sm: 'row' }}
+                spacing={2}
+                alignItems={{ xs: 'stretch', sm: 'center' }}
+                justifyContent="space-between"
+                mb={2}
+              >
+                <Box>
+                  <Stack direction="row" spacing={1} alignItems="center" mb={0.75} flexWrap="wrap">
+                    <SystemUpdateAltIcon color="primary" />
+                    <Typography variant="h6" fontWeight={800}>
+                      Cập nhật hệ thống
+                    </Typography>
+                  </Stack>
+                  <Typography variant="body2" color="text.secondary">
+                    Phát thông báo realtime sau khi bảo trì xong để các máy đang mở web tải lại.
+                  </Typography>
+                </Box>
+                <Button
+                  variant="contained"
+                  startIcon={<SystemUpdateAltIcon />}
+                  onClick={() => setPublishConfirmOpen(true)}
+                  disabled={publishing || !publishVersion.trim()}
+                  sx={{ fontWeight: 700, textTransform: 'none', minWidth: 200 }}
+                >
+                  {publishing ? 'Đang phát hành...' : 'Phát hành cập nhật'}
+                </Button>
+              </Stack>
+
+              <Grid container spacing={2}>
+                <Grid size={{ xs: 12, md: 6 }}>
+                  <InfoRow label="Phiên bản hiện tại" value={appVersion.version || '1.0.0'} mono />
+                  <InfoRow label="Cập nhật gần nhất" value={formatDateTime(appVersion.updatedAt)} />
+                  <InfoRow
+                    label="Người phát hành"
+                    value={appVersion.updatedByUser?.fullName || appVersion.updatedByUser?.username || '—'}
+                  />
+                  <InfoRow label="Kết nối đang online" value={online.totalConnections ?? 0} />
+                  <InfoRow label="Tài khoản đang online" value={online.totalUsers ?? 0} />
+                </Grid>
+                <Grid size={{ xs: 12, md: 6 }}>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    label="Phiên bản mới"
+                    value={publishVersion}
+                    onChange={(e) => setPublishVersion(e.target.value)}
+                    sx={{ mb: 1.5, bgcolor: '#fff' }}
+                    inputProps={{ maxLength: 64 }}
+                    helperText="Ví dụ: 2026.07.25.1"
+                  />
+                  <TextField
+                    fullWidth
+                    size="small"
+                    multiline
+                    minRows={2}
+                    label="Nội dung thông báo"
+                    value={publishMessage}
+                    onChange={(e) => setPublishMessage(e.target.value)}
+                    sx={{ mb: 1, bgcolor: '#fff' }}
+                    inputProps={{ maxLength: 500 }}
+                  />
+                  <FormControlLabel
+                    control={(
+                      <Checkbox
+                        checked={forceReload}
+                        onChange={(e) => setForceReload(e.target.checked)}
+                      />
+                    )}
+                    label="Bắt buộc tải lại (đếm ngược 10 giây)"
+                  />
+                </Grid>
+              </Grid>
+            </Paper>
+          </Grid>
+
           <Grid size={{ xs: 12, md: 6 }}>
             <SectionCard title="Kết nối frontend">
               <InfoRow label="API base URL" value={API_BASE} mono />
@@ -465,6 +612,36 @@ const SystemSettingsPage = () => {
             disabled={saving}
           >
             {saving ? 'Đang dừng...' : 'Dừng web ngay'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={publishConfirmOpen} onClose={() => !publishing && setPublishConfirmOpen(false)}>
+        <DialogTitle>Xác nhận phát hành cập nhật?</DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 1 }}>
+            Tất cả máy đang mở web sẽ nhận thông báo phiên bản{' '}
+            <strong>{publishVersion.trim() || '—'}</strong>.
+          </DialogContentText>
+          {forceReload && (
+            <Alert severity="warning" sx={{ mb: 1 }}>
+              Đã bật bắt buộc tải lại (đếm ngược 10 giây).
+            </Alert>
+          )}
+          <DialogContentText>
+            {publishMessage.trim() || 'Hệ thống vừa được cập nhật.'}
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setPublishConfirmOpen(false)} disabled={publishing}>
+            Hủy
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handlePublishUpdate}
+            disabled={publishing || !publishVersion.trim()}
+          >
+            {publishing ? 'Đang phát hành...' : 'Phát hành'}
           </Button>
         </DialogActions>
       </Dialog>

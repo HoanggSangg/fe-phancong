@@ -24,6 +24,7 @@ import PageHeader from '../common/PageHeader';
 import { invalidateWorkerJobCaches } from '../../lib/carCache';
 import { queryKeys } from '../../lib/queryKeys';
 import { useToast } from '../../context/ToastContext';
+import { useUnsavedChanges } from '../../context/UnsavedChangesContext';
 
 dayjs.extend(customParseFormat);
 
@@ -82,6 +83,7 @@ const AddCar = ({ onSuccess }) => {
   const toast = useToast();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { setHasUnsavedChanges } = useUnsavedChanges();
 
   const [formData, setFormData] = useState({
     plateNumber: '',
@@ -104,6 +106,18 @@ const AddCar = ({ onSuccess }) => {
   const [externalData, setExternalData] = useState(null);
   const [lookupLoading, setLookupLoading] = useState(false);
   const [lookupError, setLookupError] = useState('');
+
+  useEffect(() => {
+    const dirty = Boolean(
+      formData.plateNumber?.trim()
+      || formData.roCode?.trim()
+      || externalData
+      || (formData.mainWorkers || []).length
+      || (formData.subWorkers || []).length,
+    );
+    setHasUnsavedChanges(dirty, 'add-car');
+    return () => setHasUnsavedChanges(false, 'add-car');
+  }, [formData, externalData, setHasUnsavedChanges]);
 
   useEffect(() => {
     let cancelled = false;

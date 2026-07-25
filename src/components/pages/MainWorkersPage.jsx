@@ -13,6 +13,7 @@ import AddWorkerForm from './AddWorkerForm';
 import { parseWorkersFromExcelFile } from '../../utils/workerExcel';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
+import { useUnsavedChanges } from '../../context/UnsavedChangesContext';
 import { hasPermission } from '../../utils/permissions';
 import {
   Typography,
@@ -125,6 +126,7 @@ const WorkersPage = () => {
   const isMobile = useIsMobile();
   const { user } = useAuth();
   const toast = useToast();
+  const { setHasUnsavedChanges } = useUnsavedChanges();
   const canImportExcel = hasPermission(user, 'workers.main');
   const canManageRevenue = canImportExcel;
   const [workers, setWorkers] = useState([]);
@@ -141,6 +143,11 @@ const WorkersPage = () => {
     avatarPreview: '',
     avatarFile: null,
   });
+
+  useEffect(() => {
+    setHasUnsavedChanges(editOpen, 'main-workers-edit');
+    return () => setHasUnsavedChanges(false, 'main-workers-edit');
+  }, [editOpen, setHasUnsavedChanges]);
 
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
   const [password, setPassword] = useState('');

@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useMemo, useState, useCallback } from 'react';
 import { getMe, login as loginApi, register as registerApi } from '../components/apis';
+import { connectSocket, disconnectSocket } from '../config/socket';
 
 const AuthContext = createContext(null);
 
@@ -73,6 +74,7 @@ export const AuthProvider = ({ children }) => {
     const res = await loginApi(credentials);
     persistAuth(res.data.token, res.data.user, rememberMe);
     setUser(res.data.user);
+    connectSocket(res.data.token);
     return res.data;
   };
 
@@ -80,6 +82,7 @@ export const AuthProvider = ({ children }) => {
     const res = await registerApi(payload);
     persistAuth(res.data.token, res.data.user, true);
     setUser(res.data.user);
+    connectSocket(res.data.token);
     return res.data;
   };
 
@@ -100,9 +103,19 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const logout = () => {
+    disconnectSocket();
     clearAuthStorage();
     setUser(null);
   };
+
+  useEffect(() => {
+    if (!loading && user && getStoredToken()) {
+      connectSocket();
+    }
+    if (!loading && !user) {
+      disconnectSocket();
+    }
+  }, [loading, user]);
 
   const value = useMemo(
     () => ({
