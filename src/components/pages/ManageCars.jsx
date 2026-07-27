@@ -259,17 +259,13 @@ const ManageCars = () => {
 
     if (openCarHandledRef.current) return;
 
-    openCarHandledRef.current = true;
     let cancelled = false;
 
     let storedTarget = null;
 
     try {
       const raw = sessionStorage.getItem('ktvTargetCar');
-      if (raw) {
-        storedTarget = JSON.parse(raw);
-        sessionStorage.removeItem('ktvTargetCar');
-      }
+      if (raw) storedTarget = JSON.parse(raw);
     } catch {
       storedTarget = null;
     }
@@ -284,35 +280,58 @@ const ManageCars = () => {
 
     const roLabel = criteria.roNumber || criteria.roCode || criteria.roKey || '';
 
+    const applyMatchedCar = (matchedCar) => {
+      const locationId = matchedCar.location?._id || matchedCar.location;
+      setSelectedLocation(locationId ? String(locationId) : 'all');
+      setFilterDate(null);
+      setStatusFilter('all');
+      setSearchPlateInput(matchedCar.plateNumber || criteria.plateNumber);
+      setSearchPlate(matchedCar.plateNumber || criteria.plateNumber);
+      setPage(1);
+      setHighlightCarId(String(matchedCar._id));
+      toast.fromSnackbar({
+        open: true,
+        message: `Đã tìm thấy xe ${matchedCar.plateNumber}${getCarROLabel(matchedCar) ? ` — RO: ${getCarROLabel(matchedCar)}` : ''}`,
+        severity: 'success',
+      });
+    };
+
     const resolveOpenCar = async () => {
-      if (cancelled) return;
       try {
-        const res = await getManageCarsList({
-          plateNumber: criteria.plateNumber || undefined,
-          page: 1,
-          limit: 50,
-          statusFilter: 'all',
-          ...(isKtvUser ? { mine: '1' } : {}),
-        });
+        let matchedCar = null;
+
+        // Prefer exact ID lookup — plate search alone can miss due to spacing / pagination.
+        if (criteria.carId) {
+          try {
+            const byIdRes = await getCarById(
+              criteria.carId,
+              isKtvUser ? { mine: '1' } : undefined,
+            );
+            if (cancelled) return;
+            if (byIdRes?.data) matchedCar = byIdRes.data;
+          } catch {
+            // Fall through to plate + RO search.
+          }
+        }
+
+        if (!matchedCar) {
+          const res = await getManageCarsList({
+            plateNumber: criteria.plateNumber || undefined,
+            page: 1,
+            limit: 50,
+            statusFilter: 'all',
+            ...(isKtvUser ? { mine: '1' } : {}),
+          });
+
+          if (cancelled) return;
+
+          matchedCar = findCarByPlateAndRO(res.data?.cars || [], criteria);
+        }
 
         if (cancelled) return;
 
-        const matchedCar = findCarByPlateAndRO(res.data?.cars || [], criteria);
-
         if (matchedCar) {
-          const locationId = matchedCar.location?._id || matchedCar.location;
-          setSelectedLocation(locationId ? String(locationId) : 'all');
-          setFilterDate(null);
-          setStatusFilter('all');
-          setSearchPlateInput(matchedCar.plateNumber || criteria.plateNumber);
-          setSearchPlate(matchedCar.plateNumber || criteria.plateNumber);
-          setPage(1);
-          setHighlightCarId(String(matchedCar._id));
-          toast.fromSnackbar({
-            open: true,
-            message: `Đã tìm thấy xe ${matchedCar.plateNumber}${getCarROLabel(matchedCar) ? ` — RO: ${getCarROLabel(matchedCar)}` : ''}`,
-            severity: 'success',
-          });
+          applyMatchedCar(matchedCar);
         } else {
           if (criteria.plateNumber) {
             setSearchPlateInput(criteria.plateNumber);
@@ -334,7 +353,14 @@ const ManageCars = () => {
         });
       }
 
+      // Mark handled only after a non-cancelled run so React StrictMode remount can retry.
       if (!cancelled) {
+        openCarHandledRef.current = true;
+        try {
+          sessionStorage.removeItem('ktvTargetCar');
+        } catch {
+          // ignore
+        }
         setSearchParams({}, { replace: true });
       }
     };
