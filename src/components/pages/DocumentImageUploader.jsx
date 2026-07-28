@@ -76,11 +76,12 @@ const maybeCompressImage = async (file, enabled) => {
   }
 };
 
-const DocumentImageUploader = ({ soChungTu }) => {
+const DocumentImageUploader = ({ soChungTu, seedFiles = [], seedToken = 0 }) => {
   const toast = useToast();
   const fileInputRef = useRef(null);
   const cameraInputRef = useRef(null);
   const pendingIdRef = useRef(0);
+  const lastSeedTokenRef = useRef(0);
 
   const [files, setFiles] = useState([]);
   const [loadingFiles, setLoadingFiles] = useState(false);
@@ -107,6 +108,48 @@ const DocumentImageUploader = ({ soChungTu }) => {
     }
   }, [doc, toast]);
 
+  const addFiles = useCallback(
+    (fileList) => {
+      const incoming = Array.from(fileList || []);
+      if (!incoming.length) return;
+
+      const nextItems = [];
+      incoming.forEach((file) => {
+        if (!isAllowedFile(file)) {
+          toast.warning(`Bỏ qua file không hỗ trợ: ${file.name}`);
+          return;
+        }
+        if (file.size > MAX_UPLOAD) {
+          toast.warning(`File quá lớn (>200MB): ${file.name}`);
+          return;
+        }
+
+        pendingIdRef.current += 1;
+        const id = pendingIdRef.current;
+        const previewUrl =
+          isImageName(file.name) || (file.type && file.type.startsWith('image/'))
+            ? URL.createObjectURL(file)
+            : '';
+
+        nextItems.push({
+          id,
+          file,
+          name: file.name,
+          size: file.size,
+          previewUrl,
+          status: 'ready',
+          progress: 0,
+          error: '',
+        });
+      });
+
+      if (nextItems.length) {
+        setPending((prev) => [...prev, ...nextItems]);
+      }
+    },
+    [toast],
+  );
+
   useEffect(() => {
     setPending((prev) => {
       prev.forEach((item) => {
@@ -115,57 +158,31 @@ const DocumentImageUploader = ({ soChungTu }) => {
       return [];
     });
     setFiles([]);
+    lastSeedTokenRef.current = 0;
     if (doc) loadFiles();
-  }, [doc, loadFiles]);
+    // Chỉ reset khi đổi số chứng từ
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [doc]);
+
+  // Ảnh vừa chụp/đọc QR → đưa vào danh sách chờ tải lên
+  useEffect(() => {
+    if (!doc || !seedToken || seedToken === lastSeedTokenRef.current) return;
+    if (!seedFiles?.length) return;
+    lastSeedTokenRef.current = seedToken;
+    addFiles(seedFiles);
+  }, [doc, seedToken, seedFiles, addFiles]);
 
   useEffect(
     () => () => {
-      pending.forEach((item) => {
-        if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
+      setPending((prev) => {
+        prev.forEach((item) => {
+          if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
+        });
+        return prev;
       });
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
-
-  const addFiles = (fileList) => {
-    const incoming = Array.from(fileList || []);
-    if (!incoming.length) return;
-
-    const nextItems = [];
-    incoming.forEach((file) => {
-      if (!isAllowedFile(file)) {
-        toast.warning(`Bỏ qua file không hỗ trợ: ${file.name}`);
-        return;
-      }
-      if (file.size > MAX_UPLOAD) {
-        toast.warning(`File quá lớn (>200MB): ${file.name}`);
-        return;
-      }
-
-      pendingIdRef.current += 1;
-      const id = pendingIdRef.current;
-      const previewUrl =
-        isImageName(file.name) || file.type.startsWith('image/')
-          ? URL.createObjectURL(file)
-          : '';
-
-      nextItems.push({
-        id,
-        file,
-        name: file.name,
-        size: file.size,
-        previewUrl,
-        status: 'ready',
-        progress: 0,
-        error: '',
-      });
-    });
-
-    if (nextItems.length) {
-      setPending((prev) => [...prev, ...nextItems]);
-    }
-  };
 
   const removePending = (id) => {
     setPending((prev) => {
