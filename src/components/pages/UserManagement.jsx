@@ -37,7 +37,7 @@ import {
   deleteUser,
   getAllWorkers,
 } from '../apis';
-import { ROLE_LABELS, ROLE_DESCRIPTIONS } from '../../utils/permissions';
+import { ROLE_LABELS, ROLE_DESCRIPTIONS, ASSIGNABLE_ROLES, isKtv } from '../../utils/permissions';
 import { useToast } from '../../context/ToastContext';
 import PageLayout from '../common/PageLayout';
 import PageHeader from '../common/PageHeader';
@@ -47,6 +47,9 @@ const roleColor = {
   admin: 'error',
   giam_sat: 'warning',
   ktv: 'info',
+  lai_xe: 'success',
+  kho: 'secondary',
+  cvdv: 'default',
 };
 
 const UserManagement = () => {
@@ -98,7 +101,7 @@ const UserManagement = () => {
 
         // 2) Workers chỉ khi danh sách users cần map thợ (sau khi users xong)
         const needsWorkers = nextUsers.some(
-          (item) => item.role === 'ktv' || item.worker
+          (item) => isKtv(item) || item.worker
         );
         if (needsWorkers) {
           await new Promise((resolve) => {
@@ -225,7 +228,7 @@ const UserManagement = () => {
               <Typography fontWeight="bold">{user.fullName}</Typography>
               <Typography variant="body2" color="text.secondary">@{user.username}</Typography>
             </Box>
-            <Chip size="small" label={ROLE_LABELS[user.role]} color={roleColor[user.role]} />
+            <Chip size="small" label={ROLE_LABELS[user.role] || user.role} color={roleColor[user.role] || 'default'} />
           </Box>
 
           <Typography variant="body2">
@@ -244,7 +247,7 @@ const UserManagement = () => {
           />
 
           <Stack direction="row" spacing={1} flexWrap="wrap">
-            {['admin', 'giam_sat', 'ktv'].map((role) => (
+            {ASSIGNABLE_ROLES.map((role) => (
               <Chip
                 key={role}
                 size="small"
@@ -306,9 +309,9 @@ const UserManagement = () => {
               onChange={(e) => setRoleFilter(e.target.value)}
             >
               <MenuItem value="all">Tất cả</MenuItem>
-              <MenuItem value="admin">Admin</MenuItem>
-              <MenuItem value="giam_sat">Giám sát</MenuItem>
-              <MenuItem value="ktv">KTV</MenuItem>
+              {ASSIGNABLE_ROLES.map((role) => (
+                <MenuItem key={role} value={role}>{ROLE_LABELS[role]}</MenuItem>
+              ))}
             </TextField>
           </Grid>
         </Grid>
@@ -336,7 +339,7 @@ const UserManagement = () => {
                   <TableCell>{user.fullName}</TableCell>
                   <TableCell>@{user.username}</TableCell>
                   <TableCell>
-                    <Chip size="small" label={ROLE_LABELS[user.role]} color={roleColor[user.role]} />
+                    <Chip size="small" label={ROLE_LABELS[user.role] || user.role} color={roleColor[user.role] || 'default'} />
                   </TableCell>
                   <TableCell>{workerMap[user.worker] || '—'}</TableCell>
                   <TableCell>
@@ -378,9 +381,9 @@ const UserManagement = () => {
               required={!editingUser}
             />
             <TextField select label="Vai trò" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })} fullWidth>
-              <MenuItem value="admin">Admin</MenuItem>
-              <MenuItem value="giam_sat">Giám sát</MenuItem>
-              <MenuItem value="ktv">KTV</MenuItem>
+              {ASSIGNABLE_ROLES.map((role) => (
+                <MenuItem key={role} value={role}>{ROLE_LABELS[role]}</MenuItem>
+              ))}
             </TextField>
             <Alert severity="info" sx={{ py: 0.5 }}>
               {ROLE_DESCRIPTIONS[form.role]}
@@ -388,11 +391,11 @@ const UserManagement = () => {
             <Divider />
             <TextField
               select
-              label="Liên kết thợ (cho KTV)"
+              label="Liên kết thợ (KTV / Lái xe / Kho)"
               value={form.workerId}
               onChange={(e) => setForm({ ...form, workerId: e.target.value })}
               fullWidth
-              helperText="KTV cần liên kết thợ để xem đúng xe đang làm"
+              helperText="KTV, Lái xe, Kho cần liên kết thợ để xem đúng xe đang làm"
             >
               <MenuItem value="">Không liên kết</MenuItem>
               {workers.map((worker) => (

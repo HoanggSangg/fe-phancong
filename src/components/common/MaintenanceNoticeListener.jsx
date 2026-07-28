@@ -8,7 +8,7 @@ import CampaignIcon from '@mui/icons-material/Campaign';
 import { getSystemStatus } from '../apis';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
-import { ROLES } from '../../utils/permissions';
+import { isKtv, isGiamSatLike } from '../../utils/permissions';
 import { showBrowserNotification } from '../../utils/browserNotifications';
 import usePageVisible from '../../hooks/usePageVisible';
 import { LAYOUT } from '../../constants/layout';
@@ -16,8 +16,7 @@ import { LAYOUT } from '../../constants/layout';
 const POLL_MS = 15_000;
 const NOTIFIED_KEY = 'maintenanceNoticeNotifiedAt';
 
-const isTargetRole = (user) =>
-  user?.role === ROLES.GIAM_SAT || user?.role === ROLES.KTV;
+const isTargetRole = (user) => isGiamSatLike(user) || isKtv(user);
 
 const MaintenanceNoticeListener = () => {
   const { user } = useAuth();

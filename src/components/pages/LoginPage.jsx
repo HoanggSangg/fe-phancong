@@ -14,9 +14,10 @@ import {
 import { useAuth, REMEMBER_USERNAME_KEY } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { AuthPageShell } from '../common/AnimatedValue';
+import { getFirstAllowedPath } from '../../utils/permissions';
 
 const LoginPage = () => {
-  const { login, isAuthenticated } = useAuth();
+  const { login, isAuthenticated, user } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
   const [username, setUsername] = useState(() => localStorage.getItem(REMEMBER_USERNAME_KEY) || '');
@@ -25,7 +26,7 @@ const LoginPage = () => {
   const [loading, setLoading] = useState(false);
 
   if (isAuthenticated) {
-    return <Navigate to="/cars" replace />;
+    return <Navigate to={getFirstAllowedPath(user)} replace />;
   }
 
   const handleSubmit = async (e) => {
@@ -33,8 +34,8 @@ const LoginPage = () => {
     setLoading(true);
 
     try {
-      await login({ username, password }, rememberMe);
-      navigate('/cars');
+      const result = await login({ username, password }, rememberMe);
+      navigate(getFirstAllowedPath(result?.user));
     } catch (err) {
       toast.error(err.response?.data?.message || 'Đăng nhập thất bại');
     } finally {

@@ -304,7 +304,7 @@ const AccountPermissionsPage = () => {
 
                 <Alert severity="info" sx={{ mb: 2 }}>
                   Áp dụng nhanh theo mẫu vai trò:
-                  {['giam_sat', 'ktv'].map((role) => (
+                  {['giam_sat', 'ktv', 'lai_xe', 'kho', 'cvdv'].map((role) => (
                     <Chip
                       key={role}
                       size="small"

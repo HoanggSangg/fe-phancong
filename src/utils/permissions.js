@@ -2,19 +2,41 @@ export const ROLES = {
   ADMIN: 'admin',
   GIAM_SAT: 'giam_sat',
   KTV: 'ktv',
+  LAI_XE: 'lai_xe',
+  KHO: 'kho',
+  CVDV: 'cvdv',
 };
 
 export const ROLE_LABELS = {
   admin: 'Admin',
   giam_sat: 'Giám sát',
   ktv: 'KTV',
+  lai_xe: 'Lái xe',
+  kho: 'Kho',
+  cvdv: 'CVDV',
 };
 
 export const ROLE_DESCRIPTIONS = {
   admin: 'Toàn quyền: quản lý xe, thợ, báo cáo, địa điểm, giám sát và tài khoản',
   giam_sat: 'Quản lý xe, phân công thợ, xem báo cáo — không xóa xe hay quản lý hệ thống',
   ktv: 'Xem tất cả xe trong ngày, quản lý xe của mình và chi tiết công việc được giao',
+  lai_xe: 'Quyền như KTV, thêm chức năng tải ảnh chứng từ',
+  kho: 'Quyền như KTV, thêm chức năng tải ảnh chứng từ',
+  cvdv: 'Quyền như Giám sát, thêm chức năng tải ảnh chứng từ',
 };
+
+/** Role dùng trong form tạo/sửa tài khoản */
+export const ASSIGNABLE_ROLES = ['admin', 'giam_sat', 'ktv', 'lai_xe', 'kho', 'cvdv'];
+
+/** Role được tải ảnh mặc định */
+export const UPLOAD_IMAGE_ROLES = ['admin', 'lai_xe', 'kho', 'cvdv'];
+
+/** Role xem/hành xử như KTV (lọc xe của mình khi liên kết thợ) */
+export const KTV_LIKE_ROLES = ['ktv', 'lai_xe', 'kho'];
+
+/** Role xem/hành xử như Giám sát */
+export const GIAM_SAT_LIKE_ROLES = ['giam_sat', 'cvdv'];
+
 
 export const CAR_STATUS_LABELS = {
   pending: 'Chờ sửa',
@@ -48,18 +70,18 @@ export const ADMIN_AREA_PATH = '/admin';
  * adminPath: route trong portal admin.
  */
 export const PERMISSION_CATALOG = [
-  { key: 'cars.today', label: 'Xe trong ngày', group: 'Quản lý xe', path: '/cars', defaultRoles: ['admin', 'giam_sat', 'ktv'] },
-  { key: 'cars.manage', label: 'Quản lý xe', group: 'Quản lý xe', path: '/cars/manage', defaultRoles: ['admin', 'giam_sat', 'ktv'] },
-  { key: 'cars.add', label: 'Thêm xe', group: 'Quản lý xe', path: '/cars/add', defaultRoles: ['admin', 'giam_sat'] },
+  { key: 'cars.today', label: 'Xe trong ngày', group: 'Quản lý xe', path: '/cars', defaultRoles: ['admin', 'giam_sat', 'ktv', 'lai_xe', 'kho', 'cvdv'] },
+  { key: 'cars.manage', label: 'Quản lý xe', group: 'Quản lý xe', path: '/cars/manage', defaultRoles: ['admin', 'giam_sat', 'ktv', 'lai_xe', 'kho', 'cvdv'] },
+  { key: 'cars.add', label: 'Thêm xe', group: 'Quản lý xe', path: '/cars/add', defaultRoles: ['admin', 'giam_sat', 'cvdv'] },
   {
     key: 'cars.upload-image',
     label: 'Tải ảnh',
     group: 'Quản lý xe',
     path: '/upload-image',
-    defaultRoles: ['admin', 'giam_sat', 'ktv'],
+    defaultRoles: ['admin', 'lai_xe', 'kho', 'cvdv'],
   },
   { key: 'cars.delete', label: 'Xóa xe', group: 'Quản lý xe', defaultRoles: ['admin'] },
-  { key: 'cars.voice', label: 'Nghe thông báo thao tác (Quản lý xe)', group: 'Quản lý xe', defaultRoles: ['admin', 'giam_sat'] },
+  { key: 'cars.voice', label: 'Nghe thông báo thao tác (Quản lý xe)', group: 'Quản lý xe', defaultRoles: ['admin', 'giam_sat', 'cvdv'] },
   {
     key: 'workers.main',
     label: 'Danh sách thợ',
@@ -68,11 +90,11 @@ export const PERMISSION_CATALOG = [
     adminPath: '/admin/workers',
     adminArea: true,
     adminGroup: 'Quản lý',
-    defaultRoles: ['admin', 'giam_sat'],
+    defaultRoles: ['admin', 'giam_sat', 'cvdv'],
   },
-  { key: 'workers.woker', label: 'Chi tiết công việc', group: 'Thợ & công việc', path: '/woker', defaultRoles: ['admin', 'giam_sat', 'ktv'] },
-  { key: 'workers.available', label: 'Thợ rảnh', group: 'Thợ & công việc', path: '/workers/available', defaultRoles: ['admin', 'giam_sat'] },
-  { key: 'workers.repair-history', label: 'Lịch sử sửa chữa', group: 'Thợ & công việc', path: '/repair-history', defaultRoles: ['admin', 'giam_sat', 'ktv'] },
+  { key: 'workers.woker', label: 'Chi tiết công việc', group: 'Thợ & công việc', path: '/woker', defaultRoles: ['admin', 'giam_sat', 'ktv', 'lai_xe', 'kho', 'cvdv'] },
+  { key: 'workers.available', label: 'Thợ rảnh', group: 'Thợ & công việc', path: '/workers/available', defaultRoles: ['admin', 'giam_sat', 'cvdv'] },
+  { key: 'workers.repair-history', label: 'Lịch sử sửa chữa', group: 'Thợ & công việc', path: '/repair-history', defaultRoles: ['admin', 'giam_sat', 'ktv', 'lai_xe', 'kho', 'cvdv'] },
   {
     key: 'teams.manage',
     label: 'Quản lý tổ',
@@ -81,9 +103,9 @@ export const PERMISSION_CATALOG = [
     adminPath: '/admin/teams',
     adminArea: true,
     adminGroup: 'Quản lý',
-    defaultRoles: ['admin', 'giam_sat'],
+    defaultRoles: ['admin', 'giam_sat', 'cvdv'],
   },
-  { key: 'reports.revenue', label: 'Doanh thu thợ', group: 'Báo cáo', path: '/workers/revenue-chart', defaultRoles: ['admin', 'giam_sat'] },
+  { key: 'reports.revenue', label: 'Doanh thu thợ', group: 'Báo cáo', path: '/workers/revenue-chart', defaultRoles: ['admin', 'giam_sat', 'cvdv'] },
   {
     key: 'reports.dashboard',
     label: 'Dashboard tổng quan',
@@ -95,8 +117,8 @@ export const PERMISSION_CATALOG = [
     hideFromNav: true,
     defaultRoles: ['admin'],
   },
-  { key: 'reports.praise', label: 'Tuyên dương tuần', group: 'Báo cáo', path: '/workers/weekly-praise', defaultRoles: ['admin', 'giam_sat'] },
-  { key: 'reports.warning', label: 'Cảnh báo tuần', group: 'Báo cáo', path: '/workers/weekly-warning', defaultRoles: ['admin', 'giam_sat'] },
+  { key: 'reports.praise', label: 'Tuyên dương tuần', group: 'Báo cáo', path: '/workers/weekly-praise', defaultRoles: ['admin', 'giam_sat', 'cvdv'] },
+  { key: 'reports.warning', label: 'Cảnh báo tuần', group: 'Báo cáo', path: '/workers/weekly-warning', defaultRoles: ['admin', 'giam_sat', 'cvdv'] },
   {
     key: 'system.locations',
     label: 'Địa điểm',
@@ -161,7 +183,7 @@ export const PERMISSION_CATALOG = [
     adminArea: true,
     adminGroup: 'Hệ thống',
     hideFromNav: true,
-    defaultRoles: ['admin'],
+    defaultRoles: ['admin', 'giam_sat', 'cvdv'],
   },
   {
     key: 'system.settings',
@@ -314,12 +336,17 @@ export const getPermissionGroups = () =>
 
 export const isKtv = (roleOrUser) => {
   const role = typeof roleOrUser === 'object' ? roleOrUser?.role : roleOrUser;
-  return role === ROLES.KTV;
+  return KTV_LIKE_ROLES.includes(role);
+};
+
+export const isGiamSatLike = (roleOrUser) => {
+  const role = typeof roleOrUser === 'object' ? roleOrUser?.role : roleOrUser;
+  return GIAM_SAT_LIKE_ROLES.includes(role);
 };
 
 export const canManageCars = (roleOrUser) => {
   if (typeof roleOrUser === 'object') return hasPermission(roleOrUser, 'cars.manage');
-  return ['admin', 'giam_sat', 'ktv'].includes(roleOrUser);
+  return ['admin', 'giam_sat', 'ktv', 'lai_xe', 'kho', 'cvdv'].includes(roleOrUser);
 };
 
 export const canEditManagedCars = (user) =>
@@ -332,11 +359,11 @@ export const canDeleteCars = (roleOrUser) => {
 
 export const canHearOperationVoice = (roleOrUser) => {
   if (typeof roleOrUser === 'object') return hasPermission(roleOrUser, 'cars.voice');
-  return ['admin', 'giam_sat'].includes(roleOrUser);
+  return ['admin', 'giam_sat', 'cvdv'].includes(roleOrUser);
 };
 
 export const canPollOperationLogs = (user) => {
   if (!user) return false;
-  if (user.role === ROLES.ADMIN || user.role === ROLES.GIAM_SAT) return true;
+  if (user.role === ROLES.ADMIN || isGiamSatLike(user)) return true;
   return hasPermission(user, 'system.audit-logs');
 };
