@@ -51,6 +51,35 @@ const fmtSize = (bytes = 0) => {
   return `${bytes} B`;
 };
 
+const mimeToExt = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/gif': 'gif',
+  'image/webp': 'webp',
+  'image/bmp': 'bmp',
+  'video/mp4': 'mp4',
+  'video/webm': 'webm',
+  'video/quicktime': 'mov',
+  'video/3gpp': '3gp',
+  'video/3gpp2': '3gp',
+};
+
+/** Đặt tên file theo timestamp để tránh ghi đè (camera thường trả image.jpg trùng tên). */
+const renameWithTimestamp = (file, prefix = 'IMG') => {
+  const fromName = extOf(file.name);
+  const fromMime = mimeToExt[file.type] || '';
+  const ext =
+    fromName ||
+    fromMime ||
+    (String(file.type || '').startsWith('video/') ? 'mp4' : 'jpg');
+  const stamp = Date.now();
+  const safePrefix = String(prefix || 'IMG').replace(/[^\w.-]+/g, '_').slice(0, 40) || 'IMG';
+  return new File([file], `${safePrefix}_${stamp}.${ext}`, {
+    type: file.type || 'application/octet-stream',
+    lastModified: Date.now(),
+  });
+};
+
 const maybeCompressImage = async (file, enabled) => {
   const ext = extOf(file.name);
   const compressible = ['jpg', 'jpeg', 'jpe', 'jfif', 'png', 'bmp'].includes(ext);
@@ -374,7 +403,10 @@ const DocumentImageUploader = ({ soChungTu, seedFiles = [], seedToken = 0 }) => 
           accept="image/*,video/*"
           capture="environment"
           onChange={(e) => {
-            addFiles(e.target.files);
+            const renamed = Array.from(e.target.files || []).map((file) =>
+              renameWithTimestamp(file, doc || 'IMG'),
+            );
+            addFiles(renamed);
             e.target.value = '';
           }}
         />

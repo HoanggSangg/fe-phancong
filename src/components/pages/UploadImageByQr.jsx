@@ -339,8 +339,9 @@ const scanCapturedImage = async (sourceCanvas, processingCanvas, onStage) => {
 };
 
 const renameCaptureFile = (file, soChungTu) => {
-  const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-  const base = soChungTu || 'QR';
+  // Dùng Date.now() (ms) để tránh trùng tên khi chụp liên tiếp trong cùng giây
+  const stamp = Date.now();
+  const base = String(soChungTu || 'QR').replace(/[^\w.-]+/g, '_').slice(0, 40) || 'QR';
   const ext = /\.(jpe?g|png|gif|webp|bmp)$/i.test(file.name)
     ? file.name.split('.').pop().toLowerCase()
     : 'jpg';
