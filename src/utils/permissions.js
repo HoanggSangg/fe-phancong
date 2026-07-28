@@ -51,6 +51,13 @@ export const PERMISSION_CATALOG = [
   { key: 'cars.today', label: 'Xe trong ngày', group: 'Quản lý xe', path: '/cars', defaultRoles: ['admin', 'giam_sat', 'ktv'] },
   { key: 'cars.manage', label: 'Quản lý xe', group: 'Quản lý xe', path: '/cars/manage', defaultRoles: ['admin', 'giam_sat', 'ktv'] },
   { key: 'cars.add', label: 'Thêm xe', group: 'Quản lý xe', path: '/cars/add', defaultRoles: ['admin', 'giam_sat'] },
+  {
+    key: 'cars.upload-image',
+    label: 'Tải ảnh',
+    group: 'Quản lý xe',
+    path: '/upload-image',
+    defaultRoles: ['admin', 'giam_sat', 'ktv'],
+  },
   { key: 'cars.delete', label: 'Xóa xe', group: 'Quản lý xe', defaultRoles: ['admin'] },
   { key: 'cars.voice', label: 'Nghe thông báo thao tác (Quản lý xe)', group: 'Quản lý xe', defaultRoles: ['admin', 'giam_sat'] },
   {

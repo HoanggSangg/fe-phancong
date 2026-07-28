@@ -40,6 +40,7 @@ const KtvMessagesPage = lazy(() => import('./components/pages/KtvMessagesPage'))
 const PayrollPage = lazy(() => import('./components/pages/PayrollPage'));
 const AttendancePayrollPage = lazy(() => import('./components/pages/AttendancePayrollPage'));
 const SystemSettingsPage = lazy(() => import('./components/pages/SystemSettingsPage'));
+const UploadImageByQr = lazy(() => import('./components/pages/UploadImageByQr'));
 
 const RouteFallback = () => (
   <Box display="flex" justifyContent="center" alignItems="center" minHeight="40vh">
@@ -137,6 +138,7 @@ const AppLayout = () => (
       <Route path="/cars" element={withSuspense(<PermissionRoute permission="cars.today"><CarsTodayPage /></PermissionRoute>)} />
       <Route path="/cars/add" element={withSuspense(<PermissionRoute permission="cars.add"><AddCarPage /></PermissionRoute>)} />
       <Route path="/cars/manage" element={withSuspense(<PermissionRoute permission="cars.manage"><ManageCarsPage /></PermissionRoute>)} />
+      <Route path="/upload-image" element={withSuspense(<PermissionRoute permission="cars.upload-image"><UploadImageByQr /></PermissionRoute>)} />
       <Route path="/workers/available" element={withSuspense(<PermissionRoute permission="workers.available"><AvailableWorkersPage /></PermissionRoute>)} />
       <Route path="/workers/revenue-chart" element={withSuspense(<PermissionRoute permission="reports.revenue"><WorkerRevenueChart /></PermissionRoute>)} />
       <Route path="/workers/weekly-praise" element={withSuspense(<PermissionRoute permission="reports.praise"><WeeklyPraiseForm /></PermissionRoute>)} />
