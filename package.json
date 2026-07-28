@@ -21,6 +21,7 @@
     "dayjs": "^1.11.13",
     "exceljs": "^4.4.0",
     "html5-qrcode": "^2.3.8",
+    "jsqr": "^1.4.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-router-dom": "^7.6.2",

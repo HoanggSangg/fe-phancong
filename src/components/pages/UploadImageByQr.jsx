@@ -1,161 +1,341 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  Alert,
   Box,
   Button,
+  CircularProgress,
   Paper,
   Stack,
   TextField,
   Typography,
-  CircularProgress,
-  Alert,
 } from '@mui/material';
 import QrCodeScannerIcon from '@mui/icons-material/QrCodeScanner';
 import PhotoCameraIcon from '@mui/icons-material/PhotoCamera';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import RefreshIcon from '@mui/icons-material/Refresh';
-import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
+import ImageIcon from '@mui/icons-material/Image';
+import jsQR from 'jsqr';
 import PageLayout from '../common/PageLayout';
 import PageHeader from '../common/PageHeader';
 import DocumentImageUploader from './DocumentImageUploader';
 import { useToast } from '../../context/ToastContext';
 import { LAYOUT } from '../../constants/layout';
 
-const SCANNER_ELEMENT_ID = 'upload-image-qr-file-reader';
 const UPLOAD_BASE_URL = 'http://api2026.otobathanh.vn/upload.html';
-
-const SCANNER_CONFIG = {
-  formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
-  useBarCodeDetectorIfSupported: true,
-  verbose: false,
-};
+const MAX_SOURCE_SIZE = 2800;
+const MAX_PROCESS_SIZE = 3200;
 
 export const extractSoChungTu = (qrText) => {
   const rawValue = String(qrText || '').trim();
   if (!rawValue) return '';
 
   try {
-    const parsedUrl = new URL(rawValue);
-    const value =
-      parsedUrl.searchParams.get('khoa') ||
-      parsedUrl.searchParams.get('soChungTu');
-    return String(value || '').trim().toUpperCase();
+    const url = new URL(rawValue);
+    return String(url.searchParams.get('khoa') || url.searchParams.get('soChungTu') || '')
+      .trim()
+      .toUpperCase();
   } catch {
     return rawValue.toUpperCase();
   }
 };
 
-export const isValidSoChungTu = (soChungTu) => /^TT[A-Z0-9]+$/.test(soChungTu);
+export const isValidSoChungTu = (value) => /^TT[A-Z0-9]+$/.test(value);
 
 export const buildUploadUrl = (soChungTu) =>
   `${UPLOAD_BASE_URL}?soChungTu=${encodeURIComponent(soChungTu)}`;
 
-const loadImageFromFile = (file) =>
-  new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file);
-    const image = new Image();
-    image.onload = () => {
-      URL.revokeObjectURL(url);
-      resolve(image);
-    };
-    image.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error('Không tải được ảnh.'));
-    };
-    image.src = url;
-  });
+export const getTopRightQuarter = (width, height) => ({
+  sx: Math.floor(width * 0.5),
+  sy: 0,
+  sw: Math.floor(width * 0.5),
+  sh: Math.floor(height * 0.5),
+});
 
-const canvasToFile = (canvas, name = 'qr-crop.png') =>
-  new Promise((resolve, reject) => {
-    canvas.toBlob(
-      (blob) => {
-        if (!blob) {
-          reject(new Error('Không tạo được ảnh xử lý.'));
-          return;
-        }
-        resolve(new File([blob], name, { type: 'image/png' }));
-      },
-      'image/png',
-      0.95,
-    );
-  });
+export const getTopRightQuarterWithPadding = (width, height) => ({
+  sx: Math.floor(width * 0.42),
+  sy: 0,
+  sw: Math.floor(width * 0.58),
+  sh: Math.floor(height * 0.58),
+});
 
-const drawEnhancedRegion = (source, sx, sy, sw, sh, outSize) => {
-  const canvas = document.createElement('canvas');
-  canvas.width = outSize;
-  canvas.height = outSize;
-  const ctx = canvas.getContext('2d', { willReadFrequently: true });
-  if (!ctx) throw new Error('Canvas không khả dụng.');
+const getScaledSize = (width, height) => {
+  const longest = Math.max(width, height);
+  if (longest <= MAX_SOURCE_SIZE) return { width, height };
+  const ratio = MAX_SOURCE_SIZE / longest;
+  return {
+    width: Math.round(width * ratio),
+    height: Math.round(height * ratio),
+  };
+};
 
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = 'high';
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(0, 0, outSize, outSize);
-  ctx.drawImage(source, sx, sy, sw, sh, 0, 0, outSize, outSize);
+const calculateSafeZoom = (cropWidth, cropHeight, requestedZoom) => {
+  const longestAfterZoom = Math.max(cropWidth, cropHeight) * requestedZoom;
+  if (longestAfterZoom <= MAX_PROCESS_SIZE) return requestedZoom;
+  return MAX_PROCESS_SIZE / Math.max(cropWidth, cropHeight);
+};
 
-  const imageData = ctx.getImageData(0, 0, outSize, outSize);
+const yieldToBrowser = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+const cloneImageData = (imageData) =>
+  new ImageData(new Uint8ClampedArray(imageData.data), imageData.width, imageData.height);
+
+const applyGrayscaleContrast = (imageData, contrast = 1.6) => {
   const data = imageData.data;
-  const contrast = 1.35;
-  const intercept = 128 * (1 - contrast);
   for (let i = 0; i < data.length; i += 4) {
-    const gray = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
-    const value = Math.max(0, Math.min(255, gray * contrast + intercept));
+    const gray = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
+    const adjusted = Math.max(0, Math.min(255, (gray - 128) * contrast + 128));
+    data[i] = adjusted;
+    data[i + 1] = adjusted;
+    data[i + 2] = adjusted;
+  }
+  return imageData;
+};
+
+const applyThreshold = (imageData, threshold) => {
+  const data = imageData.data;
+  for (let i = 0; i < data.length; i += 4) {
+    const gray = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
+    const value = gray >= threshold ? 255 : 0;
     data[i] = value;
     data[i + 1] = value;
     data[i + 2] = value;
   }
-  ctx.putImageData(imageData, 0, 0);
-  return canvas;
+  return imageData;
 };
 
-const buildScanVariants = (image) => {
-  const { width: w, height: h } = image;
-  const variants = [];
-  const push = (sx, sy, sw, sh, size, label) => {
-    const safeW = Math.max(1, Math.min(sw, w - sx));
-    const safeH = Math.max(1, Math.min(sh, h - sy));
-    if (safeW < 20 || safeH < 20) return;
-    variants.push({
-      label,
-      canvas: drawEnhancedRegion(image, sx, sy, safeW, safeH, size),
-    });
-  };
+const invertImage = (imageData) => {
+  const data = imageData.data;
+  for (let i = 0; i < data.length; i += 4) {
+    data[i] = 255 - data[i];
+    data[i + 1] = 255 - data[i + 1];
+    data[i + 2] = 255 - data[i + 2];
+  }
+  return imageData;
+};
 
-  const fullSize = Math.min(1400, Math.max(w, h));
-  push(0, 0, w, h, fullSize, 'full');
-  push(0, 0, w, Math.floor(h * 0.55), 1000, 'top-half');
-  push(Math.floor(w * 0.35), 0, Math.floor(w * 0.65), Math.floor(h * 0.55), 1000, 'top-right');
-  push(Math.floor(w * 0.2), Math.floor(h * 0.05), Math.floor(w * 0.6), Math.floor(h * 0.45), 1100, 'center-top');
+const decodeCanvas = (canvas, imageDataOverride = null) => {
+  const context = canvas.getContext('2d', { willReadFrequently: true });
+  if (!context) return '';
 
-  [2, 3].forEach((grid) => {
-    const cellW = Math.floor(w / grid);
-    const cellH = Math.floor(h / grid);
-    const overlapX = Math.floor(cellW * 0.2);
-    const overlapY = Math.floor(cellH * 0.2);
-    for (let row = 0; row < grid; row += 1) {
-      for (let col = 0; col < grid; col += 1) {
-        const sx = Math.max(0, col * cellW - overlapX);
-        const sy = Math.max(0, row * cellH - overlapY);
-        const sw = Math.min(w - sx, cellW + overlapX * 2);
-        const sh = Math.min(h - sy, cellH + overlapY * 2);
-        push(sx, sy, sw, sh, 900, `grid-${grid}-${row}-${col}`);
-      }
-    }
+  const imageData =
+    imageDataOverride || context.getImageData(0, 0, canvas.width, canvas.height);
+
+  const result = jsQR(imageData.data, imageData.width, imageData.height, {
+    inversionAttempts: 'attemptBoth',
   });
 
-  return variants;
+  return result?.data || '';
 };
 
-const decodeWithBarcodeDetector = async (source) => {
-  if (typeof window === 'undefined' || typeof window.BarcodeDetector !== 'function') {
-    return null;
-  }
+const drawCropToCanvas = (source, region, requestedZoom, targetCanvas) => {
+  const zoom = calculateSafeZoom(region.sw, region.sh, requestedZoom);
+  const targetWidth = Math.max(1, Math.round(region.sw * zoom));
+  const targetHeight = Math.max(1, Math.round(region.sh * zoom));
+
+  targetCanvas.width = targetWidth;
+  targetCanvas.height = targetHeight;
+
+  const context = targetCanvas.getContext('2d', { willReadFrequently: true });
+  if (!context) return null;
+
+  context.clearRect(0, 0, targetWidth, targetHeight);
+  context.imageSmoothingEnabled = false;
+  context.drawImage(
+    source,
+    region.sx,
+    region.sy,
+    region.sw,
+    region.sh,
+    0,
+    0,
+    targetWidth,
+    targetHeight,
+  );
+
+  return targetCanvas;
+};
+
+const loadOrientedSource = async (file, sourceCanvas) => {
+  let bitmap = null;
+  let objectUrl = '';
+  let image = null;
+
   try {
-    const detector = new window.BarcodeDetector({ formats: ['qr_code'] });
-    const codes = await detector.detect(source);
-    return codes?.[0]?.rawValue ? String(codes[0].rawValue) : null;
-  } catch {
-    return null;
+    if (typeof createImageBitmap === 'function') {
+      try {
+        bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+      } catch {
+        try {
+          bitmap = await createImageBitmap(file);
+        } catch {
+          bitmap = null;
+        }
+      }
+    }
+
+    if (bitmap) {
+      const { width, height } = getScaledSize(bitmap.width, bitmap.height);
+      sourceCanvas.width = width;
+      sourceCanvas.height = height;
+      const ctx = sourceCanvas.getContext('2d', { willReadFrequently: true });
+      ctx.clearRect(0, 0, width, height);
+      ctx.drawImage(bitmap, 0, 0, width, height);
+      return sourceCanvas;
+    }
+
+    objectUrl = URL.createObjectURL(file);
+    image = await new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error('Không thể xử lý ảnh vừa chụp.'));
+      img.src = objectUrl;
+    });
+
+    const { width, height } = getScaledSize(
+      image.naturalWidth || image.width,
+      image.naturalHeight || image.height,
+    );
+    sourceCanvas.width = width;
+    sourceCanvas.height = height;
+    const ctx = sourceCanvas.getContext('2d', { willReadFrequently: true });
+    ctx.clearRect(0, 0, width, height);
+    ctx.drawImage(image, 0, 0, width, height);
+    return sourceCanvas;
+  } finally {
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
+    if (bitmap?.close) {
+      try {
+        bitmap.close();
+      } catch {
+        // ignore
+      }
+    }
   }
+};
+
+const scanRegionWithVariants = async ({
+  source,
+  region,
+  zoomLevels,
+  contrastLevels,
+  thresholds,
+  processingCanvas,
+  tryInvertAtEnd = false,
+}) => {
+  let attempts = 0;
+
+  const bump = async () => {
+    attempts += 1;
+    if (attempts % 4 === 0) await yieldToBrowser();
+  };
+
+  for (const zoom of zoomLevels) {
+    const canvas = drawCropToCanvas(source, region, zoom, processingCanvas);
+    if (!canvas) continue;
+
+    let result = decodeCanvas(canvas);
+    await bump();
+    if (result) return result;
+
+    const context = canvas.getContext('2d', { willReadFrequently: true });
+    if (!context) continue;
+    const original = context.getImageData(0, 0, canvas.width, canvas.height);
+
+    for (const contrast of contrastLevels) {
+      const contrasted = applyGrayscaleContrast(cloneImageData(original), contrast);
+      result = decodeCanvas(canvas, contrasted);
+      await bump();
+      if (result) return result;
+    }
+
+    for (const threshold of thresholds) {
+      const thresholded = applyThreshold(cloneImageData(original), threshold);
+      result = decodeCanvas(canvas, thresholded);
+      await bump();
+      if (result) return result;
+    }
+
+    if (tryInvertAtEnd) {
+      const inverted = invertImage(cloneImageData(original));
+      result = decodeCanvas(canvas, inverted);
+      await bump();
+      if (result) return result;
+    }
+  }
+
+  return '';
+};
+
+const scanCapturedImage = async (sourceCanvas, processingCanvas, onStage) => {
+  const width = sourceCanvas.width;
+  const height = sourceCanvas.height;
+
+  const regions = [
+    {
+      name: 'full-image',
+      label: 'Đang quét toàn bộ ảnh…',
+      region: {
+        sx: 0,
+        sy: 0,
+        sw: width,
+        sh: height,
+      },
+      zoomLevels: [1],
+      contrastLevels: [1.6],
+      thresholds: [145],
+      tryInvertAtEnd: true,
+    },
+    {
+      name: 'top-right-quarter',
+      label: 'Chưa thấy QR — đang phóng góc trên bên phải…',
+      region: getTopRightQuarter(width, height),
+      zoomLevels: [1.5, 2, 3, 4],
+      contrastLevels: [1.3, 1.6, 2],
+      thresholds: [90, 120, 145, 170, 200],
+      tryInvertAtEnd: false,
+    },
+    {
+      name: 'top-right-padded',
+      label: 'Đang quét góc trên phải (mở rộng)…',
+      region: getTopRightQuarterWithPadding(width, height),
+      zoomLevels: [1.5, 2, 3],
+      contrastLevels: [1.6],
+      thresholds: [120, 145, 170],
+      tryInvertAtEnd: false,
+    },
+    {
+      name: 'right-half',
+      label: 'Đang quét nửa bên phải…',
+      region: {
+        sx: Math.floor(width / 2),
+        sy: 0,
+        sw: Math.floor(width / 2),
+        sh: height,
+      },
+      zoomLevels: [1, 1.5],
+      contrastLevels: [1.6],
+      thresholds: [145],
+      tryInvertAtEnd: false,
+    },
+  ];
+
+  for (const item of regions) {
+    onStage?.(item.label);
+    const result = await scanRegionWithVariants({
+      source: sourceCanvas,
+      region: item.region,
+      zoomLevels: item.zoomLevels,
+      contrastLevels: item.contrastLevels,
+      thresholds: item.thresholds,
+      processingCanvas,
+      tryInvertAtEnd: item.tryInvertAtEnd,
+    });
+
+    if (result) return result;
+    await yieldToBrowser();
+  }
+
+  return '';
 };
 
 const renameCaptureFile = (file, soChungTu) => {
@@ -173,45 +353,72 @@ const renameCaptureFile = (file, soChungTu) => {
 const UploadImageByQr = () => {
   const toast = useToast();
 
-  const scannerRef = useRef(null);
-  const fileInputRef = useRef(null);
-  const cameraCaptureInputRef = useRef(null);
+  const captureInputRef = useRef(null);
+  const galleryInputRef = useRef(null);
+  const sourceCanvasRef = useRef(null);
+  const processingCanvasRef = useRef(null);
+  const isImageProcessingRef = useRef(false);
+  const previewUrlRef = useRef('');
 
-  const [isReadingFile, setIsReadingFile] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [statusText, setStatusText] = useState('');
   const [manualCode, setManualCode] = useState('');
   const [scannedCode, setScannedCode] = useState('');
   const [uploadUrl, setUploadUrl] = useState('');
+  const [previewUrl, setPreviewUrl] = useState('');
   const [seedFiles, setSeedFiles] = useState([]);
   const [seedToken, setSeedToken] = useState(0);
 
   useEffect(() => {
-    const el = document.getElementById(SCANNER_ELEMENT_ID);
-    if (!el) return undefined;
-
-    scannerRef.current = new Html5Qrcode(SCANNER_ELEMENT_ID, SCANNER_CONFIG);
+    sourceCanvasRef.current = document.createElement('canvas');
+    processingCanvasRef.current = document.createElement('canvas');
 
     return () => {
-      try {
-        scannerRef.current?.clear();
-      } catch {
-        // ignore
+      if (previewUrlRef.current) {
+        URL.revokeObjectURL(previewUrlRef.current);
+        previewUrlRef.current = '';
       }
-      scannerRef.current = null;
     };
   }, []);
 
-  const ensureScanner = useCallback(() => {
-    if (!scannerRef.current) {
-      scannerRef.current = new Html5Qrcode(SCANNER_ELEMENT_ID, SCANNER_CONFIG);
+  const clearPreview = useCallback(() => {
+    if (previewUrlRef.current) {
+      URL.revokeObjectURL(previewUrlRef.current);
+      previewUrlRef.current = '';
     }
-    return scannerRef.current;
+    setPreviewUrl('');
   }, []);
 
-  const openUploadInNewTab = useCallback(
-    (url) => {
+  const updatePreviewFromRegion = useCallback(
+    (sourceCanvas, region) => {
+      const canvas = processingCanvasRef.current;
+      if (!canvas) return;
+
+      drawCropToCanvas(sourceCanvas, region, 2, canvas);
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) return;
+          if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+          const url = URL.createObjectURL(blob);
+          previewUrlRef.current = url;
+          setPreviewUrl(url);
+        },
+        'image/jpeg',
+        0.72,
+      );
+    },
+    [],
+  );
+
+  const openUploadUrl = useCallback(
+    (url, { autoOpen = false } = {}) => {
       const newWindow = window.open(url, '_blank', 'noopener,noreferrer');
       if (!newWindow) {
-        toast.warning('Trình duyệt đã chặn cửa sổ mới.');
+        toast.warning(
+          autoOpen
+            ? 'Trình duyệt đã chặn cửa sổ mới. Vui lòng bấm Mở trang tải ảnh.'
+            : 'Trình duyệt đã chặn cửa sổ mới. Vui lòng cho phép popup hoặc thử lại.',
+        );
         return false;
       }
       return true;
@@ -219,12 +426,12 @@ const UploadImageByQr = () => {
     [toast],
   );
 
-  const applySoChungTu = useCallback(
-    (rawCode, { showToast = true, imageFile = null } = {}) => {
-      const soChungTu = extractSoChungTu(rawCode);
+  const applySuccess = useCallback(
+    (qrText, imageFile = null) => {
+      const soChungTu = extractSoChungTu(qrText);
 
       if (!isValidSoChungTu(soChungTu)) {
-        toast.error('Không tìm thấy số chứng từ hợp lệ trong mã QR.');
+        toast.error('Đã đọc được QR nhưng không tìm thấy số chứng từ hợp lệ.');
         return false;
       }
 
@@ -234,97 +441,94 @@ const UploadImageByQr = () => {
       setUploadUrl(url);
 
       if (imageFile) {
-        const renamed = renameCaptureFile(imageFile, soChungTu);
-        setSeedFiles([renamed]);
+        setSeedFiles([renameCaptureFile(imageFile, soChungTu)]);
         setSeedToken((prev) => prev + 1);
       }
 
-      if (showToast) {
-        toast.success(
-          imageFile
-            ? `Đã nhận mã ${soChungTu}. Ảnh QR đã thêm vào danh sách tải lên.`
-            : `Đã nhận mã chứng từ: ${soChungTu}`,
-        );
-      }
+      toast.success('Đã đọc được mã QR.');
+      openUploadUrl(url, { autoOpen: true });
       return true;
     },
-    [toast],
+    [openUploadUrl, toast],
   );
 
-  const decodeQrFromFile = useCallback(
-    async (file) => {
-      const nativeFromFile = await decodeWithBarcodeDetector(file);
-      if (nativeFromFile) return nativeFromFile;
-
-      const image = await loadImageFromFile(file);
-      const nativeFromImage = await decodeWithBarcodeDetector(image);
-      if (nativeFromImage) return nativeFromImage;
-
-      const scanner = ensureScanner();
-      try {
-        const text = await scanner.scanFile(file, false);
-        if (text) return text;
-      } catch {
-        // thử crop
-      }
-
-      const variants = buildScanVariants(image);
-      for (const variant of variants) {
-        const nativeVariant = await decodeWithBarcodeDetector(variant.canvas);
-        if (nativeVariant) return nativeVariant;
-
-        try {
-          const variantFile = await canvasToFile(variant.canvas, `${variant.label}.png`);
-          const text = await ensureScanner().scanFile(variantFile, false);
-          if (text) return text;
-        } catch {
-          // tiếp tục
-        }
-      }
-
-      throw new Error('NO_QR_FOUND');
-    },
-    [ensureScanner],
-  );
-
-  const handleFileChange = async (event) => {
+  const handleCapturedImage = async (event) => {
     const file = event.target.files?.[0];
     event.target.value = '';
+
     if (!file) return;
+    if (isImageProcessingRef.current) return;
 
-    setIsReadingFile(true);
+    isImageProcessingRef.current = true;
+    setIsProcessing(true);
+    setStatusText('Đang quét toàn bộ ảnh…');
+    clearPreview();
+
     try {
-      const decodedText = await decodeQrFromFile(file);
-      applySoChungTu(decodedText, { imageFile: file });
-    } catch (error) {
-      console.error('Đọc QR từ ảnh thất bại:', error);
-      toast.error('Không đọc được mã QR trong ảnh. Hãy chụp gần, rõ nét hơn.');
-    } finally {
-      setIsReadingFile(false);
-    }
-  };
+      const sourceCanvas = sourceCanvasRef.current;
+      const processingCanvas = processingCanvasRef.current;
+      if (!sourceCanvas || !processingCanvas) {
+        throw new Error('Không thể xử lý ảnh vừa chụp.');
+      }
 
-  const handleReset = () => {
-    setScannedCode('');
-    setUploadUrl('');
-    setManualCode('');
-    setSeedFiles([]);
-    setSeedToken(0);
-    cameraCaptureInputRef.current?.click();
+      await loadOrientedSource(file, sourceCanvas);
+
+      const topRight = getTopRightQuarter(sourceCanvas.width, sourceCanvas.height);
+      updatePreviewFromRegion(sourceCanvas, topRight);
+
+      setStatusText('Đang quét toàn bộ ảnh…');
+      const qrText = await scanCapturedImage(sourceCanvas, processingCanvas, setStatusText);
+
+      if (!qrText) {
+        toast.error(
+          'Không đọc được mã QR. Vui lòng chụp lại và đảm bảo mã QR không bị mờ hoặc lóa sáng.',
+        );
+        return;
+      }
+
+      applySuccess(qrText, file);
+    } catch (error) {
+      console.error('Xử lý ảnh QR thất bại:', error);
+      toast.error(error?.message || 'Không thể xử lý ảnh vừa chụp.');
+    } finally {
+      isImageProcessingRef.current = false;
+      setIsProcessing(false);
+      setStatusText('');
+      if (captureInputRef.current) captureInputRef.current.value = '';
+      if (galleryInputRef.current) galleryInputRef.current.value = '';
+    }
   };
 
   const handleOpenManual = () => {
-    applySoChungTu(String(manualCode || '').trim().toUpperCase());
-  };
-
-  const handleOpenInNewTab = () => {
-    if (uploadUrl) {
-      openUploadInNewTab(uploadUrl);
+    const soChungTu = String(manualCode || '').trim().toUpperCase();
+    if (!isValidSoChungTu(soChungTu)) {
+      toast.error('Đã đọc được QR nhưng không tìm thấy số chứng từ hợp lệ.');
       return;
     }
-    const soChungTu = String(manualCode || '').trim().toUpperCase();
-    if (!applySoChungTu(soChungTu, { showToast: false })) return;
-    openUploadInNewTab(buildUploadUrl(soChungTu));
+
+    const url = buildUploadUrl(soChungTu);
+    setScannedCode(soChungTu);
+    setManualCode(soChungTu);
+    setUploadUrl(url);
+    openUploadUrl(url);
+  };
+
+  const handleOpenResult = () => {
+    if (uploadUrl) {
+      openUploadUrl(uploadUrl);
+      return;
+    }
+    handleOpenManual();
+  };
+
+  const handleReshoot = () => {
+    if (isImageProcessingRef.current) return;
+    setScannedCode('');
+    setUploadUrl('');
+    setSeedFiles([]);
+    setSeedToken(0);
+    clearPreview();
+    captureInputRef.current?.click();
   };
 
   return (
@@ -332,13 +536,13 @@ const UploadImageByQr = () => {
       <PageHeader
         icon={<QrCodeScannerIcon />}
         title="Tải ảnh"
-        subtitle="Chụp hoặc chọn ảnh mã QR phiếu sửa chữa để tải ảnh chứng từ"
+        subtitle="Chụp mã QR trên phiếu sửa chữa (hoạt động trên HTTP)."
       />
 
       <Stack spacing={LAYOUT.sectionGap}>
         <Alert severity="info">
-          Bấm <strong>Chụp ảnh QR</strong> để mở camera điện thoại, hoặc chọn ảnh QR có sẵn.
-          Hệ thống đọc mã chứng từ rồi tự thêm ảnh đó vào phần tải lên.
+          Bấm <strong>Chụp mã QR</strong> để mở camera hệ thống. Hệ thống quét{' '}
+          <strong>toàn bộ ảnh trước</strong>; nếu chưa thấy QR mới phóng / quét góc trên bên phải.
         </Alert>
 
         <Paper variant="outlined" sx={{ p: LAYOUT.paperPadding, borderRadius: 2 }}>
@@ -355,62 +559,91 @@ const UploadImageByQr = () => {
             }}
           >
             <PhotoCameraIcon sx={{ fontSize: 48, color: 'primary.main', mb: 1 }} />
-            <Typography variant="body2" fontWeight={600} sx={{ mb: 0.5 }}>
-              Chụp / chọn ảnh mã QR
+            <Typography variant="body2" fontWeight={700} sx={{ mb: 0.5 }}>
+              Chụp rõ mã QR trên phiếu
             </Typography>
             <Typography variant="caption" color="text.secondary">
-              Chụp gần, để QR rõ và chiếm phần lớn khung hình.
+              Tránh mờ / lóa sáng. Không dùng webcam trình duyệt trên HTTP.
             </Typography>
           </Box>
 
-          {/* Element ẩn cho html5-qrcode đọc file */}
-          <Box id={SCANNER_ELEMENT_ID} sx={{ width: 1, height: 1, overflow: 'hidden', opacity: 0 }} />
+          {previewUrl && (
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="caption" fontWeight={700} sx={{ display: 'block', mb: 0.75 }}>
+                Vùng góc trên phải (dùng khi quét full chưa thấy QR)
+              </Typography>
+              <Box
+                component="img"
+                src={previewUrl}
+                alt="Vùng QR góc trên phải"
+                sx={{
+                  display: 'block',
+                  width: '100%',
+                  maxHeight: 220,
+                  objectFit: 'contain',
+                  borderRadius: 1,
+                  border: '1px solid',
+                  borderColor: 'success.light',
+                  bgcolor: '#111',
+                }}
+              />
+            </Box>
+          )}
+
+          {isProcessing && (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, mb: 2 }}>
+              <CircularProgress size={18} />
+              <Typography variant="body2" color="text.secondary">
+                {statusText || 'Đang quét toàn bộ ảnh…'}
+              </Typography>
+            </Box>
+          )}
 
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} useFlexGap flexWrap="wrap">
             <Button
               variant="contained"
-              startIcon={isReadingFile ? <CircularProgress size={16} color="inherit" /> : <PhotoCameraIcon />}
-              onClick={() => cameraCaptureInputRef.current?.click()}
-              disabled={isReadingFile}
+              startIcon={isProcessing ? <CircularProgress size={16} color="inherit" /> : <PhotoCameraIcon />}
+              onClick={() => captureInputRef.current?.click()}
+              disabled={isProcessing}
             >
-              {isReadingFile ? 'Đang đọc QR...' : 'Chụp ảnh QR'}
+              {isProcessing ? 'Đang tìm QR…' : 'Chụp mã QR'}
             </Button>
 
             <Button
               variant="outlined"
-              startIcon={<QrCodeScannerIcon />}
-              onClick={() => fileInputRef.current?.click()}
-              disabled={isReadingFile}
+              startIcon={<ImageIcon />}
+              onClick={() => galleryInputRef.current?.click()}
+              disabled={isProcessing}
             >
               Chọn ảnh có sẵn
             </Button>
 
-            {(scannedCode || uploadUrl) && (
+            {(scannedCode || uploadUrl || previewUrl) && (
               <Button
                 variant="outlined"
                 startIcon={<RefreshIcon />}
-                onClick={handleReset}
-                disabled={isReadingFile}
+                onClick={handleReshoot}
+                disabled={isProcessing}
               >
-                Chụp mã khác
+                Chụp lại
               </Button>
             )}
           </Stack>
 
           <input
-            ref={cameraCaptureInputRef}
+            ref={captureInputRef}
             type="file"
             accept="image/*"
             capture="environment"
             hidden
-            onChange={handleFileChange}
+            onChange={handleCapturedImage}
           />
           <input
-            ref={fileInputRef}
+            ref={galleryInputRef}
             type="file"
             accept="image/*"
             hidden
-            onChange={handleFileChange}
+            onChange={handleCapturedImage}
           />
         </Paper>
 
@@ -428,26 +661,18 @@ const UploadImageByQr = () => {
               value={manualCode}
               onChange={(e) => setManualCode(e.target.value.toUpperCase())}
               inputProps={{ autoCapitalize: 'characters', spellCheck: false }}
+              disabled={isProcessing}
             />
 
-            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} useFlexGap flexWrap="wrap">
-              <Button
-                variant="contained"
-                color="primary"
-                onClick={handleOpenManual}
-                disabled={!manualCode.trim()}
-              >
-                Mở tải ảnh trong app
-              </Button>
-              <Button
-                variant="outlined"
-                startIcon={<OpenInNewIcon />}
-                onClick={handleOpenInNewTab}
-                disabled={!manualCode.trim() && !uploadUrl}
-              >
-                Mở trang ngoài
-              </Button>
-            </Stack>
+            <Button
+              variant="contained"
+              color="primary"
+              startIcon={<OpenInNewIcon />}
+              onClick={handleOpenResult}
+              disabled={isProcessing || (!manualCode.trim() && !uploadUrl)}
+            >
+              Mở trang tải ảnh
+            </Button>
           </Stack>
 
           {(scannedCode || uploadUrl) && (
@@ -482,14 +707,6 @@ const UploadImageByQr = () => {
             seedFiles={seedFiles}
             seedToken={seedToken}
           />
-        )}
-
-        {!scannedCode && (
-          <Paper variant="outlined" sx={{ p: LAYOUT.paperPadding, borderRadius: 2 }}>
-            <Typography variant="body2" color="text.secondary">
-              Chụp/chọn ảnh QR hoặc nhập số chứng từ để mở phần tải ảnh.
-            </Typography>
-          </Paper>
         )}
       </Stack>
     </PageLayout>
