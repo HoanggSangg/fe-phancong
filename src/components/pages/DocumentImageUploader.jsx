@@ -26,6 +26,7 @@ import {
   getDocumentFiles,
   uploadDocumentFile,
 } from '../../utils/documentImageApi';
+import { sanitizeUploadFileName, withSafeUploadFileName } from '../../utils/documentImageFileName';
 
 const IMAGE_EXT = ['jpg', 'jpeg', 'jpe', 'jfif', 'png', 'gif', 'bmp', 'webp'];
 const VIDEO_EXT = ['mp4', 'm4v', 'mov', 'webm', '3gp', '3gpp'];
@@ -65,7 +66,7 @@ const mimeToExt = {
 };
 
 /** Đặt tên file theo timestamp để tránh ghi đè (camera thường trả image.jpg trùng tên). */
-const renameWithTimestamp = (file, prefix = 'IMG') => {
+const renameWithTimestamp = (file) => {
   const fromName = extOf(file.name);
   const fromMime = mimeToExt[file.type] || '';
   const ext =
@@ -73,8 +74,7 @@ const renameWithTimestamp = (file, prefix = 'IMG') => {
     fromMime ||
     (String(file.type || '').startsWith('video/') ? 'mp4' : 'jpg');
   const stamp = Date.now();
-  const safePrefix = String(prefix || 'IMG').replace(/[^\w.-]+/g, '_').slice(0, 40) || 'IMG';
-  return new File([file], `${safePrefix}_${stamp}.${ext}`, {
+  return new File([file], sanitizeUploadFileName(`${stamp}.${ext}`, { fallbackStamp: stamp }), {
     type: file.type || 'application/octet-stream',
     lastModified: Date.now(),
   });
@@ -143,6 +143,7 @@ const DocumentImageUploader = ({ soChungTu, seedFiles = [], seedToken = 0 }) => 
       if (!incoming.length) return;
 
       const nextItems = [];
+      const usedNames = new Set();
       incoming.forEach((file) => {
         if (!isAllowedFile(file)) {
           toast.warning(`Bỏ qua file không hỗ trợ: ${file.name}`);
@@ -153,18 +154,31 @@ const DocumentImageUploader = ({ soChungTu, seedFiles = [], seedToken = 0 }) => 
           return;
         }
 
+        let safeFile = withSafeUploadFileName(file);
+        let safeName = safeFile.name;
+        if (usedNames.has(safeName)) {
+          const ext = extOf(safeName) || 'jpg';
+          const base = extOf(safeName) ? safeName.slice(0, -(ext.length + 1)) : safeName;
+          safeName = sanitizeUploadFileName(`${base}_${Date.now()}.${ext}`);
+          safeFile = new File([safeFile], safeName, {
+            type: safeFile.type || 'application/octet-stream',
+            lastModified: safeFile.lastModified || Date.now(),
+          });
+        }
+        usedNames.add(safeName);
+
         pendingIdRef.current += 1;
         const id = pendingIdRef.current;
         const previewUrl =
-          isImageName(file.name) || (file.type && file.type.startsWith('image/'))
-            ? URL.createObjectURL(file)
+          isImageName(safeName) || (safeFile.type && safeFile.type.startsWith('image/'))
+            ? URL.createObjectURL(safeFile)
             : '';
 
         nextItems.push({
           id,
-          file,
-          name: file.name,
-          size: file.size,
+          file: safeFile,
+          name: safeName,
+          size: safeFile.size,
           previewUrl,
           status: 'ready',
           progress: 0,
@@ -404,7 +418,7 @@ const DocumentImageUploader = ({ soChungTu, seedFiles = [], seedToken = 0 }) => 
           capture="environment"
           onChange={(e) => {
             const renamed = Array.from(e.target.files || []).map((file) =>
-              renameWithTimestamp(file, doc || 'IMG'),
+              renameWithTimestamp(file),
             );
             addFiles(renamed);
             e.target.value = '';

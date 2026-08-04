@@ -18,6 +18,7 @@ import jsQR from 'jsqr';
 import PageLayout from '../common/PageLayout';
 import PageHeader from '../common/PageHeader';
 import DocumentImageUploader from './DocumentImageUploader';
+import { sanitizeUploadFileName } from '../../utils/documentImageFileName';
 import { useToast } from '../../context/ToastContext';
 import { LAYOUT } from '../../constants/layout';
 
@@ -338,14 +339,12 @@ const scanCapturedImage = async (sourceCanvas, processingCanvas, onStage) => {
   return '';
 };
 
-const renameCaptureFile = (file, soChungTu) => {
-  // Dùng Date.now() (ms) để tránh trùng tên khi chụp liên tiếp trong cùng giây
+const renameCaptureFile = (file) => {
   const stamp = Date.now();
-  const base = String(soChungTu || 'QR').replace(/[^\w.-]+/g, '_').slice(0, 40) || 'QR';
   const ext = /\.(jpe?g|png|gif|webp|bmp)$/i.test(file.name)
     ? file.name.split('.').pop().toLowerCase()
     : 'jpg';
-  return new File([file], `${base}_${stamp}.${ext}`, {
+  return new File([file], sanitizeUploadFileName(`${stamp}.${ext}`, { fallbackStamp: stamp }), {
     type: file.type || 'image/jpeg',
     lastModified: file.lastModified || Date.now(),
   });
@@ -442,7 +441,7 @@ const UploadImageByQr = () => {
       setUploadUrl(url);
 
       if (imageFile) {
-        setSeedFiles([renameCaptureFile(imageFile, soChungTu)]);
+        setSeedFiles([renameCaptureFile(imageFile)]);
         setSeedToken((prev) => prev + 1);
       }
 
