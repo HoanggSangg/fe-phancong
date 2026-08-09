@@ -3,28 +3,28 @@ import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import { ensureCert, keyFile, certFile } from './scripts/ensure-dev-cert.mjs'
 
-const resolveHttps = () => {
-  try {
-    ensureCert()
-  } catch (error) {
-    console.warn('[dev-cert] Không tạo được cert mkcert:', error?.message || error)
-  }
-
-  if (fs.existsSync(keyFile) && fs.existsSync(certFile)) {
-    return {
-      key: fs.readFileSync(keyFile),
-      cert: fs.readFileSync(certFile),
-    }
-  }
-  return true
-}
-
 // https://vite.dev/config/
-export default defineConfig(({ mode }) => {
+export default defineConfig(async ({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   // HTTPS mặc định: camera điện thoại cần secure context trên IP LAN.
   // Tắt: .env.local → VITE_DEV_HTTPS=false
   const useHttps = (env.VITE_DEV_HTTPS || process.env.VITE_DEV_HTTPS || 'true') !== 'false'
+
+  let httpsOption = false
+  if (useHttps) {
+    const ok = await ensureCert()
+    if (ok && fs.existsSync(keyFile) && fs.existsSync(certFile)) {
+      httpsOption = {
+        key: fs.readFileSync(keyFile),
+        cert: fs.readFileSync(certFile),
+      }
+    } else {
+      console.warn(
+        '[dev-cert] Không có cert mkcert — Vite sẽ dùng cert tạm (Chrome dễ báo lỗi SSL).',
+      )
+      httpsOption = true
+    }
+  }
 
   return {
     plugins: [react()],
@@ -32,7 +32,7 @@ export default defineConfig(({ mode }) => {
       host: '0.0.0.0',
       port: 5173,
       strictPort: true,
-      https: useHttps ? resolveHttps() : false,
+      https: httpsOption,
       proxy: {
         '/api': {
           target: 'http://localhost:3000',
@@ -48,7 +48,7 @@ export default defineConfig(({ mode }) => {
     preview: {
       host: '0.0.0.0',
       port: 5173,
-      https: useHttps ? resolveHttps() : false,
+      https: httpsOption,
     },
     build: {
       rollupOptions: {
