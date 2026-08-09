@@ -41,8 +41,9 @@ const collectHosts = () => {
     const host = extra.trim()
     if (host) hosts.add(host)
   }
-  // IP Tailscale máy Vũ — giữ nguyên trong cert
+  // Link chuẩn: Tailscale (khác mạng) + LAN (cùng mạng)
   hosts.add('100.127.133.38')
+  hosts.add('192.168.1.250')
   return [...hosts].sort()
 }
 

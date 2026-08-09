@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "dev:trust-cert": "node scripts/ensure-dev-cert.mjs",
+    "dev:firewall": "powershell -ExecutionPolicy Bypass -File scripts/allow-dev-firewall.ps1",
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",

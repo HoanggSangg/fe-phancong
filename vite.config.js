@@ -2,6 +2,8 @@ import fs from 'node:fs'
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import { ensureCert, keyFile, certFile } from './scripts/ensure-dev-cert.mjs'
+import { httpToHttpsRedirectPlugin } from './plugins/httpToHttpsRedirect.js'
+import { printAccessUrlsPlugin } from './plugins/printAccessUrls.js'
 
 // https://vite.dev/config/
 export default defineConfig(async ({ mode }) => {
@@ -27,7 +29,12 @@ export default defineConfig(async ({ mode }) => {
   }
 
   return {
-    plugins: [react()],
+    plugins: [
+      react(),
+      ...(useHttps
+        ? [httpToHttpsRedirectPlugin({ enabled: true })]
+        : [printAccessUrlsPlugin()]),
+    ],
     server: {
       host: '0.0.0.0',
       port: 5173,

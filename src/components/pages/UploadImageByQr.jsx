@@ -23,6 +23,11 @@ import {
   extractSoChungTu,
   isValidSoChungTu,
 } from '../../utils/uploadUrl';
+import {
+  ACCESS_HINT,
+  ACCESS_LAN_URL,
+  ACCESS_TAILSCALE_URL,
+} from '../../constants/accessUrls';
 import { useToast } from '../../context/ToastContext';
 import { LAYOUT } from '../../constants/layout';
 
@@ -108,7 +113,7 @@ const UploadImageByQr = () => {
 
     if (!isSecureCameraContext()) {
       setCameraError(
-        'Trình duyệt chỉ cho mở camera khi web chạy HTTPS. Dùng https://100.127.133.38:5173 (giữ IP cũ, chỉ đổi http→https).',
+        `Trình duyệt chỉ cho mở camera khi web chạy HTTPS. ${ACCESS_HINT}`,
       );
       toast.error('Cần HTTPS để mở camera điện thoại.');
       return;
@@ -204,8 +209,13 @@ const UploadImageByQr = () => {
 
       <Stack spacing={LAYOUT.sectionGap}>
         <Alert severity="info">
-          Bấm <strong>Quét QR</strong> để mở camera. Đưa mã QR vào khung là lấy số chứng từ.
-          Link giữ nguyên IP Tailscale: <strong>https://100.127.133.38:5173</strong> (chỉ đổi http→https).
+          Bấm <strong>Quét QR</strong> để mở camera. Đưa mã vào khung là lấy số chứng từ.
+          <br />
+          Khác mạng + Tailscale: <strong>{ACCESS_TAILSCALE_URL}</strong>
+          <br />
+          Cùng mạng LAN: <strong>{ACCESS_LAN_URL}</strong>
+          <br />
+          Mở <strong>http://</strong> cũng được — hệ thống tự chuyển sang <strong>https://</strong>.
         </Alert>
 
         <Paper variant="outlined" sx={{ p: LAYOUT.paperPadding, borderRadius: 2 }}>
