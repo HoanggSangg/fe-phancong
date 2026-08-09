@@ -18,6 +18,13 @@ const collectHosts = () => {
       if (addr.family === 'IPv4' && !addr.internal) hosts.add(addr.address)
     }
   }
+  // IP cũ / thêm tay: VITE_DEV_CERT_HOSTS=100.127.133.38,192.168.1.10
+  for (const extra of String(process.env.VITE_DEV_CERT_HOSTS || '').split(',')) {
+    const host = extra.trim()
+    if (host) hosts.add(host)
+  }
+  // IP hay dùng trước đây (bookmark cũ)
+  hosts.add('100.127.133.38')
   return [...hosts].sort()
 }
 

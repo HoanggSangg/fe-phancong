@@ -108,7 +108,7 @@ const UploadImageByQr = () => {
 
     if (!isSecureCameraContext()) {
       setCameraError(
-        'Trình duyệt chỉ cho mở camera khi web chạy HTTPS. Hãy mở https://…:5173 thay vì http://…',
+        'Trình duyệt chỉ cho mở camera khi web chạy HTTPS. Dùng https://100.127.133.38:5173 (giữ IP cũ, chỉ đổi http→https).',
       );
       toast.error('Cần HTTPS để mở camera điện thoại.');
       return;
@@ -204,8 +204,8 @@ const UploadImageByQr = () => {
 
       <Stack spacing={LAYOUT.sectionGap}>
         <Alert severity="info">
-          Bấm <strong>Quét QR</strong> để mở camera sau. Đưa mã QR vào khung là hệ thống tự lấy số
-          chứng từ và tải thông tin ảnh xe. Cần truy cập bằng <strong>HTTPS</strong>.
+          Bấm <strong>Quét QR</strong> để mở camera. Đưa mã QR vào khung là lấy số chứng từ.
+          Link giữ nguyên IP Tailscale: <strong>https://100.127.133.38:5173</strong> (chỉ đổi http→https).
         </Alert>
 
         <Paper variant="outlined" sx={{ p: LAYOUT.paperPadding, borderRadius: 2 }}>
