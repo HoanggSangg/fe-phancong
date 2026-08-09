@@ -6,6 +6,9 @@ import {
   Typography,
   Paper,
   Autocomplete,
+  Stack,
+  Alert,
+  CircularProgress,
 } from '@mui/material';
 import {
   createCar,
@@ -19,12 +22,26 @@ import { useQueryClient } from '@tanstack/react-query';
 import dayjs from 'dayjs';
 import customParseFormat from 'dayjs/plugin/customParseFormat';
 import DirectionsCarIcon from '@mui/icons-material/DirectionsCar';
+import QrCodeScannerIcon from '@mui/icons-material/QrCodeScanner';
+import StopCircleIcon from '@mui/icons-material/StopCircle';
+import { Html5Qrcode } from 'html5-qrcode';
 import PageLayout from '../common/PageLayout';
 import PageHeader from '../common/PageHeader';
 import { invalidateWorkerJobCaches } from '../../lib/carCache';
 import { queryKeys } from '../../lib/queryKeys';
 import { useToast } from '../../context/ToastContext';
 import { useUnsavedChanges } from '../../context/UnsavedChangesContext';
+import { extractSoChungTu, isValidSoChungTu } from '../../utils/uploadUrl';
+import { ACCESS_HINT } from '../../constants/accessUrls';
+
+const ADD_CAR_SCANNER_ID = 'add-car-qr-reader';
+
+const isSecureCameraContext = () => {
+  if (typeof window === 'undefined') return false;
+  if (window.isSecureContext) return true;
+  const host = window.location.hostname;
+  return host === 'localhost' || host === '127.0.0.1';
+};
 
 dayjs.extend(customParseFormat);
 
@@ -106,6 +123,11 @@ const AddCar = ({ onSuccess }) => {
   const [externalData, setExternalData] = useState(null);
   const [lookupLoading, setLookupLoading] = useState(false);
   const [lookupError, setLookupError] = useState('');
+  const [isScanningQr, setIsScanningQr] = useState(false);
+  const [isStartingQr, setIsStartingQr] = useState(false);
+  const [cameraError, setCameraError] = useState('');
+  const scannerRef = useRef(null);
+  const qrHandlingRef = useRef(false);
 
   useEffect(() => {
     const dirty = Boolean(
@@ -162,7 +184,7 @@ const AddCar = ({ onSuccess }) => {
     }
   }, [availableWorkers, workersLoaded]);
 
-  const searchExternalData = async (keyword, searchType = 'plate') => {
+  const searchExternalData = useCallback(async (keyword, searchType = 'plate') => {
     const cleanKeyword = cleanText(keyword);
     if (!cleanKeyword) return;
 
@@ -174,7 +196,11 @@ const AddCar = ({ onSuccess }) => {
       setLookupError('');
       setExternalData(null);
 
-      const plateParam = searchType === 'ro' ? formData.plateNumber : '';
+      // TT tra theo /baogia/{TT} — không cần biển số kèm theo
+      const plateParam =
+        searchType === 'ro' && !cleanKeyword.startsWith('TT')
+          ? formData.plateNumber
+          : '';
       const res = await lookupCarOrRO(cleanKeyword, plateParam);
       const data = res.data;
 
@@ -199,13 +225,113 @@ const AddCar = ({ onSuccess }) => {
       console.error(err);
       setLookupError(
         searchType === 'ro'
-          ? 'Không tìm thấy RO. Nếu nhập RO dạng RO26010011, cần nhập biển số trước.'
+          ? cleanKeyword.startsWith('TT')
+            ? 'Không tìm thấy chứng từ TT / báo giá tương ứng.'
+            : 'Không tìm thấy RO. Nếu nhập RO dạng RO26010011, cần nhập biển số trước.'
           : 'Không tìm thấy biển số xe'
       );
     } finally {
       setLookupLoading(false);
     }
-  };
+  }, [ensureAvailableWorkers, formData.plateNumber]);
+
+  const stopQrScanner = useCallback(async () => {
+    const scanner = scannerRef.current;
+    if (!scanner) {
+      setIsScanningQr(false);
+      return;
+    }
+
+    try {
+      if (scanner.isScanning) {
+        await scanner.stop();
+      }
+    } catch {
+      // ignore stop race
+    }
+
+    try {
+      await scanner.clear();
+    } catch {
+      // ignore
+    }
+
+    scannerRef.current = null;
+    setIsScanningQr(false);
+  }, []);
+
+  useEffect(() => () => {
+    stopQrScanner();
+  }, [stopQrScanner]);
+
+  const handleQrScanned = useCallback(
+    async (qrText) => {
+      if (qrHandlingRef.current) return;
+      qrHandlingRef.current = true;
+
+      const soChungTu = extractSoChungTu(qrText);
+      if (!isValidSoChungTu(soChungTu)) {
+        qrHandlingRef.current = false;
+        toast.error('QR không chứa mã TT hợp lệ (vd: TT0000000000198).');
+        return;
+      }
+
+      toast.success(`Đã quét: ${soChungTu}`);
+      await stopQrScanner();
+      await searchExternalData(soChungTu, 'ro');
+      qrHandlingRef.current = false;
+    },
+    [searchExternalData, stopQrScanner, toast],
+  );
+
+  const startQrScanner = useCallback(async () => {
+    if (isStartingQr || isScanningQr) return;
+
+    if (!isSecureCameraContext()) {
+      setCameraError(
+        `Trình duyệt chỉ cho mở camera khi web chạy HTTPS. ${ACCESS_HINT}`,
+      );
+      toast.error('Cần HTTPS để mở camera quét QR.');
+      return;
+    }
+
+    setCameraError('');
+    setIsStartingQr(true);
+
+    try {
+      await stopQrScanner();
+
+      const scanner = new Html5Qrcode(ADD_CAR_SCANNER_ID, { verbose: false });
+      scannerRef.current = scanner;
+
+      await scanner.start(
+        { facingMode: 'environment' },
+        {
+          fps: 10,
+          qrbox: { width: 240, height: 240 },
+          aspectRatio: 1,
+        },
+        async (decodedText) => {
+          await handleQrScanned(decodedText);
+        },
+        () => {},
+      );
+
+      setIsScanningQr(true);
+    } catch (err) {
+      console.error(err);
+      scannerRef.current = null;
+      setIsScanningQr(false);
+      setCameraError(
+        err?.message?.includes('Permission')
+          ? 'Không được cấp quyền camera. Hãy cho phép camera rồi thử lại.'
+          : 'Không mở được camera. Kiểm tra HTTPS và quyền camera.',
+      );
+      toast.error('Không mở được camera quét QR.');
+    } finally {
+      setIsStartingQr(false);
+    }
+  }, [handleQrScanned, isScanningQr, isStartingQr, stopQrScanner, toast]);
 
   const buildRepairItems = () => {
     const { chiTiet } = getExternalContext(externalData);
@@ -435,7 +561,7 @@ const AddCar = ({ onSuccess }) => {
       <PageHeader
         icon={<DirectionsCarIcon color="primary" />}
         title="Thêm xe mới"
-        subtitle="Nhập biển số hoặc RO để tải dữ liệu có sẵn."
+        subtitle="Quét QR báo giá (TT…) hoặc nhập biển số / RO để tải dữ liệu có sẵn."
       />
 
       <Box
@@ -443,6 +569,58 @@ const AddCar = ({ onSuccess }) => {
         onSubmit={handleSubmit}
         sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}
       >
+        <Paper variant="outlined" sx={{ p: 2 }}>
+          <Stack spacing={1.5}>
+
+            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+              {!isScanningQr ? (
+                <Button
+                  type="button"
+                  variant="outlined"
+                  startIcon={
+                    isStartingQr
+                      ? <CircularProgress size={16} />
+                      : <QrCodeScannerIcon />
+                  }
+                  onClick={startQrScanner}
+                  disabled={isStartingQr || lookupLoading}
+                >
+                  {isStartingQr ? 'Đang mở camera…' : 'Quét QR để thêm xe'}
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  variant="outlined"
+                  color="error"
+                  startIcon={<StopCircleIcon />}
+                  onClick={stopQrScanner}
+                >
+                  Dừng quét
+                </Button>
+              )}
+            </Stack>
+
+            {cameraError && (
+              <Alert severity="warning" onClose={() => setCameraError('')}>
+                {cameraError}
+              </Alert>
+            )}
+
+            <Box
+              id={ADD_CAR_SCANNER_ID}
+              sx={{
+                width: '100%',
+                maxWidth: 360,
+                minHeight: isScanningQr ? 260 : 0,
+                overflow: 'hidden',
+                borderRadius: 1,
+                bgcolor: isScanningQr ? '#111' : 'transparent',
+                '& video': { borderRadius: 1 },
+              }}
+            />
+          </Stack>
+        </Paper>
+
         <Box
           sx={{
             display: 'grid',

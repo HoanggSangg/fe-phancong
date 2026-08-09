@@ -12,9 +12,9 @@ import {
 import QrCodeScannerIcon from '@mui/icons-material/QrCodeScanner';
 import CameraswitchIcon from '@mui/icons-material/Cameraswitch';
 import StopCircleIcon from '@mui/icons-material/StopCircle';
-import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import { Html5Qrcode } from 'html5-qrcode';
+import { useSearchParams } from 'react-router-dom';
 import PageLayout from '../common/PageLayout';
 import PageHeader from '../common/PageHeader';
 import DocumentImageUploader from './DocumentImageUploader';
@@ -23,11 +23,8 @@ import {
   extractSoChungTu,
   isValidSoChungTu,
 } from '../../utils/uploadUrl';
-import {
-  ACCESS_HINT,
-  ACCESS_LAN_URL,
-  ACCESS_TAILSCALE_URL,
-} from '../../constants/accessUrls';
+import { ACCESS_HINT } from '../../constants/accessUrls';
+import { getDocumentImageContext } from '../../utils/documentImageApi';
 import { useToast } from '../../context/ToastContext';
 import { LAYOUT } from '../../constants/layout';
 
@@ -44,12 +41,15 @@ const isSecureCameraContext = () => {
 
 const UploadImageByQr = () => {
   const toast = useToast();
+  const [searchParams, setSearchParams] = useSearchParams();
   const scannerRef = useRef(null);
   const handlingRef = useRef(false);
+  const hydratedQueryRef = useRef('');
 
   const [manualCode, setManualCode] = useState('');
   const [scannedCode, setScannedCode] = useState('');
-  const [uploadUrl, setUploadUrl] = useState('');
+  const [carInfo, setCarInfo] = useState(null);
+  const [carInfoLoading, setCarInfoLoading] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
   const [cameraError, setCameraError] = useState('');
@@ -83,29 +83,73 @@ const UploadImageByQr = () => {
     stopScanner();
   }, [stopScanner]);
 
+  const loadCarInfo = useCallback(async (soChungTu) => {
+    if (!isValidSoChungTu(soChungTu)) {
+      setCarInfo(null);
+      return;
+    }
+
+    setCarInfoLoading(true);
+    try {
+      const data = await getDocumentImageContext(soChungTu);
+      setCarInfo(data || null);
+    } catch (error) {
+      console.error(error);
+      setCarInfo({
+        baseTt: soChungTu,
+        roNumber: soChungTu,
+        plateNumber: '',
+        roCode: '',
+      });
+    } finally {
+      setCarInfoLoading(false);
+    }
+  }, []);
+
+  const openSoChungTu = useCallback(
+    async (rawValue, { announce = true, syncQuery = true } = {}) => {
+      const soChungTu = extractSoChungTu(rawValue);
+      if (!isValidSoChungTu(soChungTu)) {
+        toast.error('Số chứng từ không hợp lệ (ví dụ TT0000000000198).');
+        return false;
+      }
+
+      setScannedCode(soChungTu);
+      setManualCode(soChungTu);
+      hydratedQueryRef.current = soChungTu;
+
+      if (syncQuery) {
+        setSearchParams({ soChungTu }, { replace: true });
+      }
+
+      if (announce) {
+        toast.success(`Đã mở xe: ${soChungTu}`);
+      }
+
+      await stopScanner();
+      await loadCarInfo(soChungTu);
+      return true;
+    },
+    [loadCarInfo, setSearchParams, stopScanner, toast],
+  );
+
+  useEffect(() => {
+    const fromQuery = extractSoChungTu(searchParams.get('soChungTu') || '');
+    if (!isValidSoChungTu(fromQuery)) return;
+    if (hydratedQueryRef.current === fromQuery) return;
+
+    openSoChungTu(fromQuery, { announce: false, syncQuery: false });
+  }, [openSoChungTu, searchParams]);
+
   const applySuccess = useCallback(
     async (qrText) => {
       if (handlingRef.current) return false;
       handlingRef.current = true;
-
-      const soChungTu = extractSoChungTu(qrText);
-      if (!isValidSoChungTu(soChungTu)) {
-        handlingRef.current = false;
-        toast.error('Đã đọc được QR nhưng không tìm thấy số chứng từ hợp lệ.');
-        return false;
-      }
-
-      const url = buildUploadUrl(soChungTu);
-      setScannedCode(soChungTu);
-      setManualCode(soChungTu);
-      setUploadUrl(url);
-      toast.success(`Đã quét: ${soChungTu}`);
-
-      await stopScanner();
+      const ok = await openSoChungTu(qrText, { announce: true, syncQuery: true });
       handlingRef.current = false;
-      return true;
+      return ok;
     },
-    [stopScanner, toast],
+    [openSoChungTu],
   );
 
   const startScanner = useCallback(async () => {
@@ -169,34 +213,22 @@ const UploadImageByQr = () => {
   }, [applySuccess, isScanning, isStarting, stopScanner, toast]);
 
   const handleOpenManual = () => {
-    const soChungTu = String(manualCode || '').trim().toUpperCase();
-    if (!isValidSoChungTu(soChungTu)) {
-      toast.error('Số chứng từ không hợp lệ (ví dụ TT0000000003636).');
-      return;
-    }
-
-    const url = buildUploadUrl(soChungTu);
-    setScannedCode(soChungTu);
-    setManualCode(soChungTu);
-    setUploadUrl(url);
-  };
-
-  const handleOpenResult = () => {
-    if (!uploadUrl && !manualCode.trim()) return;
-    if (!uploadUrl) {
-      handleOpenManual();
-      return;
-    }
-    const newWindow = window.open(uploadUrl, '_blank', 'noopener,noreferrer');
-    if (!newWindow) {
-      toast.warning('Trình duyệt đã chặn cửa sổ mới. Vui lòng cho phép popup hoặc thử lại.');
-    }
+    openSoChungTu(manualCode, { announce: true, syncQuery: true });
   };
 
   const handleRescan = async () => {
     setScannedCode('');
-    setUploadUrl('');
+    setCarInfo(null);
+    hydratedQueryRef.current = '';
+    setSearchParams({}, { replace: true });
     await startScanner();
+  };
+
+  const handleClearResult = () => {
+    setScannedCode('');
+    setCarInfo(null);
+    hydratedQueryRef.current = '';
+    setSearchParams({}, { replace: true });
   };
 
   return (
@@ -208,16 +240,6 @@ const UploadImageByQr = () => {
       />
 
       <Stack spacing={LAYOUT.sectionGap}>
-        <Alert severity="info">
-          Bấm <strong>Quét QR</strong> để mở camera. Đưa mã vào khung là lấy số chứng từ.
-          <br />
-          Khác mạng + Tailscale: <strong>{ACCESS_TAILSCALE_URL}</strong>
-          <br />
-          Cùng mạng LAN: <strong>{ACCESS_LAN_URL}</strong>
-          <br />
-          Mở <strong>http://</strong> cũng được — hệ thống tự chuyển sang <strong>https://</strong>.
-        </Alert>
-
         <Paper variant="outlined" sx={{ p: LAYOUT.paperPadding, borderRadius: 2 }}>
           <Box
             id={SCANNER_ELEMENT_ID}
@@ -273,7 +295,7 @@ const UploadImageByQr = () => {
             </Typography>
           )}
 
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} useFlexGap flexWrap="wrap">
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} useFlexGap flexWrap="wrap" sx={{ mb: 2 }}>
             {!isScanning ? (
               <Button
                 variant="contained"
@@ -308,76 +330,42 @@ const UploadImageByQr = () => {
             )}
 
             {scannedCode && (
-              <Button variant="text" startIcon={<RefreshIcon />} onClick={() => setScannedCode('')}>
+              <Button variant="text" startIcon={<RefreshIcon />} onClick={handleClearResult}>
                 Xóa kết quả
               </Button>
             )}
           </Stack>
-        </Paper>
 
-        <Paper variant="outlined" sx={{ p: LAYOUT.paperPadding, borderRadius: 2 }}>
-          <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 700 }}>
-            Nhập thủ công số chứng từ
-          </Typography>
-
-          <Stack spacing={1.5}>
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} useFlexGap>
             <TextField
-              fullWidth
               size="small"
-              label="Số chứng từ"
-              placeholder="TT0000000003636"
+              label="Hoặc nhập số chứng từ TT"
               value={manualCode}
               onChange={(e) => setManualCode(e.target.value.toUpperCase())}
-              inputProps={{ autoCapitalize: 'characters', spellCheck: false }}
-              disabled={isScanning || isStarting}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  handleOpenManual();
+                }
+              }}
+              fullWidth
+              placeholder="TT0000000000198"
             />
-
-            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-              <Button
-                variant="contained"
-                onClick={handleOpenManual}
-                disabled={isScanning || isStarting || !manualCode.trim()}
-              >
-                Lấy thông tin xe
-              </Button>
-              <Button
-                variant="outlined"
-                startIcon={<OpenInNewIcon />}
-                onClick={handleOpenResult}
-                disabled={isScanning || isStarting || (!manualCode.trim() && !uploadUrl)}
-              >
-                Mở trang tải ảnh
-              </Button>
-            </Stack>
+            <Button variant="outlined" onClick={handleOpenManual} sx={{ whiteSpace: 'nowrap' }}>
+              Mở xe
+            </Button>
           </Stack>
-
-          {(scannedCode || uploadUrl) && (
-            <Box sx={{ mt: 2, p: 1.5, bgcolor: 'grey.50', borderRadius: 1.5 }}>
-              {scannedCode && (
-                <Typography variant="body2" sx={{ mb: 0.5 }}>
-                  <Box component="span" fontWeight={700}>
-                    Mã chứng từ:{' '}
-                  </Box>
-                  {scannedCode}
-                </Typography>
-              )}
-              {uploadUrl && (
-                <Typography
-                  variant="body2"
-                  color="text.secondary"
-                  sx={{ wordBreak: 'break-all', fontSize: '0.8rem' }}
-                >
-                  <Box component="span" fontWeight={700} color="text.primary">
-                    Link:{' '}
-                  </Box>
-                  {uploadUrl}
-                </Typography>
-              )}
-            </Box>
-          )}
         </Paper>
 
-        {scannedCode && <DocumentImageUploader soChungTu={scannedCode} />}
+        {carInfoLoading && scannedCode && (
+          <Typography variant="body2" color="text.secondary">
+            Đang tải thông tin xe…
+          </Typography>
+        )}
+
+        {scannedCode && (
+          <DocumentImageUploader soChungTu={scannedCode} carInfo={carInfo} />
+        )}
       </Stack>
     </PageLayout>
   );

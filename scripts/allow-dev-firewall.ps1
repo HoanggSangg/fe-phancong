@@ -1,5 +1,5 @@
 # Cho phép máy khác (LAN / Tailscale) vào Vite :5173
-# Chạy PowerShell (Run as Administrator) trên máy FE (Vũ):
+# Chạy PowerShell (Run as Administrator) trên máy FE (máy cũ):
 #   powershell -ExecutionPolicy Bypass -File scripts/allow-dev-firewall.ps1
 
 $ruleName = 'Vite FE HTTPS 5173'

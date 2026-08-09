@@ -23,6 +23,8 @@ import {
 } from '@mui/material';
 import ManageSearchIcon from '@mui/icons-material/ManageSearch';
 import HistoryIcon from '@mui/icons-material/History';
+import DirectionsCarIcon from '@mui/icons-material/DirectionsCar';
+import { useNavigate } from 'react-router-dom';
 import { getOperationLogs } from '../apis';
 import { ROLE_LABELS } from '../../utils/permissions';
 import { useToast } from '../../context/ToastContext';
@@ -34,6 +36,7 @@ import useOperationVoiceMonitor from '../../hooks/useOperationVoiceMonitor';
 import PageLayout from '../common/PageLayout';
 import PageHeader from '../common/PageHeader';
 import FilterPanel from '../common/FilterPanel';
+import { extractSoChungTu, isValidSoChungTu } from '../../utils/uploadUrl';
 
 const POLL_INTERVAL_MS = 15_000;
 
@@ -46,6 +49,7 @@ const MODULE_LABELS = {
   location: 'Địa điểm',
   supervisor: 'Giám sát',
   team: 'Tổ',
+  document_image: 'Tải ảnh',
 };
 
 const ACTION_LABELS = {
@@ -54,6 +58,7 @@ const ACTION_LABELS = {
   create: 'Tạo mới',
   update: 'Cập nhật',
   delete: 'Xóa',
+  upload: 'Tải lên',
   update_status: 'Đổi trạng thái',
   assign_workers: 'Phân công',
   manual_items: 'Hạng mục SC',
@@ -74,6 +79,7 @@ const moduleColor = {
   location: 'success',
   supervisor: 'warning',
   team: 'info',
+  document_image: 'secondary',
 };
 
 const formatDateTime = (value) => {
@@ -88,8 +94,12 @@ const formatDateTime = (value) => {
   });
 };
 
+const getLogSoChungTu = (log) =>
+  extractSoChungTu(log?.metadata?.baseTt || log?.metadata?.soChungTu || log?.targetLabel || '');
+
 const OperationHistoryPage = () => {
   const toast = useToast();
+  const navigate = useNavigate();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const pageVisible = usePageVisible();
@@ -178,6 +188,15 @@ const OperationHistoryPage = () => {
     []
   );
 
+  const handleViewUploadCar = (log) => {
+    const soChungTu = getLogSoChungTu(log);
+    if (!isValidSoChungTu(soChungTu)) {
+      toast.error('Không xác định được số chứng từ để mở trang tải ảnh.');
+      return;
+    }
+    navigate(`/upload-image?soChungTu=${encodeURIComponent(soChungTu)}`);
+  };
+
   const renderDetails = (log) => (
     <Stack spacing={0.5}>
       <Typography variant="body2">{log.description}</Typography>
@@ -194,6 +213,19 @@ const OperationHistoryPage = () => {
             </Typography>
           ))}
         </Stack>
+      )}
+      {log.module === 'document_image' && isValidSoChungTu(getLogSoChungTu(log)) && (
+        <Box>
+          <Button
+            size="small"
+            variant="outlined"
+            startIcon={<DirectionsCarIcon />}
+            onClick={() => handleViewUploadCar(log)}
+            sx={{ mt: 0.5 }}
+          >
+            Xem xe / tải ảnh
+          </Button>
+        </Box>
       )}
     </Stack>
   );

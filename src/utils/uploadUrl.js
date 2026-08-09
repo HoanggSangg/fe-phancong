@@ -13,18 +13,35 @@ export const getPublicImageBase = () => {
   return base.replace(/\/?$/, '/');
 };
 
+const matchSoChungTu = (text) => {
+  const match = String(text || '').toUpperCase().match(/TT[A-Z0-9]+/);
+  return match ? match[0] : '';
+};
+
+/** Lấy mã TT từ QR: query, path `/baogia/TT...`, hoặc chuỗi chứa TT. */
 export const extractSoChungTu = (qrText) => {
   const rawValue = String(qrText || '').trim();
   if (!rawValue) return '';
 
   try {
     const url = new URL(rawValue);
-    return String(url.searchParams.get('khoa') || url.searchParams.get('soChungTu') || '')
+    const fromQuery = String(
+      url.searchParams.get('khoa')
+      || url.searchParams.get('soChungTu')
+      || '',
+    )
       .trim()
       .toUpperCase();
+    const fromQueryMatch = matchSoChungTu(fromQuery);
+    if (fromQueryMatch) return fromQueryMatch;
+
+    const fromPath = matchSoChungTu(url.pathname);
+    if (fromPath) return fromPath;
   } catch {
-    return rawValue.toUpperCase();
+    // không phải URL đầy đủ
   }
+
+  return matchSoChungTu(rawValue) || rawValue.toUpperCase();
 };
 
 export const isValidSoChungTu = (value) => /^TT[A-Z0-9]+$/.test(value);

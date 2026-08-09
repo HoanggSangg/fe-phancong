@@ -96,7 +96,7 @@ export function httpToHttpsRedirectPlugin({ enabled = true } = {}) {
         peekServer.listen(PUBLIC_PORT, '0.0.0.0', () => {
           console.log('')
           console.log('  http:// tự chuyển → https:// (cùng IP:5173)')
-          console.log(`  ➜  Tailscale: ${ACCESS_TAILSCALE_URL}`)
+          console.log(`  ➜  Máy cũ (Tailscale): ${ACCESS_TAILSCALE_URL}`)
           console.log(`  ➜  LAN:       ${ACCESS_LAN_URL}`)
           console.log(`  ➜  Local:     ${ACCESS_LOCAL_URL}`)
           console.log(`  (nội bộ Vite :${internalPort})`)

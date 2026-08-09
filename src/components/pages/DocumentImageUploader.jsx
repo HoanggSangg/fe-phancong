@@ -12,18 +12,29 @@ import {
   IconButton,
   Dialog,
   CircularProgress,
+  ToggleButton,
+  ToggleButtonGroup,
+  Tooltip,
 } from '@mui/material';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import PhotoCameraIcon from '@mui/icons-material/PhotoCamera';
 import CloseIcon from '@mui/icons-material/Close';
+import DownloadIcon from '@mui/icons-material/Download';
+import DirectionsCarIcon from '@mui/icons-material/DirectionsCar';
+import BuildIcon from '@mui/icons-material/Build';
 import imageCompression from 'browser-image-compression';
 import { useToast } from '../../context/ToastContext';
 import { LAYOUT } from '../../constants/layout';
 import {
+  IMAGE_KIND_CAR,
+  IMAGE_KIND_PARTS,
+  buildDocKey,
+  deleteDocumentFile,
   getDocumentFileUrl,
   getDocumentFiles,
+  getPublicDocumentFileUrl,
   uploadDocumentFile,
 } from '../../utils/documentImageApi';
 import { sanitizeUploadFileName, withSafeUploadFileName } from '../../utils/documentImageFileName';
@@ -65,7 +76,6 @@ const mimeToExt = {
   'video/3gpp2': '3gp',
 };
 
-/** Đặt tên file theo timestamp để tránh ghi đè (camera thường trả image.jpg trùng tên). */
 const renameWithTimestamp = (file) => {
   const fromName = extOf(file.name);
   const fromMime = mimeToExt[file.type] || '';
@@ -105,22 +115,34 @@ const maybeCompressImage = async (file, enabled) => {
   }
 };
 
-const DocumentImageUploader = ({ soChungTu, seedFiles = [], seedToken = 0 }) => {
+const DocumentImageUploader = ({
+  soChungTu,
+  seedFiles = [],
+  seedToken = 0,
+  carInfo = null,
+}) => {
   const toast = useToast();
   const fileInputRef = useRef(null);
   const cameraInputRef = useRef(null);
   const pendingIdRef = useRef(0);
   const lastSeedTokenRef = useRef(0);
 
+  const [imageKind, setImageKind] = useState(IMAGE_KIND_CAR);
   const [files, setFiles] = useState([]);
   const [loadingFiles, setLoadingFiles] = useState(false);
   const [pending, setPending] = useState([]);
   const [compress, setCompress] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [deletingName, setDeletingName] = useState('');
   const [overallProgress, setOverallProgress] = useState(0);
   const [preview, setPreview] = useState(null);
 
-  const doc = String(soChungTu || '').trim().toUpperCase();
+  const baseCode = String(soChungTu || '')
+    .trim()
+    .toUpperCase()
+    .replace(/^HPT\//, '');
+  const doc = buildDocKey(baseCode, imageKind);
+  const kindLabel = imageKind === IMAGE_KIND_PARTS ? 'ảnh phụ tùng' : 'ảnh xe';
 
   const loadFiles = useCallback(async () => {
     if (!doc) return;
@@ -203,11 +225,9 @@ const DocumentImageUploader = ({ soChungTu, seedFiles = [], seedToken = 0 }) => 
     setFiles([]);
     lastSeedTokenRef.current = 0;
     if (doc) loadFiles();
-    // Chỉ reset khi đổi số chứng từ
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [doc]);
 
-  // Ảnh vừa chụp/đọc QR → đưa vào danh sách chờ tải lên
   useEffect(() => {
     if (!doc || !seedToken || seedToken === lastSeedTokenRef.current) return;
     if (!seedFiles?.length) return;
@@ -242,6 +262,18 @@ const DocumentImageUploader = ({ soChungTu, seedFiles = [], seedToken = 0 }) => 
       });
       return [];
     });
+  };
+
+  const handleKindChange = (_event, next) => {
+    if (!next || next === imageKind) return;
+    if (pending.length || uploading) {
+      const ok = window.confirm(
+        'Đổi loại ảnh sẽ xóa danh sách chờ tải lên. Tiếp tục?',
+      );
+      if (!ok) return;
+      clearPending();
+    }
+    setImageKind(next);
   };
 
   const handleUploadAll = async () => {
@@ -317,11 +349,43 @@ const DocumentImageUploader = ({ soChungTu, seedFiles = [], seedToken = 0 }) => 
     await loadFiles();
 
     if (failCount === 0) {
-      toast.success(`Đã tải lên ${queue.length} file.`);
+      toast.success(`Đã tải lên ${queue.length} ${kindLabel}.`);
       clearPending();
       setOverallProgress(0);
     } else {
       toast.warning(`Hoàn tất với ${failCount} file lỗi. Các file thành công đã lên server.`);
+    }
+  };
+
+  const handleDownload = (item, event) => {
+    event?.stopPropagation?.();
+    const link = document.createElement('a');
+    link.href = getDocumentFileUrl(doc, item.name, { download: true });
+    link.download = item.name;
+    link.rel = 'noopener';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  };
+
+  const handleDelete = async (item, event) => {
+    event?.stopPropagation?.();
+    const publicUrl = getPublicDocumentFileUrl(doc, item.name);
+    const ok = window.confirm(
+      `Xóa ${kindLabel} này?\n\n${item.name}\n${publicUrl}`,
+    );
+    if (!ok) return;
+
+    setDeletingName(item.name);
+    try {
+      await deleteDocumentFile(doc, item.name);
+      toast.success('Đã xóa ảnh.');
+      if (preview?.name === item.name) setPreview(null);
+      await loadFiles();
+    } catch (error) {
+      toast.error(error?.response?.data?.message || 'Không xóa được ảnh.');
+    } finally {
+      setDeletingName('');
     }
   };
 
@@ -330,19 +394,85 @@ const DocumentImageUploader = ({ soChungTu, seedFiles = [], seedToken = 0 }) => 
       files.map((name) => ({
         name,
         url: getDocumentFileUrl(doc, name),
+        publicUrl: getPublicDocumentFileUrl(doc, name),
         isImage: isImageName(name),
         isVideo: isVideoName(name),
       })),
     [doc, files],
   );
 
-  if (!doc) return null;
+  if (!baseCode) return null;
 
   return (
     <Stack spacing={LAYOUT.sectionGap}>
+      {carInfo && (carInfo.plateNumber || carInfo.roCode || carInfo.roNumber) && (
+        <Paper
+          variant="outlined"
+          sx={{
+            p: LAYOUT.paperPadding,
+            borderRadius: 2,
+            bgcolor: 'action.hover',
+            borderColor: 'divider',
+          }}
+        >
+          <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 0.75 }}>
+            Thông tin xe
+          </Typography>
+          <Stack spacing={0.35}>
+            {carInfo.plateNumber && (
+              <Typography variant="body2">
+                Biển số: <strong>{carInfo.plateNumber}</strong>
+              </Typography>
+            )}
+            {(carInfo.roNumber || baseCode) && (
+              <Typography variant="body2">
+                Số chứng từ: <strong>{carInfo.roNumber || baseCode}</strong>
+              </Typography>
+            )}
+            {carInfo.roCode && (
+              <Typography variant="body2">
+                RO: <strong>{carInfo.roCode}</strong>
+              </Typography>
+            )}
+            {carInfo.externalCarTypeName && (
+              <Typography variant="body2" color="text.secondary">
+                Loại xe: {carInfo.externalCarTypeName}
+              </Typography>
+            )}
+          </Stack>
+        </Paper>
+      )}
+
       <Paper variant="outlined" sx={{ p: LAYOUT.paperPadding, borderRadius: 2 }}>
+        <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>
+          Chọn loại ảnh — {baseCode}
+        </Typography>
+        <ToggleButtonGroup
+          exclusive
+          fullWidth
+          size="small"
+          value={imageKind}
+          onChange={handleKindChange}
+          disabled={uploading}
+          sx={{ mb: 1.5 }}
+        >
+          <ToggleButton value={IMAGE_KIND_CAR} sx={{ textTransform: 'none', gap: 0.75 }}>
+            <DirectionsCarIcon fontSize="small" />
+            Ảnh xe
+          </ToggleButton>
+          <ToggleButton value={IMAGE_KIND_PARTS} sx={{ textTransform: 'none', gap: 0.75 }}>
+            <BuildIcon fontSize="small" />
+            Ảnh phụ tùng
+          </ToggleButton>
+        </ToggleButtonGroup>
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
+          {imageKind === IMAGE_KIND_CAR
+            ? `Lưu vào soChungTu=${baseCode} (ảnh xe)`
+            : `Lưu vào soChungTu=hpt/${baseCode} (ảnh phụ tùng)`}
+        </Typography>
+
         <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1.5 }}>
-          Tải ảnh / video lên — {doc}
+          Tải {kindLabel} lên
         </Typography>
 
         <Box
@@ -370,7 +500,7 @@ const DocumentImageUploader = ({ soChungTu, seedFiles = [], seedToken = 0 }) => 
         >
           <CloudUploadIcon sx={{ fontSize: 40, color: 'primary.main', mb: 1 }} />
           <Typography variant="body2" fontWeight={600}>
-            Kéo thả ảnh / video vào đây, hoặc bấm để chọn file
+            Kéo thả {kindLabel} vào đây, hoặc bấm để chọn file
           </Typography>
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
             JPG, PNG, GIF, WEBP, MP4, MOV… · Tối đa 200 MB/file · Chọn nhiều file cùng lúc
@@ -429,7 +559,7 @@ const DocumentImageUploader = ({ soChungTu, seedFiles = [], seedToken = 0 }) => 
           <Box sx={{ mt: 2 }}>
             <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
               <Typography variant="body2" fontWeight={600}>
-                Chờ tải lên ({pending.length})
+                Chờ tải lên ({pending.length}) — {kindLabel}
               </Typography>
               <Button
                 size="small"
@@ -505,7 +635,7 @@ const DocumentImageUploader = ({ soChungTu, seedFiles = [], seedToken = 0 }) => 
                       {fmtSize(item.size)}
                       {item.status === 'uploading' ? ` · ${item.progress}%` : ''}
                       {item.status === 'done' ? ' · Xong' : ''}
-                      {item.status === 'error' ? ` · Lỗi` : ''}
+                      {item.status === 'error' ? ' · Lỗi' : ''}
                     </Typography>
                     {item.status === 'uploading' && (
                       <LinearProgress variant="determinate" value={item.progress} sx={{ mt: 0.5 }} />
@@ -536,7 +666,7 @@ const DocumentImageUploader = ({ soChungTu, seedFiles = [], seedToken = 0 }) => 
               disabled={uploading}
               sx={{ mt: 1.5 }}
             >
-              {uploading ? 'Đang tải lên...' : 'Tải lên tất cả'}
+              {uploading ? 'Đang tải lên...' : `Tải lên ${kindLabel}`}
             </Button>
           </Box>
         )}
@@ -551,7 +681,7 @@ const DocumentImageUploader = ({ soChungTu, seedFiles = [], seedToken = 0 }) => 
           sx={{ mb: 1.5 }}
         >
           <Typography variant="subtitle2" fontWeight={700}>
-            Ảnh / video hiện có ({files.length})
+            {imageKind === IMAGE_KIND_PARTS ? 'Ảnh phụ tùng' : 'Ảnh xe'} hiện có ({files.length})
           </Typography>
           <Button
             size="small"
@@ -569,7 +699,7 @@ const DocumentImageUploader = ({ soChungTu, seedFiles = [], seedToken = 0 }) => 
           </Box>
         ) : !galleryItems.length ? (
           <Box sx={{ py: 4, textAlign: 'center', color: 'text.secondary' }}>
-            <Typography variant="body2">Chưa có ảnh / video cho chứng từ này.</Typography>
+            <Typography variant="body2">Chưa có {kindLabel} cho chứng từ này.</Typography>
           </Box>
         ) : (
           <Grid container spacing={1}>
@@ -580,12 +710,13 @@ const DocumentImageUploader = ({ soChungTu, seedFiles = [], seedToken = 0 }) => 
                   sx={{
                     borderRadius: 1.5,
                     overflow: 'hidden',
-                    cursor: 'pointer',
                     '&:hover': { borderColor: 'primary.main' },
                   }}
-                  onClick={() => setPreview(item)}
                 >
-                  <Box sx={{ position: 'relative', width: '100%', pt: '75%', bgcolor: 'grey.100' }}>
+                  <Box
+                    sx={{ position: 'relative', width: '100%', pt: '75%', bgcolor: 'grey.100', cursor: 'pointer' }}
+                    onClick={() => setPreview(item)}
+                  >
                     {item.isImage ? (
                       <Box
                         component="img"
@@ -616,9 +747,35 @@ const DocumentImageUploader = ({ soChungTu, seedFiles = [], seedToken = 0 }) => 
                       </Box>
                     )}
                   </Box>
-                  <Typography variant="caption" noWrap sx={{ display: 'block', px: 1, py: 0.75 }}>
+                  <Typography variant="caption" noWrap sx={{ display: 'block', px: 1, pt: 0.75 }} title={item.name}>
                     {item.name}
                   </Typography>
+                  <Stack direction="row" spacing={0.5} sx={{ px: 0.5, pb: 0.75 }}>
+                    <Tooltip title="Tải về">
+                      <IconButton
+                        size="small"
+                        color="primary"
+                        onClick={(e) => handleDownload(item, e)}
+                        disabled={Boolean(deletingName)}
+                      >
+                        <DownloadIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip title="Xóa ảnh">
+                      <IconButton
+                        size="small"
+                        color="error"
+                        onClick={(e) => handleDelete(item, e)}
+                        disabled={deletingName === item.name}
+                      >
+                        {deletingName === item.name ? (
+                          <CircularProgress size={16} color="inherit" />
+                        ) : (
+                          <DeleteOutlineIcon fontSize="small" />
+                        )}
+                      </IconButton>
+                    </Tooltip>
+                  </Stack>
                 </Paper>
               </Grid>
             ))}
@@ -628,12 +785,30 @@ const DocumentImageUploader = ({ soChungTu, seedFiles = [], seedToken = 0 }) => 
 
       <Dialog open={Boolean(preview)} onClose={() => setPreview(null)} maxWidth="md" fullWidth>
         <Box sx={{ position: 'relative', bgcolor: '#000' }}>
-          <IconButton
-            onClick={() => setPreview(null)}
-            sx={{ position: 'absolute', top: 8, right: 8, zIndex: 2, color: '#fff' }}
+          <Stack
+            direction="row"
+            spacing={1}
+            sx={{ position: 'absolute', top: 8, right: 8, zIndex: 2 }}
           >
-            <CloseIcon />
-          </IconButton>
+            <IconButton
+              onClick={(e) => preview && handleDownload(preview, e)}
+              sx={{ color: '#fff', bgcolor: 'rgba(0,0,0,0.35)' }}
+            >
+              <DownloadIcon />
+            </IconButton>
+            <IconButton
+              onClick={(e) => preview && handleDelete(preview, e)}
+              sx={{ color: '#fff', bgcolor: 'rgba(0,0,0,0.35)' }}
+            >
+              <DeleteOutlineIcon />
+            </IconButton>
+            <IconButton
+              onClick={() => setPreview(null)}
+              sx={{ color: '#fff', bgcolor: 'rgba(0,0,0,0.35)' }}
+            >
+              <CloseIcon />
+            </IconButton>
+          </Stack>
           {preview?.isImage && (
             <Box
               component="img"
