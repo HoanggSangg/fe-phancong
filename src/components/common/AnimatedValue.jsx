@@ -33,17 +33,6 @@ export const pageEnter = keyframes`
   }
 `;
 
-export const authCardEnter = keyframes`
-  0% {
-    opacity: 0;
-    transform: translateY(28px) scale(0.96);
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-`;
-
 export const softPulse = keyframes`
   0%, 100% { opacity: 1; }
   50% { opacity: 0.72; }
@@ -74,22 +63,6 @@ export function PageContent({ animationKey, children, sx }) {
       sx={{
         animation: `${pageEnter} 0.48s ${EASE} both`,
         ...staggerRules,
-        ...sx,
-      }}
-    >
-      {children}
-    </Box>
-  );
-}
-
-/** Login / register card entrance. */
-export function AuthPageShell({ children, sx }) {
-  return (
-    <Box
-      sx={{
-        width: '100%',
-        maxWidth: 440,
-        animation: `${authCardEnter} 0.55s ${EASE} both`,
         ...sx,
       }}
     >

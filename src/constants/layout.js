@@ -5,7 +5,7 @@ export const LAYOUT = {
   pagePadding: { xs: 1.5, sm: 2 },
   sectionGap: 2,
   paperPadding: { xs: 1.5, sm: 2 },
-  headerBg: 'grey.100',
+  headerBg: 'transparent',
   maxWidth: {
     full: undefined,
     narrow: 560,

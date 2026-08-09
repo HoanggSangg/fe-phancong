@@ -1,14 +1,13 @@
 import React from 'react';
-import { Paper, Stack, Typography } from '@mui/material';
+import { Box, Stack, Typography } from '@mui/material';
 import FilterListIcon from '@mui/icons-material/FilterList';
-import { LAYOUT } from '../../constants/layout';
+import { filterPanelSx } from '../../constants/brand';
 import { hoverLiftSx } from './AnimatedValue';
 
 const FilterPanel = ({ children, title = 'Bộ lọc', sx = {} }) => (
-  <Paper
+  <Box
     sx={{
-      p: LAYOUT.paperPadding,
-      mb: LAYOUT.sectionGap,
+      ...filterPanelSx,
       ...hoverLiftSx,
       ...sx,
     }}
@@ -16,11 +15,13 @@ const FilterPanel = ({ children, title = 'Bộ lọc', sx = {} }) => (
     {title && (
       <Stack direction="row" alignItems="center" spacing={0.75} sx={{ mb: 1.5 }}>
         <FilterListIcon color="primary" sx={{ fontSize: 18 }} />
-        <Typography variant="subtitle2">{title}</Typography>
+        <Typography variant="subtitle2" sx={{ fontFamily: '"Sora", sans-serif' }}>
+          {title}
+        </Typography>
       </Stack>
     )}
     {children}
-  </Paper>
+  </Box>
 );
 
 export default FilterPanel;

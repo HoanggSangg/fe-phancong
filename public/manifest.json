@@ -1,10 +1,10 @@
 {
-    "name": "Quản Lý Công Việc",
-    "short_name": "QLCV",
+    "name": "Oto Bá Thành",
+    "short_name": "Bá Thành",
     "start_url": "/",
     "display": "standalone",
-    "background_color": "#ffffff",
-    "theme_color": "#1976d2",
+    "background_color": "#eef2f6",
+    "theme_color": "#b71c1c",
     "icons": [
       {
         "src": "https://res.cloudinary.com/drbjrsm0s/image/upload/v1745463450/logo_ulbaie.png",

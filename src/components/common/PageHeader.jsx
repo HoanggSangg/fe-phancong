@@ -1,30 +1,24 @@
 import React from 'react';
 import { Box, Typography } from '@mui/material';
 import { LAYOUT } from '../../constants/layout';
+import { pageHeaderSx } from '../../constants/brand';
 
 const PageHeader = ({ icon, emoji, title, subtitle, actions }) => (
-  <Box
-    sx={{
-      bgcolor: LAYOUT.headerBg,
-      borderRadius: 2,
-      px: { xs: 1.25, sm: 2 },
-      py: { xs: 1, sm: 1.5 },
-      mb: { xs: 1.5, sm: LAYOUT.sectionGap },
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      gap: 1.5,
-      flexWrap: 'wrap',
-    }}
-  >
-    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, minWidth: 0 }}>
+  <Box sx={{ ...pageHeaderSx, mb: { xs: 1.5, sm: LAYOUT.sectionGap } }}>
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, minWidth: 0, pl: 0.75 }}>
       {icon && (
         <Box
           sx={{
-            color: 'primary.main',
+            width: { xs: 38, sm: 44 },
+            height: { xs: 38, sm: 44 },
+            borderRadius: 1.5,
             display: 'flex',
             alignItems: 'center',
-            '& .MuiSvgIcon-root': { fontSize: { xs: 24, sm: 30 } },
+            justifyContent: 'center',
+            bgcolor: 'rgba(21, 101, 192, 0.1)',
+            color: 'primary.main',
+            flexShrink: 0,
+            '& .MuiSvgIcon-root': { fontSize: { xs: 22, sm: 26 } },
           }}
         >
           {icon}
@@ -35,12 +29,23 @@ const PageHeader = ({ icon, emoji, title, subtitle, actions }) => (
           {emoji}
         </Box>
       )}
-      <Box>
-        <Typography variant="h5" color="primary" sx={{ fontSize: { xs: '1rem', sm: undefined } }}>
+      <Box sx={{ minWidth: 0 }}>
+        <Typography
+          variant="h5"
+          color="primary"
+          sx={{
+            fontSize: { xs: '1rem', sm: '1.15rem' },
+            fontFamily: '"Sora", sans-serif',
+          }}
+        >
           {title}
         </Typography>
         {subtitle && (
-          <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.75rem', sm: undefined } }}>
+          <Typography
+            variant="body2"
+            color="text.secondary"
+            sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}
+          >
             {subtitle}
           </Typography>
         )}

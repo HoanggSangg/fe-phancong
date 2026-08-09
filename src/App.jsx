@@ -26,6 +26,7 @@ const AddCarPage = lazy(() => import('./components/pages/AddCar'));
 const ManageCarsPage = lazy(() => import('./components/pages/ManageCars'));
 const AvailableWorkersPage = lazy(() => import('./components/pages/AvailableWorkersPage'));
 const LocationManager = lazy(() => import('./components/pages/LocationManager'));
+const InsurancePage = lazy(() => import('./components/pages/InsurancePage'));
 const WokerAssignment = lazy(() => import('./components/pages/WokerAssignment'));
 const RepairHistoryPage = lazy(() => import('./components/pages/RepairHistoryPage'));
 const WorkerRevenueChart = lazy(() => import('./components/pages/WorkerRevenueChart'));
@@ -169,6 +170,7 @@ const AppLayout = () => (
       <Route path="/dashboard" element={<Navigate to="/admin/dashboard" replace />} />
       <Route path="/system" element={<Navigate to="/admin" replace />} />
       <Route path="/locations" element={<Navigate to="/admin/locations" replace />} />
+      <Route path="/insurance" element={<Navigate to="/admin/insurance" replace />} />
       <Route path="/supervisors" element={<Navigate to="/admin/supervisors" replace />} />
       <Route path="/users" element={<Navigate to="/admin/users" replace />} />
       <Route path="/account-permissions" element={<Navigate to="/admin/account-permissions" replace />} />
@@ -205,6 +207,7 @@ function App() {
               <Route path="workers" element={withSuspense(<PermissionRoute permission="workers.main"><MainWorkersPage /></PermissionRoute>)} />
               <Route path="teams" element={withSuspense(<PermissionRoute permission="teams.manage"><TeamManagement /></PermissionRoute>)} />
               <Route path="locations" element={withSuspense(<PermissionRoute permission="system.locations"><LocationManager /></PermissionRoute>)} />
+              <Route path="insurance" element={withSuspense(<PermissionRoute permission="system.insurance"><InsurancePage /></PermissionRoute>)} />
               <Route path="supervisors" element={withSuspense(<PermissionRoute permission="system.supervisors"><SupervisorsPage /></PermissionRoute>)} />
               <Route path="users" element={withSuspense(<PermissionRoute permission="system.users"><UserManagement /></PermissionRoute>)} />
               <Route path="account-permissions" element={withSuspense(<PermissionRoute permission="system.permissions"><AccountPermissionsPage /></PermissionRoute>)} />

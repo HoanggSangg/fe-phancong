@@ -3,9 +3,12 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Quản Lý Công Việc</title>
+    <title>Oto Bá Thành — Phân công</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Sora:wght@600;700;800&display=swap" rel="stylesheet" />
     <script>
-      // HTTP cũ → HTTPS cùng host:port (5173)
+      // Fallback: nếu vẫn vào bằng HTTP (proxy/dev), chuyển HTTPS cùng host:port
       (function () {
         if (typeof location === 'undefined' || location.protocol !== 'http:') return;
         location.replace(
@@ -30,7 +33,7 @@
     <meta name="apple-mobile-web-app-title" content="Quản Lý Công Việc" />
 
     <!-- Android theme -->
-    <meta name="theme-color" content="#1976d2" />
+    <meta name="theme-color" content="#b71c1c" />
   </head>
   <body>
     <div id="root"></div>

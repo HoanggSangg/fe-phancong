@@ -78,7 +78,6 @@ export const AuthProvider = ({ children }) => {
     const res = await loginApi(credentials);
     persistAuth(res.data.token, res.data.user, rememberMe);
     setUser(res.data.user);
-    connectSocket(res.data.token);
     return res.data;
   };
 
@@ -86,7 +85,6 @@ export const AuthProvider = ({ children }) => {
     const res = await registerApi(payload);
     persistAuth(res.data.token, res.data.user, true);
     setUser(res.data.user);
-    connectSocket(res.data.token);
     return res.data;
   };
 
@@ -116,13 +114,20 @@ export const AuthProvider = ({ children }) => {
   };
 
   useEffect(() => {
-    if (!loading && user && getStoredToken()) {
-      connectSocket();
+    if (loading) return undefined;
+
+    const token = getStoredToken();
+    if (user && token) {
+      connectSocket(token);
+      return undefined;
     }
-    if (!loading && !user) {
+
+    if (!user) {
       disconnectSocket();
     }
-  }, [loading, user]);
+    return undefined;
+    // Chỉ reconnect khi đổi user id / loading — tránh connect lại mỗi lần getMe cập nhật object
+  }, [loading, user?.id]);
 
   const value = useMemo(
     () => ({

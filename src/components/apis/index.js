@@ -50,6 +50,12 @@ export const createLocation = (data) => api.post('/locations', data);
 export const updateLocation = (id, data) => api.put(`/locations/${id}`, data);
 export const deleteLocation = (id) => api.delete(`/locations/${id}`);
 
+export const getInsuranceCars = (params) => api.get('/insurance', { params });
+export const getInsuranceCar = (id) => api.get(`/insurance/${id}`);
+export const createInsuranceCar = (data) => api.post('/insurance', data);
+export const updateInsuranceCar = (id, data) => api.put(`/insurance/${id}`, data);
+export const deleteInsuranceCar = (id) => api.delete(`/insurance/${id}`);
+
 export const getCarWorkerHistory = (id) => api.get(`/cars/${id}/workers/history`);
 
 export const getWorkerRevenueChart = (from, to) =>

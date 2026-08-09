@@ -1,15 +1,15 @@
 import { io } from 'socket.io-client';
 import { getStoredToken } from '../components/apis/axios';
 
+const GLOBAL_SOCKET_KEY = '__phancongSocket';
+
 let socketInstance = null;
-let authListenersBound = false;
 
 const resolveSocketUrl = () => {
   if (import.meta.env.VITE_SOCKET_URL) {
     return import.meta.env.VITE_SOCKET_URL;
   }
   if (import.meta.env.DEV) {
-    // Dev: đi qua Vite proxy /socket.io → backend
     return window.location.origin;
   }
   if (typeof window !== 'undefined') {
@@ -19,6 +19,27 @@ const resolveSocketUrl = () => {
   return 'http://localhost:3000';
 };
 
+const readGlobalSocket = () => {
+  if (typeof window === 'undefined') return null;
+  const existing = window[GLOBAL_SOCKET_KEY];
+  if (existing && !existing.disconnected) {
+    return existing;
+  }
+  return null;
+};
+
+const storeGlobalSocket = (socket) => {
+  if (typeof window !== 'undefined') {
+    window[GLOBAL_SOCKET_KEY] = socket;
+  }
+};
+
+const clearGlobalSocket = () => {
+  if (typeof window !== 'undefined') {
+    delete window[GLOBAL_SOCKET_KEY];
+  }
+};
+
 const syncSocketAuth = (socket, token) => {
   const accessToken = token || getStoredToken() || '';
   socket.auth = { token: accessToken };
@@ -26,8 +47,8 @@ const syncSocketAuth = (socket, token) => {
 };
 
 const bindAuthListeners = (socket) => {
-  if (authListenersBound) return;
-  authListenersBound = true;
+  if (socket.__phancongAuthBound) return;
+  socket.__phancongAuthBound = true;
 
   socket.io.on('reconnect_attempt', () => {
     syncSocketAuth(socket);
@@ -36,56 +57,75 @@ const bindAuthListeners = (socket) => {
   socket.on('connect_error', (err) => {
     const message = String(err?.message || '');
     if (message.includes('UNAUTHORIZED')) {
-      // Token hết hạn / không hợp lệ — dừng reconnect storm
       socket.disconnect();
     }
   });
 };
 
+const createSocket = () => {
+  const socket = io(resolveSocketUrl(), {
+    autoConnect: false,
+    path: '/socket.io',
+    transports: import.meta.env.DEV ? ['websocket'] : ['websocket', 'polling'],
+    auth: {
+      token: getStoredToken() || '',
+    },
+    reconnection: true,
+    reconnectionAttempts: Infinity,
+    reconnectionDelay: 1000,
+    reconnectionDelayMax: 10000,
+    timeout: 20000,
+  });
+  bindAuthListeners(socket);
+  storeGlobalSocket(socket);
+  return socket;
+};
+
+/** Lấy socket hiện có — không tạo mới nếu chưa đăng nhập. */
 export const getSocket = () => {
   if (!socketInstance) {
-    socketInstance = io(resolveSocketUrl(), {
-      autoConnect: false,
-      // Dev qua proxy: polling trước ổn định hơn; sau đó nâng cấp websocket.
-      transports: import.meta.env.DEV
-        ? ['polling', 'websocket']
-        : ['websocket', 'polling'],
-      auth: {
-        token: getStoredToken() || '',
-      },
-      reconnection: true,
-      reconnectionAttempts: Infinity,
-      reconnectionDelay: 1000,
-      reconnectionDelayMax: 10000,
-      timeout: 20000,
-    });
-    bindAuthListeners(socketInstance);
+    socketInstance = readGlobalSocket();
+  }
+  if (!socketInstance) {
+    socketInstance = createSocket();
   }
   return socketInstance;
 };
 
+/** Chỉ AuthContext gọi khi đã có token. */
 export const connectSocket = (token) => {
-  const socket = getSocket();
-  const accessToken = syncSocketAuth(socket, token);
-  if (!accessToken) return socket;
+  const accessToken = token || getStoredToken() || '';
+  if (!accessToken) return null;
 
-  if (!socket.connected) {
-    socket.connect();
-  }
+  const socket = getSocket();
+  syncSocketAuth(socket, accessToken);
+
+  if (socket.connected) return socket;
+  if (socket.active) return socket;
+
+  socket.connect();
   return socket;
 };
 
+/** Chỉ gọi khi logout — ngắt hẳn kết nối. */
 export const disconnectSocket = () => {
-  if (!socketInstance) return;
-  socketInstance.auth = { token: '' };
-  if (socketInstance.connected || socketInstance.active) {
-    socketInstance.disconnect();
+  const socket = socketInstance || readGlobalSocket();
+  if (!socket) {
+    socketInstance = null;
+    clearGlobalSocket();
+    return;
   }
+
+  socket.auth = { token: '' };
+  socket.disconnect();
+
+  socketInstance = null;
+  clearGlobalSocket();
 };
 
 export const emitPresence = (currentPath) => {
-  const socket = getSocket();
-  if (!socket.connected) return;
+  const socket = socketInstance || readGlobalSocket();
+  if (!socket?.connected) return;
   socket.emit('client:presence', {
     currentPath: String(currentPath || '/').slice(0, 200),
   });

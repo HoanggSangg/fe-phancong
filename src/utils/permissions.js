@@ -131,6 +131,17 @@ export const PERMISSION_CATALOG = [
     defaultRoles: ['admin'],
   },
   {
+    key: 'system.insurance',
+    label: 'Bảo hiểm',
+    group: 'Hệ thống',
+    path: '/insurance',
+    adminPath: '/admin/insurance',
+    adminArea: true,
+    adminGroup: 'Quản lý',
+    hideFromNav: true,
+    defaultRoles: ['admin'],
+  },
+  {
     key: 'system.supervisors',
     label: 'Giám sát',
     group: 'Hệ thống',

@@ -12,6 +12,8 @@ export default defineConfig(async ({ mode }) => {
   // Tắt: .env.local → VITE_DEV_HTTPS=false
   const useHttps = (env.VITE_DEV_HTTPS || process.env.VITE_DEV_HTTPS || 'true') !== 'false'
   const publicPort = Number(env.VITE_DEV_PORT || process.env.VITE_DEV_PORT || 5173)
+  // Vite HTTPS nội bộ; proxy công khai :publicPort nhận cả http→https và TLS.
+  const vitePort = useHttps ? publicPort + 2 : publicPort
 
   let httpsOption = false
   if (useHttps) {
@@ -33,31 +35,38 @@ export default defineConfig(async ({ mode }) => {
     plugins: [
       react(),
       ...(useHttps
-        ? [httpToHttpsRedirectPlugin({ enabled: true })]
+        ? [
+            httpToHttpsRedirectPlugin({
+              enabled: true,
+              publicPort,
+              vitePort,
+            }),
+          ]
         : [printAccessUrlsPlugin()]),
     ],
     server: {
-      // HTTPS lắng nghe trực tiếp — không qua TCP peek-proxy (tránh HMR/WS timeout).
-      host: '0.0.0.0',
-      port: publicPort,
+      // HTTPS: chỉ localhost; LAN/Tailscale vào qua proxy :publicPort
+      host: useHttps ? '127.0.0.1' : '0.0.0.0',
+      port: vitePort,
       strictPort: true,
       https: httpsOption,
+      allowedHosts: true,
       hmr: useHttps
         ? {
             protocol: 'wss',
-            // Không cố định host: client dùng location.hostname (localhost / LAN / Tailscale).
             clientPort: publicPort,
           }
         : true,
       proxy: {
         '/api': {
-          target: 'http://localhost:3000',
+          target: 'http://127.0.0.1:3000',
           changeOrigin: true,
         },
         '/socket.io': {
-          target: 'http://localhost:3000',
+          target: 'http://127.0.0.1:3000',
           changeOrigin: true,
           ws: true,
+          secure: false,
         },
       },
     },
@@ -71,13 +80,13 @@ export default defineConfig(async ({ mode }) => {
         output: {
           manualChunks(id) {
             if (id.includes('node_modules')) {
-              if (id.includes('exceljs')) return 'exceljs';
-              if (id.includes('recharts') || id.includes('d3-')) return 'charts';
-              if (id.includes('@mui')) return 'mui';
-              if (id.includes('react-dom') || id.includes('/react/')) return 'react-vendor';
-              if (id.includes('@tanstack')) return 'query';
+              if (id.includes('exceljs')) return 'exceljs'
+              if (id.includes('recharts') || id.includes('d3-')) return 'charts'
+              if (id.includes('@mui')) return 'mui'
+              if (id.includes('react-dom') || id.includes('/react/')) return 'react-vendor'
+              if (id.includes('@tanstack')) return 'query'
             }
-            return undefined;
+            return undefined
           },
         },
       },

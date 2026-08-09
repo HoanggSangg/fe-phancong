@@ -22,6 +22,7 @@ import DashboardIcon from '@mui/icons-material/Dashboard';
 import EngineeringIcon from '@mui/icons-material/Engineering';
 import GroupsIcon from '@mui/icons-material/Groups';
 import LocationOnIcon from '@mui/icons-material/LocationOn';
+import HealthAndSafetyIcon from '@mui/icons-material/HealthAndSafety';
 import SupervisorAccountIcon from '@mui/icons-material/SupervisorAccount';
 import PeopleIcon from '@mui/icons-material/People';
 import SecurityIcon from '@mui/icons-material/Security';
@@ -45,6 +46,7 @@ const NAV_ICONS = {
   'workers.main': <EngineeringIcon fontSize="small" />,
   'teams.manage': <GroupsIcon fontSize="small" />,
   'system.locations': <LocationOnIcon fontSize="small" />,
+  'system.insurance': <HealthAndSafetyIcon fontSize="small" />,
   'system.supervisors': <SupervisorAccountIcon fontSize="small" />,
   'system.users': <PeopleIcon fontSize="small" />,
   'system.permissions': <SecurityIcon fontSize="small" />,

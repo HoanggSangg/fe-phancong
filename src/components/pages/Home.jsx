@@ -262,31 +262,52 @@ const Home = () => {
         </Stack>
       </FilterPanel>
 
-      <Paper sx={{ p: 1.5, mb: 2 }}>
-        <Typography variant="subtitle2" gutterBottom>Thống kê</Typography>
+      <Box
+        sx={{
+          p: { xs: 1.5, sm: 2 },
+          mb: 2,
+          borderRadius: 2.5,
+          border: '1px solid',
+          borderColor: 'rgba(21, 101, 192, 0.14)',
+          background: 'linear-gradient(180deg, #ffffff 0%, #f7fafc 100%)',
+          boxShadow: '0 6px 18px rgba(15, 23, 42, 0.04)',
+        }}
+      >
+        <Typography variant="subtitle2" gutterBottom sx={{ fontFamily: '"Sora", sans-serif' }}>
+          Thống kê
+        </Typography>
         <Grid container spacing={1}>
           {statsConfig.map((stat) => (
             <Grid size={{ xs: 4, sm: 3, md: 1.5 }} key={stat.key}>
               <Box
                 sx={{
                   p: 1,
-                  borderRadius: 1.5,
+                  borderRadius: 2,
                   textAlign: 'center',
-                  bgcolor: stat.key === 'late' ? '#fff3e0' : 'grey.50',
+                  bgcolor: stat.key === 'late' ? 'rgba(245, 158, 11, 0.12)' : 'rgba(21, 101, 192, 0.04)',
                   border: '1px solid',
-                  borderColor: 'divider',
+                  borderColor: stat.key === 'late' ? 'rgba(245, 158, 11, 0.35)' : 'rgba(21, 101, 192, 0.1)',
+                  transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+                  '&:hover': {
+                    transform: 'translateY(-2px)',
+                    boxShadow: '0 8px 16px rgba(15, 23, 42, 0.08)',
+                  },
                 }}
               >
                 <Box sx={{ '& .MuiSvgIcon-root': { fontSize: 18 } }}>{stat.icon}</Box>
                 <Typography variant="caption" display="block" fontWeight={600}>{stat.label}</Typography>
-                <Typography variant="subtitle2" color={stat.key === 'late' ? 'error' : 'primary'}>
+                <Typography
+                  variant="subtitle2"
+                  color={stat.key === 'late' ? 'error' : 'primary'}
+                  sx={{ fontFamily: '"Sora", sans-serif', fontWeight: 800 }}
+                >
                   {stat.key === 'late' ? filterCars(overdueCars).length : getFilteredStats()[stat.key]}
                 </Typography>
               </Box>
             </Grid>
           ))}
         </Grid>
-      </Paper>
+      </Box>
 
       {(!selectedSectionKey || selectedSectionKey === 'today') && (
         <Box sx={{ mb: 2 }}>

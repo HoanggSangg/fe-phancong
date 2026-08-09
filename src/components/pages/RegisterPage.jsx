@@ -1,17 +1,17 @@
 import React, { useState } from 'react';
-import { Link as RouterLink, Navigate, useNavigate } from 'react-router-dom';
-import {
-  Box,
-  Button,
-  Paper,
-  TextField,
-  Typography,
-  Link,
-  Stack,
-} from '@mui/material';
+import { Navigate, useNavigate } from 'react-router-dom';
+import BadgeOutlinedIcon from '@mui/icons-material/BadgeOutlined';
+import PersonOutlineIcon from '@mui/icons-material/PersonOutline';
+import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
-import { AuthPageShell } from '../common/AnimatedValue';
+import GarageAuthHero from '../common/GarageAuthHero';
+import AuthFormPanel, {
+  AuthPasswordField,
+  AuthSubmitButton,
+  AuthSwitchLink,
+  AuthTextField,
+} from '../common/AuthFormPanel';
 
 const RegisterPage = () => {
   const { register, isAuthenticated } = useAuth();
@@ -23,6 +23,7 @@ const RegisterPage = () => {
     confirmPassword: '',
     fullName: '',
   });
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
   if (isAuthenticated) {
@@ -35,7 +36,6 @@ const RegisterPage = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
     if (form.password !== form.confirmPassword) {
       toast.error('Mật khẩu xác nhận không khớp');
       return;
@@ -56,54 +56,54 @@ const RegisterPage = () => {
     }
   };
 
+  const lockIcon = <LockOutlinedIcon fontSize="small" />;
+
   return (
-    <Box
-      sx={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        p: 2,
-        bgcolor: '#f5f5f5',
-      }}
-    >
-      <AuthPageShell sx={{ maxWidth: 420 }}>
-      <Paper
-        component="form"
+    <GarageAuthHero>
+      <AuthFormPanel
+        title="Đăng ký"
+        subtitle="Điền thông tin để tạo tài khoản làm việc."
         onSubmit={handleSubmit}
-        elevation={1}
-        sx={{ p: { xs: 2.5, sm: 3 }, width: '100%' }}
+        maxWidth={560}
+        footer={(
+          <AuthSwitchLink prompt="Đã có tài khoản?" to="/login" actionLabel="Đăng nhập" />
+        )}
       >
-        <Stack spacing={1.5}>
-          <Box textAlign="center">
-            <Typography variant="h5" color="primary">
-              Đăng ký
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Tài khoản đầu tiên sẽ là Admin. Các tài khoản sau mặc định là KTV.
-            </Typography>
-          </Box>
-
-
-          <TextField label="Họ tên" value={form.fullName} onChange={handleChange('fullName')} required fullWidth />
-          <TextField label="Tên đăng nhập" value={form.username} onChange={handleChange('username')} required fullWidth />
-          <TextField label="Mật khẩu" type="password" value={form.password} onChange={handleChange('password')} required fullWidth />
-          <TextField label="Xác nhận mật khẩu" type="password" value={form.confirmPassword} onChange={handleChange('confirmPassword')} required fullWidth />
-
-          <Button type="submit" variant="contained" disabled={loading} fullWidth>
-            {loading ? 'Đang đăng ký...' : 'Đăng ký'}
-          </Button>
-
-          <Typography variant="body2" textAlign="center">
-            Đã có tài khoản?{' '}
-            <Link component={RouterLink} to="/login">
-              Đăng nhập
-            </Link>
-          </Typography>
-        </Stack>
-      </Paper>
-      </AuthPageShell>
-    </Box>
+        <AuthTextField
+          label="Họ tên"
+          value={form.fullName}
+          onChange={handleChange('fullName')}
+          icon={<BadgeOutlinedIcon fontSize="small" />}
+        />
+        <AuthTextField
+          label="Tên đăng nhập"
+          value={form.username}
+          onChange={handleChange('username')}
+          autoComplete="username"
+          icon={<PersonOutlineIcon fontSize="small" />}
+        />
+        <AuthPasswordField
+          label="Mật khẩu"
+          value={form.password}
+          onChange={handleChange('password')}
+          autoComplete="new-password"
+          showPassword={showPassword}
+          onToggleShow={() => setShowPassword((v) => !v)}
+          icon={lockIcon}
+        />
+        <AuthTextField
+          label="Xác nhận mật khẩu"
+          type={showPassword ? 'text' : 'password'}
+          value={form.confirmPassword}
+          onChange={handleChange('confirmPassword')}
+          autoComplete="new-password"
+          icon={lockIcon}
+        />
+        <AuthSubmitButton loading={loading} loadingLabel="Đang đăng ký...">
+          Đăng ký
+        </AuthSubmitButton>
+      </AuthFormPanel>
+    </GarageAuthHero>
   );
 };
 

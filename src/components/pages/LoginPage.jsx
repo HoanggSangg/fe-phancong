@@ -1,19 +1,18 @@
 import React, { useState } from 'react';
-import { Link as RouterLink, Navigate, useNavigate } from 'react-router-dom';
-import {
-  Box,
-  Button,
-  Paper,
-  TextField,
-  Typography,
-  Link,
-  Stack,
-  FormControlLabel,
-  Checkbox,
-} from '@mui/material';
+import { Navigate, useNavigate } from 'react-router-dom';
+import { Checkbox, FormControlLabel } from '@mui/material';
+import PersonOutlineIcon from '@mui/icons-material/PersonOutline';
+import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import { useAuth, REMEMBER_USERNAME_KEY } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
-import { AuthPageShell } from '../common/AnimatedValue';
+import GarageAuthHero from '../common/GarageAuthHero';
+import AuthFormPanel, {
+  AuthPasswordField,
+  AuthSubmitButton,
+  AuthSwitchLink,
+  AuthTextField,
+} from '../common/AuthFormPanel';
+import { authRememberSx } from '../../constants/brand';
 import { getFirstAllowedPath } from '../../utils/permissions';
 
 const LoginPage = () => {
@@ -23,6 +22,7 @@ const LoginPage = () => {
   const [username, setUsername] = useState(() => localStorage.getItem(REMEMBER_USERNAME_KEY) || '');
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(() => !!localStorage.getItem(REMEMBER_USERNAME_KEY));
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
   if (isAuthenticated) {
@@ -32,7 +32,6 @@ const LoginPage = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
-
     try {
       const result = await login({ username, password }, rememberMe);
       navigate(getFirstAllowedPath(result?.user));
@@ -44,77 +43,47 @@ const LoginPage = () => {
   };
 
   return (
-    <Box
-      sx={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        p: 2,
-        bgcolor: '#f5f5f5',
-      }}
-    >
-      <AuthPageShell>
-      <Paper
-        component="form"
+    <GarageAuthHero>
+      <AuthFormPanel
+        title="Đăng nhập"
+        subtitle="Nhập tài khoản để vào hệ thống phân công."
         onSubmit={handleSubmit}
-        elevation={1}
-        sx={{ p: { xs: 2.5, sm: 3 }, width: '100%' }}
+        footer={(
+          <AuthSwitchLink prompt="Chưa có tài khoản?" to="/register" actionLabel="Đăng ký" />
+        )}
       >
-        <Stack spacing={1.5}>
-          <Box textAlign="center">
-            <Typography variant="h5" color="primary">
-              Đăng nhập
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Hệ thống phân công Oto Bá Thành
-            </Typography>
-          </Box>
-
-
-          <TextField
-            label="Tên đăng nhập"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            fullWidth
-            required
-            autoComplete="username"
-          />
-          <TextField
-            label="Mật khẩu"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            fullWidth
-            required
-            autoComplete="current-password"
-          />
-
-          <FormControlLabel
-            control={
-              <Checkbox
-                checked={rememberMe}
-                onChange={(e) => setRememberMe(e.target.checked)}
-                color="primary"
-              />
-            }
-            label="Ghi nhớ đăng nhập"
-          />
-
-          <Button type="submit" variant="contained" disabled={loading} fullWidth>
-            {loading ? 'Đang đăng nhập...' : 'Đăng nhập'}
-          </Button>
-
-          <Typography variant="body2" textAlign="center">
-            Chưa có tài khoản?{' '}
-            <Link component={RouterLink} to="/register">
-              Đăng ký
-            </Link>
-          </Typography>
-        </Stack>
-      </Paper>
-      </AuthPageShell>
-    </Box>
+        <AuthTextField
+          label="Tên đăng nhập"
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+          autoComplete="username"
+          icon={<PersonOutlineIcon fontSize="small" />}
+        />
+        <AuthPasswordField
+          label="Mật khẩu"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          autoComplete="current-password"
+          showPassword={showPassword}
+          onToggleShow={() => setShowPassword((v) => !v)}
+          icon={<LockOutlinedIcon fontSize="small" />}
+        />
+        <FormControlLabel
+          sx={authRememberSx}
+          control={
+            <Checkbox
+              checked={rememberMe}
+              onChange={(e) => setRememberMe(e.target.checked)}
+              size="medium"
+            />
+          }
+          label="Ghi nhớ đăng nhập"
+        />
+        <AuthSubmitButton loading={loading} loadingLabel="Đang đăng nhập...">
+          Đăng nhập
+        </AuthSubmitButton>
+      </AuthFormPanel>
+    </GarageAuthHero>
   );
 };
 

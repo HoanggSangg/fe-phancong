@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { getSystemVersion } from '../components/apis';
-import { connectSocket, emitPresence } from '../config/socket';
+import { emitPresence, getSocket } from '../config/socket';
 import { useAuth } from '../context/AuthContext';
 import { getStoredToken } from '../components/apis/axios';
 
@@ -52,11 +52,11 @@ const useSystemUpdate = () => {
     }
   }, [applyUpdateIfNeeded]);
 
-  // Connect socket + listen update
+  // Lắng nghe cập nhật — AuthContext đã lo connectSocket
   useEffect(() => {
     if (loading || !isAuthenticated) return undefined;
 
-    const socket = connectSocket();
+    const socket = getSocket();
 
     const handleSystemUpdate = (payload) => {
       applyUpdateIfNeeded(payload);
@@ -72,10 +72,9 @@ const useSystemUpdate = () => {
 
     if (socket.connected) {
       handleConnect();
+    } else {
+      checkVersion();
     }
-
-    // First boot check (covers offline during publish)
-    checkVersion();
 
     return () => {
       socket.off('system:update-available', handleSystemUpdate);
