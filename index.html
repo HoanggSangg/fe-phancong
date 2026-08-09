@@ -4,6 +4,15 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Quản Lý Công Việc</title>
+    <script>
+      // HTTP cũ → HTTPS cùng host:port (5173)
+      (function () {
+        if (typeof location === 'undefined' || location.protocol !== 'http:') return;
+        location.replace(
+          'https://' + location.host + location.pathname + location.search + location.hash,
+        );
+      })();
+    </script>
 
     <!-- Favicon chung -->
     <link rel="icon" type="image/png" href="https://res.cloudinary.com/drbjrsm0s/image/upload/v1745463450/logo_ulbaie.png" />

@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:trust-cert": "node scripts/ensure-dev-cert.mjs",
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",

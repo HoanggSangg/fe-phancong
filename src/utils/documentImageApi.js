@@ -1,8 +1,7 @@
 import { api } from '../components/apis/axios';
+import { getPublicImageBase } from './uploadUrl';
 
-const PUBLIC_IMAGE_BASE = (
-  import.meta.env.VITE_DOCUMENT_IMAGE_PUBLIC_BASE || 'http://api2026.otobathanh.vn/'
-).replace(/\/?$/, '/');
+const PUBLIC_IMAGE_BASE = getPublicImageBase();
 
 export const getDocumentFiles = async (soChungTu) => {
   const { data } = await api.get('/document-images/files', {
