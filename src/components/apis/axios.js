@@ -28,7 +28,18 @@ const AUTH_ERROR_MESSAGES = new Set([
 export const isAuthErrorResponse = (error) => {
   const message = error?.response?.data?.message;
   const status = error?.response?.status;
-  return status === 401 || (message && AUTH_ERROR_MESSAGES.has(message));
+  if (!status || status !== 401) return false;
+  // Chỉ coi là lỗi phiên khi backend trả đúng message auth (tránh logout vì 401 lạ / proxy).
+  if (message && AUTH_ERROR_MESSAGES.has(message)) return true;
+  // Một số route chỉ trả 401 không body — vẫn logout nếu request đã gửi Bearer.
+  return Boolean(error?.config?.headers?.Authorization);
+};
+
+const clearAuthStorage = () => {
+  localStorage.removeItem('token');
+  localStorage.removeItem('user');
+  sessionStorage.removeItem('token');
+  sessionStorage.removeItem('user');
 };
 
 export const api = axios.create({
@@ -47,13 +58,18 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
+    if (error?.config?.skipAuthRedirect) {
+      return Promise.reject(error);
+    }
+
     if (isAuthErrorResponse(error)) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      sessionStorage.removeItem('token');
-      sessionStorage.removeItem('user');
-      if (window.location.pathname !== '/login') {
-        window.location.href = '/login';
+      const sentAuth = Boolean(error?.config?.headers?.Authorization);
+      // Chỉ đá login khi request thực sự mang token và bị từ chối auth.
+      if (sentAuth) {
+        clearAuthStorage();
+        if (window.location.pathname !== '/login') {
+          window.location.href = '/login';
+        }
       }
     }
     return Promise.reject(error);

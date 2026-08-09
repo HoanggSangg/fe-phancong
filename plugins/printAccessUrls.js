@@ -12,7 +12,7 @@ export function printAccessUrlsPlugin() {
     configureServer(server) {
       const print = () => {
         console.log('')
-        console.log('  Dùng HTTPS (gõ https:// — http:// sẽ lỗi ERR_EMPTY_RESPONSE):')
+        console.log('  Dùng HTTPS (khuyến nghị):')
         console.log(`  ➜  Máy cũ (Tailscale): ${ACCESS_TAILSCALE_URL}`)
         console.log(`  ➜  LAN (cùng mạng):       ${ACCESS_LAN_URL}`)
         console.log(`  ➜  Máy chạy FE:           ${ACCESS_LOCAL_URL}`)

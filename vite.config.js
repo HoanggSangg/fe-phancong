@@ -11,6 +11,7 @@ export default defineConfig(async ({ mode }) => {
   // HTTPS mặc định: camera điện thoại cần secure context trên IP LAN.
   // Tắt: .env.local → VITE_DEV_HTTPS=false
   const useHttps = (env.VITE_DEV_HTTPS || process.env.VITE_DEV_HTTPS || 'true') !== 'false'
+  const publicPort = Number(env.VITE_DEV_PORT || process.env.VITE_DEV_PORT || 5173)
 
   let httpsOption = false
   if (useHttps) {
@@ -36,10 +37,18 @@ export default defineConfig(async ({ mode }) => {
         : [printAccessUrlsPlugin()]),
     ],
     server: {
+      // HTTPS lắng nghe trực tiếp — không qua TCP peek-proxy (tránh HMR/WS timeout).
       host: '0.0.0.0',
-      port: 5173,
+      port: publicPort,
       strictPort: true,
       https: httpsOption,
+      hmr: useHttps
+        ? {
+            protocol: 'wss',
+            // Không cố định host: client dùng location.hostname (localhost / LAN / Tailscale).
+            clientPort: publicPort,
+          }
+        : true,
       proxy: {
         '/api': {
           target: 'http://localhost:3000',
@@ -54,7 +63,7 @@ export default defineConfig(async ({ mode }) => {
     },
     preview: {
       host: '0.0.0.0',
-      port: 5173,
+      port: publicPort,
       https: httpsOption,
     },
     build: {

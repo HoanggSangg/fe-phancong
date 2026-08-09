@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getOperationLogs } from '../components/apis';
+import { getStoredToken } from '../components/apis/axios';
 import { getTodayDate } from '../utils/dateFilters';
 import {
   alertNewOperationLogs,
@@ -101,13 +102,18 @@ const useOperationVoiceMonitor = ({ poll = true, pollReady = true, onNewCarLogs 
 
     const fetchVoiceLogs = async () => {
       if (document.visibilityState === 'hidden') return;
+      if (!getStoredToken()) return;
       try {
-        const res = await getOperationLogs({
-          from: today,
-          to: today,
-          page: 1,
-          limit: 30,
-        });
+        const res = await getOperationLogs(
+          {
+            from: today,
+            to: today,
+            page: 1,
+            limit: 30,
+          },
+          // Poll nền: lỗi auth không được đá session / redirect login.
+          { skipAuthRedirect: true },
+        );
         processLogs(res.data?.items, { announceNew: true });
       } catch {
         // Bỏ qua khi không có quyền hoặc lỗi mạng

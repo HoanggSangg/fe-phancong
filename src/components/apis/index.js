@@ -79,7 +79,8 @@ export const addManualJobToWorker = (workerId, data) =>
   api.post(`/worker/${workerId}/manual-jobs`, data);
 export const removeManualJobFromWorker = (workerId, jobId) =>
   api.delete(`/worker/${workerId}/manual-jobs/${jobId}`);
-export const getOperationLogs = (params) => api.get('/audit-logs', { params });
+export const getOperationLogs = (params, config = {}) =>
+  api.get('/audit-logs', { ...config, params });
 
 export const getKtvMessageSettings = () => api.get('/ktv-messages/settings');
 export const updateKtvMessageSettings = (receiverUserIds) =>

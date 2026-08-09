@@ -1,4 +1,4 @@
-import net from 'node:net'
+import http from 'node:http'
 import {
   ACCESS_LAN_URL,
   ACCESS_LOCAL_URL,
@@ -6,113 +6,82 @@ import {
 } from '../src/constants/accessUrls.js'
 
 const PUBLIC_PORT = Number(process.env.VITE_DEV_PORT || 5173)
-const INTERNAL_PORT = Number(process.env.VITE_INTERNAL_PORT || PUBLIC_PORT + 10000)
+/** Cổng HTTP phụ: chuyển sang https:// cùng host:5173 (không đụng TLS/WebSocket). */
+const HTTP_REDIRECT_PORT = Number(
+  process.env.VITE_HTTP_REDIRECT_PORT || PUBLIC_PORT + 1,
+)
 
 /**
- * Cổng public 5173:
- * - HTTP  → 301 https://cùng-host:5173/...
- * - HTTPS → proxy tới Vite nội bộ
+ * Vite lắng nghe HTTPS trực tiếp trên :5173 (HMR + /socket.io ổn định).
+ * HTTP redirect chạy cổng riêng để tránh TCP peek-proxy làm timeout WebSocket.
  */
 export function httpToHttpsRedirectPlugin({ enabled = true } = {}) {
-  /** @type {import('node:net').Server | null} */
-  let peekServer = null
+  /** @type {import('node:http').Server | null} */
+  let redirectServer = null
 
   return {
     name: 'http-to-https-redirect',
     apply: 'serve',
-    config() {
-      if (!enabled) return
-      return {
-        server: {
-          host: '127.0.0.1',
-          port: INTERNAL_PORT,
-          strictPort: false,
-          hmr: {
-            protocol: 'wss',
-            clientPort: PUBLIC_PORT,
-          },
-        },
-      }
-    },
     configureServer(server) {
       if (!enabled) return
 
-      const startPeek = () => {
-        if (peekServer) return
+      const print = () => {
+        console.log('')
+        console.log('  Dev HTTPS (Vite lắng nghe trực tiếp — HMR/WebSocket ổn định):')
+        console.log(`  ➜  Máy cũ (Tailscale): ${ACCESS_TAILSCALE_URL}`)
+        console.log(`  ➜  LAN:       ${ACCESS_LAN_URL}`)
+        console.log(`  ➜  Local:     ${ACCESS_LOCAL_URL}`)
+        if (redirectServer) {
+          console.log(
+            `  HTTP :${HTTP_REDIRECT_PORT} → tự chuyển https://…:${PUBLIC_PORT}`,
+          )
+        }
+        console.log('')
+      }
 
-        const addr = server.httpServer?.address()
-        const internalPort =
-          addr && typeof addr === 'object' && addr.port ? addr.port : INTERNAL_PORT
+      const startRedirect = () => {
+        if (redirectServer) return
 
-        peekServer = net.createServer((socket) => {
-          socket.once('data', (chunk) => {
-            const isTls = chunk[0] === 0x16 || chunk[0] === 0x80
-
-            if (isTls) {
-              const upstream = net.connect(internalPort, '127.0.0.1', () => {
-                upstream.write(chunk)
-                socket.pipe(upstream)
-                upstream.pipe(socket)
-              })
-              upstream.on('error', () => socket.destroy())
-              socket.on('error', () => upstream.destroy())
-              return
-            }
-
-            const head = chunk.toString('utf8')
-            const firstLine = head.split(/\r?\n/, 1)[0] || ''
-            const pathMatch = firstLine.match(
-              /^(?:GET|HEAD|POST|PUT|PATCH|DELETE|OPTIONS)\s+(\S+)/i,
-            )
-            const urlPath = pathMatch?.[1] || '/'
-            const hostMatch = head.match(/host:\s*([^\r\n]+)/i)
-            const rawHost = hostMatch?.[1]?.trim() || `localhost:${PUBLIC_PORT}`
-            const hostname = rawHost.replace(/:\d+$/, '')
-            const target = `https://${hostname}:${PUBLIC_PORT}${urlPath}`
-            const body = `Redirecting to ${target}`
-
-            socket.write(
-              'HTTP/1.1 301 Moved Permanently\r\n' +
-                `Location: ${target}\r\n` +
-                'Cache-Control: no-store\r\n' +
-                'Connection: close\r\n' +
-                'Content-Type: text/plain; charset=utf-8\r\n' +
-                `Content-Length: ${Buffer.byteLength(body)}\r\n\r\n` +
-                body,
-            )
-            socket.end()
+        redirectServer = http.createServer((req, res) => {
+          const hostHeader = req.headers.host || `localhost:${HTTP_REDIRECT_PORT}`
+          const hostname = hostHeader.replace(/:\d+$/, '')
+          const target = `https://${hostname}:${PUBLIC_PORT}${req.url || '/'}`
+          res.writeHead(301, {
+            Location: target,
+            'Cache-Control': 'no-store',
           })
-
-          socket.on('error', () => socket.destroy())
+          res.end(`Redirecting to ${target}`)
         })
 
-        peekServer.on('error', (err) => {
-          console.warn(`\n[http→https] Không mở :${PUBLIC_PORT} — ${err.message}`)
-          if (err.code === 'EADDRINUSE') {
-            console.warn(`[http→https] Cổng ${PUBLIC_PORT} đang bị chiếm. Tắt process cũ rồi npm run dev.\n`)
-          }
+        redirectServer.on('error', (err) => {
+          console.warn(
+            `\n[http→https] Không mở HTTP :${HTTP_REDIRECT_PORT} — ${err.message}`,
+          )
+          redirectServer = null
         })
 
-        peekServer.listen(PUBLIC_PORT, '0.0.0.0', () => {
-          console.log('')
-          console.log('  http:// tự chuyển → https:// (cùng IP:5173)')
-          console.log(`  ➜  Máy cũ (Tailscale): ${ACCESS_TAILSCALE_URL}`)
-          console.log(`  ➜  LAN:       ${ACCESS_LAN_URL}`)
-          console.log(`  ➜  Local:     ${ACCESS_LOCAL_URL}`)
-          console.log(`  (nội bộ Vite :${internalPort})`)
-          console.log('')
+        redirectServer.listen(HTTP_REDIRECT_PORT, '0.0.0.0', () => {
+          print()
         })
       }
 
-      server.httpServer?.once('listening', startPeek)
+      server.httpServer?.once('listening', () => {
+        startRedirect()
+        if (!redirectServer) print()
+      })
+
       return () => {
-        if (server.httpServer?.listening) startPeek()
-        else server.httpServer?.once('listening', startPeek)
+        const run = () => {
+          startRedirect()
+          if (!redirectServer) print()
+        }
+        if (server.httpServer?.listening) run()
+        else server.httpServer?.once('listening', run)
       }
     },
     buildEnd() {
-      peekServer?.close()
-      peekServer = null
+      redirectServer?.close()
+      redirectServer = null
     },
   }
 }

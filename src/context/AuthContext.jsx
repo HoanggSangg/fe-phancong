@@ -63,9 +63,13 @@ export const AuthProvider = ({ children }) => {
         setUser(res.data.user);
         storage.setItem('user', JSON.stringify(res.data.user));
       })
-      .catch(() => {
-        clearAuthStorage();
-        setUser(null);
+      .catch((error) => {
+        // Chỉ xóa session khi backend từ chối auth — giữ đăng nhập nếu lỗi mạng/proxy.
+        const status = error?.response?.status;
+        if (status === 401 || status === 403) {
+          clearAuthStorage();
+          setUser(null);
+        }
       })
       .finally(() => setLoading(false));
   }, []);
@@ -95,9 +99,12 @@ export const AuthProvider = ({ children }) => {
       setUser(res.data.user);
       storage.setItem('user', JSON.stringify(res.data.user));
       return res.data.user;
-    } catch {
-      clearAuthStorage();
-      setUser(null);
+    } catch (error) {
+      const status = error?.response?.status;
+      if (status === 401 || status === 403) {
+        clearAuthStorage();
+        setUser(null);
+      }
       return null;
     }
   }, []);
