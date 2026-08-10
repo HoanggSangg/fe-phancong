@@ -17,6 +17,7 @@ import {
   TableBody,
   TableCell,
   TableHead,
+  TablePagination,
   TableRow,
   TextField,
   Tooltip,
@@ -91,6 +92,22 @@ const money = (value) => {
   return n.toLocaleString('vi-VN');
 };
 
+const pickRoNumber = (...candidates) => {
+  for (const raw of candidates) {
+    const value = String(raw || '').toUpperCase().trim();
+    if (value.startsWith('RO')) return value;
+  }
+  return '';
+};
+
+const pickTtCode = (...candidates) => {
+  for (const raw of candidates) {
+    const value = String(raw || '').toUpperCase().trim().replace(/^HPT\//, '');
+    if (value.startsWith('TT')) return value;
+  }
+  return '';
+};
+
 const getExternalContext = (externalData) => {
   const raw = externalData?.raw || {};
   const bg = raw.baogiaGanNhat || {};
@@ -105,12 +122,18 @@ const getExternalContext = (externalData) => {
     || '',
   );
 
-  const headerTt = String(header.soChungtu || header.khoa || '').toUpperCase().trim();
-  const selectedRo = String(externalData?.selectedRO || header.khoa || raw.khoaBaoGiaGanNhat || '')
-    .toUpperCase()
-    .trim();
-  const soChungTu = (headerTt.startsWith('TT') ? headerTt : '')
-    || (selectedRo.startsWith('TT') ? selectedRo : '');
+  // TT = mã chứng từ (khoa); RO = số RO (soChungtu)
+  const soChungTu = pickTtCode(
+    header.khoa,
+    externalData?.selectedRO,
+    raw.khoaBaoGiaGanNhat,
+    header.soChungtu,
+  );
+  const roNumber = pickRoNumber(
+    header.soChungtu,
+    externalData?.selectedRO,
+    header.khoa,
+  );
 
   const deliveryDate = yyyymmddToInput(
     header.ngayDuKienHoanThanh || header.ngayXuatXuong || header.ngayHoanTat || '',
@@ -120,9 +143,9 @@ const getExternalContext = (externalData) => {
 
   return {
     plateNumber,
-    roCode: selectedRo,
     soChungTu,
-    roNumber: soChungTu || selectedRo || String(header.soChungtu || '').toUpperCase().trim(),
+    roNumber,
+    roCode: roNumber,
     externalCarTypeName: loaiXe.tenViet || loaiXe.tenAnh || loaiXe.ma || '',
     advisorName: header.coVanDichVu1 || '',
     insuranceCompanyKey: String(header.khoaHangBaoHiem || raw.khoaHangBaoHiem || '').trim(),
@@ -143,25 +166,32 @@ const isSecureCameraContext = () => {
   return window.isSecureContext || ['localhost', '127.0.0.1'].includes(window.location.hostname);
 };
 
-const toPayload = (form) => ({
-  plateNumber: cleanText(form.plateNumber),
-  soChungTu: String(form.soChungTu || '').trim().toUpperCase().replace(/^HPT\//, ''),
-  roNumber: String(form.roNumber || '').trim().toUpperCase(),
-  roCode: String(form.roCode || '').trim().toUpperCase(),
-  externalCarTypeName: String(form.externalCarTypeName || '').trim(),
-  advisorName: String(form.advisorName || '').trim(),
-  insuranceCompanyKey: String(form.insuranceCompanyKey || '').trim(),
-  insurancePolicyNumber: String(form.insurancePolicyNumber || '').trim(),
-  insuranceAssessor: String(form.insuranceAssessor || '').trim(),
-  insuranceAssessorPhone: String(form.insuranceAssessorPhone || '').trim(),
-  insuranceApproved: Boolean(form.insuranceApproved),
-  insuranceApprovedDate: form.insuranceApprovedDate || null,
-  insuranceFileCompleted: Boolean(form.insuranceFileCompleted),
-  deductibleAmount: Number(form.deductibleAmount) || 0,
-  notes: String(form.notes || '').trim(),
-  deliveryDate: form.deliveryDate || null,
-  insuranceExpiryDate: form.insuranceExpiryDate || null,
-});
+const toPayload = (form) => {
+  const soChungTu = pickTtCode(form.soChungTu) || String(form.soChungTu || '').trim().toUpperCase().replace(/^HPT\//, '');
+  // Chỉ lưu số RO (RO…) — không ghi TT vào roNumber/roCode
+  const roNumber = pickRoNumber(form.roNumber, form.roCode);
+  return {
+    plateNumber: cleanText(form.plateNumber),
+    soChungTu,
+    roNumber,
+    roCode: roNumber,
+    externalCarTypeName: String(form.externalCarTypeName || '').trim(),
+    advisorName: String(form.advisorName || '').trim(),
+    insuranceCompanyKey: String(form.insuranceCompanyKey || '').trim(),
+    insurancePolicyNumber: String(form.insurancePolicyNumber || '').trim(),
+    insuranceAssessor: String(form.insuranceAssessor || '').trim(),
+    insuranceAssessorPhone: String(form.insuranceAssessorPhone || '').trim(),
+    insuranceApproved: Boolean(form.insuranceApproved),
+    insuranceApprovedDate: form.insuranceApprovedDate || null,
+    insuranceFileCompleted: Boolean(form.insuranceFileCompleted),
+    deductibleAmount: Number(form.deductibleAmount) || 0,
+    notes: String(form.notes || '').trim(),
+    deliveryDate: form.deliveryDate || null,
+    insuranceExpiryDate: form.insuranceExpiryDate || null,
+  };
+};
+
+const PAGE_SIZE_OPTIONS = [10, 20, 50];
 
 const InsurancePage = () => {
   const toast = useToast();
@@ -171,6 +201,9 @@ const InsurancePage = () => {
   const [saving, setSaving] = useState(false);
   const [lookupLoading, setLookupLoading] = useState(false);
   const [lookupKeyword, setLookupKeyword] = useState('');
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(20);
+  const [total, setTotal] = useState(0);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -181,21 +214,33 @@ const InsurancePage = () => {
   const scannerRef = useRef(null);
   const qrHandlingRef = useRef(false);
 
-  const loadItems = useCallback(async (q = search) => {
+  const loadItems = useCallback(async ({
+    q = search,
+    pageIndex = page,
+    limit = rowsPerPage,
+  } = {}) => {
     setLoading(true);
     try {
-      const res = await getInsuranceCars(q ? { q } : undefined);
-      setItems(res.data || []);
+      const res = await getInsuranceCars({
+        q: q?.trim() || undefined,
+        page: pageIndex + 1,
+        limit,
+      });
+      const data = res.data;
+      const list = Array.isArray(data) ? data : (data?.items || []);
+      const pagination = data?.pagination || {};
+      setItems(list);
+      setTotal(Number(pagination.total) || list.length);
     } catch (err) {
       toast.error(err.response?.data?.message || 'Không tải được danh sách bảo hiểm');
     } finally {
       setLoading(false);
     }
-  }, [search, toast]);
+  }, [page, rowsPerPage, search, toast]);
 
   useEffect(() => {
-    loadItems('');
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    loadItems({ q: search, pageIndex: page, limit: rowsPerPage });
+  }, [page, rowsPerPage]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const stopQrScanner = useCallback(async () => {
     const scanner = scannerRef.current;
@@ -226,10 +271,9 @@ const InsurancePage = () => {
     setForm((prev) => ({
       ...prev,
       plateNumber: ctx.plateNumber || prev.plateNumber,
-      soChungTu: (ctx.soChungTu && ctx.soChungTu.startsWith('TT') ? ctx.soChungTu : prev.soChungTu)
-        || (ctx.roCode?.startsWith('TT') ? ctx.roCode : prev.soChungTu),
-      roCode: ctx.roCode || prev.roCode,
+      soChungTu: ctx.soChungTu || prev.soChungTu,
       roNumber: ctx.roNumber || prev.roNumber,
+      roCode: ctx.roNumber || prev.roCode,
       externalCarTypeName: ctx.externalCarTypeName || prev.externalCarTypeName,
       advisorName: ctx.advisorName || prev.advisorName,
       insuranceCompanyKey: ctx.insuranceCompanyKey || prev.insuranceCompanyKey,
@@ -245,8 +289,8 @@ const InsurancePage = () => {
       deliveryDate: ctx.deliveryDate || prev.deliveryDate,
       insuranceExpiryDate: ctx.insuranceExpiryDate || prev.insuranceExpiryDate,
     }));
-    if (ctx.soChungTu?.startsWith('TT') || ctx.roCode?.startsWith('TT')) {
-      setLookupKeyword(ctx.soChungTu || ctx.roCode);
+    if (ctx.soChungTu) {
+      setLookupKeyword(ctx.soChungTu);
     }
   }, []);
 
@@ -343,12 +387,14 @@ const InsurancePage = () => {
   };
 
   const openEdit = (row) => {
+    const ro = pickRoNumber(row.roNumber, row.roCode);
+    const tt = pickTtCode(row.soChungTu, row.roCode, row.roNumber);
     setEditingId(row._id);
     setForm({
       plateNumber: row.plateNumber || '',
-      soChungTu: row.soChungTu || '',
-      roNumber: row.roNumber || '',
-      roCode: row.roCode || '',
+      soChungTu: tt || row.soChungTu || '',
+      roNumber: ro,
+      roCode: ro,
       externalCarTypeName: row.externalCarTypeName || '',
       advisorName: row.advisorName || '',
       insuranceCompanyKey: row.insuranceCompanyKey || '',
@@ -374,7 +420,17 @@ const InsurancePage = () => {
 
   const handleChange = (field) => (e) => {
     const value = e.target.value;
-    setForm((prev) => ({ ...prev, [field]: value }));
+    setForm((prev) => {
+      if (field === 'roNumber') {
+        return { ...prev, roNumber: value, roCode: value };
+      }
+      return { ...prev, [field]: value };
+    });
+  };
+
+  const handleSearch = () => {
+    setPage(0);
+    loadItems({ q: search, pageIndex: 0, limit: rowsPerPage });
   };
 
   const handleSuggestExpiry = () => {
@@ -402,7 +458,7 @@ const InsurancePage = () => {
         toast.success('Đã thêm xe bảo hiểm');
       }
       await closeDialog();
-      await loadItems();
+      await loadItems({ q: search, pageIndex: page, limit: rowsPerPage });
     } catch (err) {
       toast.error(err.response?.data?.message || 'Lưu thất bại');
     } finally {
@@ -415,7 +471,9 @@ const InsurancePage = () => {
     try {
       await deleteInsuranceCar(row._id);
       toast.success('Đã xóa');
-      await loadItems();
+      const nextPage = items.length <= 1 && page > 0 ? page - 1 : page;
+      if (nextPage !== page) setPage(nextPage);
+      else await loadItems({ q: search, pageIndex: nextPage, limit: rowsPerPage });
     } catch (err) {
       toast.error(err.response?.data?.message || 'Xóa thất bại');
     }
@@ -443,18 +501,18 @@ const InsurancePage = () => {
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems={{ sm: 'center' }}>
           <TextField
             size="small"
-            label="Biển số / TT / ghi chú"
+            label="Biển số / TT / RO / ghi chú"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter') loadItems(search);
+              if (e.key === 'Enter') handleSearch();
             }}
             fullWidth
           />
           <Button
             variant="outlined"
             startIcon={loading ? <CircularProgress size={16} /> : <SearchIcon />}
-            onClick={() => loadItems(search)}
+            onClick={handleSearch}
             disabled={loading}
           >
             Tìm
@@ -505,8 +563,12 @@ const InsurancePage = () => {
                   </TableCell>
                   <TableCell>{row.externalCarTypeName || '—'}</TableCell>
                   <TableCell>
-                    <Typography variant="body2">{row.soChungTu || '—'}</Typography>
-                    <Typography variant="caption" color="text.secondary">{row.roCode || row.roNumber || ''}</Typography>
+                    <Typography variant="body2">
+                      {pickTtCode(row.soChungTu) || row.soChungTu || '—'}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {pickRoNumber(row.roNumber, row.roCode) || '—'}
+                    </Typography>
                   </TableCell>
                   <TableCell>
                     <Typography variant="body2">{row.insuranceAssessor || '—'}</Typography>
@@ -562,6 +624,20 @@ const InsurancePage = () => {
             })}
           </TableBody>
         </Table>
+        <TablePagination
+          component="div"
+          count={total}
+          page={page}
+          onPageChange={(_, next) => setPage(next)}
+          rowsPerPage={rowsPerPage}
+          onRowsPerPageChange={(e) => {
+            setRowsPerPage(parseInt(e.target.value, 10));
+            setPage(0);
+          }}
+          rowsPerPageOptions={PAGE_SIZE_OPTIONS}
+          labelRowsPerPage="Mỗi trang"
+          labelDisplayedRows={({ from, to, count }) => `${from}–${to} / ${count !== -1 ? count : `hơn ${to}`}`}
+        />
       </Paper>
 
       <Dialog open={dialogOpen} onClose={closeDialog} fullWidth maxWidth="md">
@@ -657,7 +733,14 @@ const InsurancePage = () => {
             </Stack>
 
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
-              <TextField label="RO / mã" value={form.roCode} onChange={handleChange('roCode')} fullWidth size="small" />
+              <TextField
+                label="Số RO"
+                value={form.roNumber}
+                onChange={handleChange('roNumber')}
+                fullWidth
+                size="small"
+                placeholder="RO…"
+              />
               <TextField
                 label="Loại xe"
                 value={form.externalCarTypeName}
