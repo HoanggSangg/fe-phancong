@@ -197,38 +197,75 @@ const OperationHistoryPage = () => {
     navigate(`/upload-image?soChungTu=${encodeURIComponent(soChungTu)}`);
   };
 
-  const renderDetails = (log) => (
-    <Stack spacing={0.5}>
-      <Typography variant="body2">{log.description}</Typography>
-      {Array.isArray(log.metadata?.details) && log.metadata.details.length > 0 && (
-        <Stack component="ul" sx={{ m: 0, pl: 2.2 }}>
-          {log.metadata.details.map((line, index) => (
-            <Typography
-              key={`${log._id}-detail-${index}`}
-              component="li"
-              variant="caption"
-              color="text.secondary"
-            >
-              {line}
-            </Typography>
-          ))}
-        </Stack>
-      )}
-      {log.module === 'document_image' && isValidSoChungTu(getLogSoChungTu(log)) && (
-        <Box>
-          <Button
-            size="small"
-            variant="outlined"
-            startIcon={<DirectionsCarIcon />}
-            onClick={() => handleViewUploadCar(log)}
-            sx={{ mt: 0.5 }}
+  const renderDetails = (log) => {
+    const meta = log.metadata || {};
+    const fileName = String(meta.fileName || '').trim();
+    const isDocImage = log.module === 'document_image';
+    const detailLines = Array.isArray(meta.details) ? meta.details.filter(Boolean) : [];
+
+    // Log cũ: chưa có details — dựng dòng rõ tên file / chứng từ
+    if (isDocImage && detailLines.length === 0) {
+      const actionLabel = meta.actionLabel
+        || (log.action === 'delete' ? 'Xóa' : log.action === 'upload' ? 'Tải lên' : '');
+      const kindLabel = meta.kindLabel
+        || (meta.kind === 'parts' ? 'ảnh phụ tùng' : meta.kind === 'car' ? 'ảnh xe' : '');
+      if (actionLabel || kindLabel) {
+        detailLines.push(`Thao tác: ${[actionLabel, kindLabel].filter(Boolean).join(' ')}`);
+      }
+      if (fileName) detailLines.push(`Tên file: ${fileName}`);
+      if (meta.soChungTu || meta.baseTt) {
+        detailLines.push(`Chứng từ: ${meta.soChungTu || meta.baseTt}`);
+      }
+      if (meta.plateNumber) detailLines.push(`Biển số: ${meta.plateNumber}`);
+    }
+
+    return (
+      <Stack spacing={0.5}>
+        <Typography variant="body2">{log.description}</Typography>
+        {fileName && (
+          <Typography
+            variant="body2"
+            fontWeight={700}
+            sx={{
+              fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+              wordBreak: 'break-all',
+            }}
           >
-            Xem xe / tải ảnh
-          </Button>
-        </Box>
-      )}
-    </Stack>
-  );
+            File: {fileName}
+          </Typography>
+        )}
+        {detailLines.length > 0 && (
+          <Stack component="ul" sx={{ m: 0, pl: 2.2 }}>
+            {detailLines
+              .filter((line) => !(fileName && /^Tên file:/i.test(String(line))))
+              .map((line, index) => (
+              <Typography
+                key={`${log._id}-detail-${index}`}
+                component="li"
+                variant="caption"
+                color="text.secondary"
+              >
+                {line}
+              </Typography>
+            ))}
+          </Stack>
+        )}
+        {isDocImage && isValidSoChungTu(getLogSoChungTu(log)) && (
+          <Box>
+            <Button
+              size="small"
+              variant="outlined"
+              startIcon={<DirectionsCarIcon />}
+              onClick={() => handleViewUploadCar(log)}
+              sx={{ mt: 0.5 }}
+            >
+              Xem xe / tải ảnh
+            </Button>
+          </Box>
+        )}
+      </Stack>
+    );
+  };
 
   const renderLogRow = (log) => (
     <TableRow key={log._id} hover>

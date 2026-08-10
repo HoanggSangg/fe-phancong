@@ -13,6 +13,8 @@ import {
   IconButton,
   Paper,
   Stack,
+  Tab,
+  Tabs,
   Table,
   TableBody,
   TableCell,
@@ -33,10 +35,14 @@ import EventAvailableIcon from '@mui/icons-material/EventAvailable';
 import { Html5Qrcode } from 'html5-qrcode';
 import {
   createInsuranceCar,
+  createInsurancePart,
   deleteInsuranceCar,
+  deleteInsurancePart,
   getInsuranceCars,
+  getInsuranceParts,
   lookupCarOrRO,
   updateInsuranceCar,
+  updateInsurancePart,
 } from '../apis';
 import PageLayout from '../common/PageLayout';
 import PageHeader from '../common/PageHeader';
@@ -75,6 +81,14 @@ const emptyForm = () => ({
   insuranceExpiryDate: '',
 });
 
+const emptyPartForm = () => ({
+  name: '',
+  costPrice: '',
+  carTypeName: '',
+  carBrand: '',
+  notes: '',
+});
+
 const cleanText = (val) => String(val || '').toUpperCase().replace(/\s/g, '');
 
 /** API OtoBaThanh: YYYYMMDD → YYYY-MM-DD */
@@ -89,6 +103,12 @@ const isFlagOn = (value) => value === 1 || value === true || value === '1';
 const money = (value) => {
   const n = Number(value);
   if (!Number.isFinite(n) || n === 0) return '';
+  return n.toLocaleString('vi-VN');
+};
+
+const formatMoneyDisplay = (value) => {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return '—';
   return n.toLocaleString('vi-VN');
 };
 
@@ -191,10 +211,20 @@ const toPayload = (form) => {
   };
 };
 
+const toPartPayload = (form) => ({
+  name: String(form.name || '').trim(),
+  costPrice: Number(form.costPrice) || 0,
+  carTypeName: String(form.carTypeName || '').trim(),
+  carBrand: String(form.carBrand || '').trim(),
+  notes: String(form.notes || '').trim(),
+});
+
 const PAGE_SIZE_OPTIONS = [10, 20, 50];
 
 const InsurancePage = () => {
   const toast = useToast();
+  const [mainTab, setMainTab] = useState(0);
+
   const [items, setItems] = useState([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(false);
@@ -209,10 +239,23 @@ const InsurancePage = () => {
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(emptyForm);
 
+  const [parts, setParts] = useState([]);
+  const [partSearch, setPartSearch] = useState('');
+  const [partsLoading, setPartsLoading] = useState(false);
+  const [partSaving, setPartSaving] = useState(false);
+  const [partPage, setPartPage] = useState(0);
+  const [partRowsPerPage, setPartRowsPerPage] = useState(20);
+  const [partTotal, setPartTotal] = useState(0);
+  const [partDialogOpen, setPartDialogOpen] = useState(false);
+  const [editingPartId, setEditingPartId] = useState(null);
+  const [partForm, setPartForm] = useState(emptyPartForm);
+
   const [isScanningQr, setIsScanningQr] = useState(false);
   const [isStartingQr, setIsStartingQr] = useState(false);
   const scannerRef = useRef(null);
   const qrHandlingRef = useRef(false);
+  const notesInputRef = useRef(null);
+  const notesFieldKeyRef = useRef(0);
 
   const loadItems = useCallback(async ({
     q = search,
@@ -238,9 +281,38 @@ const InsurancePage = () => {
     }
   }, [page, rowsPerPage, search, toast]);
 
+  const loadParts = useCallback(async ({
+    q = partSearch,
+    pageIndex = partPage,
+    limit = partRowsPerPage,
+  } = {}) => {
+    setPartsLoading(true);
+    try {
+      const res = await getInsuranceParts({
+        q: q?.trim() || undefined,
+        page: pageIndex + 1,
+        limit,
+      });
+      const data = res.data;
+      const list = Array.isArray(data) ? data : (data?.items || []);
+      const pagination = data?.pagination || {};
+      setParts(list);
+      setPartTotal(Number(pagination.total) || list.length);
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Không tải được danh sách phụ tùng');
+    } finally {
+      setPartsLoading(false);
+    }
+  }, [partPage, partRowsPerPage, partSearch, toast]);
+
   useEffect(() => {
     loadItems({ q: search, pageIndex: page, limit: rowsPerPage });
   }, [page, rowsPerPage]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (mainTab !== 1) return;
+    loadParts({ q: partSearch, pageIndex: partPage, limit: partRowsPerPage });
+  }, [mainTab, partPage, partRowsPerPage]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const stopQrScanner = useCallback(async () => {
     const scanner = scannerRef.current;
@@ -380,6 +452,7 @@ const InsurancePage = () => {
   }, [handleQrScanned, isScanningQr, isStartingQr, stopQrScanner, toast]);
 
   const openCreate = () => {
+    notesFieldKeyRef.current += 1;
     setEditingId(null);
     setForm(emptyForm());
     setLookupKeyword('');
@@ -387,6 +460,7 @@ const InsurancePage = () => {
   };
 
   const openEdit = (row) => {
+    notesFieldKeyRef.current += 1;
     const ro = pickRoNumber(row.roNumber, row.roCode);
     const tt = pickTtCode(row.soChungTu, row.roCode, row.roNumber);
     setEditingId(row._id);
@@ -443,7 +517,10 @@ const InsurancePage = () => {
   };
 
   const handleSave = async () => {
-    const payload = toPayload(form);
+    const payload = toPayload({
+      ...form,
+      notes: notesInputRef.current?.value ?? form.notes,
+    });
     if (!payload.plateNumber) {
       toast.error('Biển số xe là bắt buộc');
       return;
@@ -479,6 +556,74 @@ const InsurancePage = () => {
     }
   };
 
+  const openCreatePart = () => {
+    setEditingPartId(null);
+    setPartForm(emptyPartForm());
+    setPartDialogOpen(true);
+  };
+
+  const openEditPart = (row) => {
+    setEditingPartId(row._id);
+    setPartForm({
+      name: row.name || '',
+      costPrice: row.costPrice != null && row.costPrice !== '' ? row.costPrice : '',
+      carTypeName: row.carTypeName || '',
+      carBrand: row.carBrand || '',
+      notes: row.notes || '',
+    });
+    setPartDialogOpen(true);
+  };
+
+  const closePartDialog = () => {
+    setPartDialogOpen(false);
+  };
+
+  const handlePartChange = (field) => (e) => {
+    setPartForm((prev) => ({ ...prev, [field]: e.target.value }));
+  };
+
+  const handlePartSearch = () => {
+    setPartPage(0);
+    loadParts({ q: partSearch, pageIndex: 0, limit: partRowsPerPage });
+  };
+
+  const handleSavePart = async () => {
+    const payload = toPartPayload(partForm);
+    if (!payload.name) {
+      toast.error('Tên phụ tùng là bắt buộc');
+      return;
+    }
+    setPartSaving(true);
+    try {
+      if (editingPartId) {
+        await updateInsurancePart(editingPartId, payload);
+        toast.success('Đã cập nhật phụ tùng');
+      } else {
+        await createInsurancePart(payload);
+        toast.success('Đã thêm phụ tùng');
+      }
+      closePartDialog();
+      await loadParts({ q: partSearch, pageIndex: partPage, limit: partRowsPerPage });
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Lưu phụ tùng thất bại');
+    } finally {
+      setPartSaving(false);
+    }
+  };
+
+  const handleDeletePart = async (row) => {
+    if (!window.confirm(`Xóa phụ tùng "${row.name}"?`)) return;
+    try {
+      await deleteInsurancePart(row._id);
+      toast.success('Đã xóa phụ tùng');
+      const nextPage = parts.length <= 1 && partPage > 0 ? partPage - 1 : partPage;
+      if (nextPage !== partPage) setPartPage(nextPage);
+      else await loadParts({ q: partSearch, pageIndex: nextPage, limit: partRowsPerPage });
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Xóa phụ tùng thất bại');
+    }
+  };
+
   const filteredHint = useMemo(() => {
     const soon = items.filter((x) => isInsuranceExpiringSoon(x.insuranceExpiryDate)).length;
     return soon > 0 ? `${soon} xe sắp/đã hết hạn BH` : '';
@@ -489,156 +634,287 @@ const InsurancePage = () => {
       <PageHeader
         icon={<HealthAndSafetyIcon />}
         title="Bảo hiểm"
-        subtitle="Lưu thông tin xe BH riêng — quét QR tra cứu & ảnh chứng từ"
+        subtitle="Xe BH & phụ tùng giá vốn — quét QR tra cứu, ảnh chứng từ"
         actions={(
-          <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}>
-            Thêm xe BH
-          </Button>
+          mainTab === 0 ? (
+            <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}>
+              Thêm xe BH
+            </Button>
+          ) : (
+            <Button variant="contained" startIcon={<AddIcon />} onClick={openCreatePart}>
+              Thêm phụ tùng
+            </Button>
+          )
         )}
       />
 
-      <FilterPanel title="Tìm kiếm">
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems={{ sm: 'center' }}>
-          <TextField
-            size="small"
-            label="Biển số / TT / RO / ghi chú"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') handleSearch();
-            }}
-            fullWidth
-          />
-          <Button
-            variant="outlined"
-            startIcon={loading ? <CircularProgress size={16} /> : <SearchIcon />}
-            onClick={handleSearch}
-            disabled={loading}
-          >
-            Tìm
-          </Button>
-          {filteredHint && <Chip color="error" label={filteredHint} />}
-        </Stack>
-      </FilterPanel>
+      <Tabs
+        value={mainTab}
+        onChange={(_, next) => setMainTab(next)}
+        sx={{ mb: 2, borderBottom: 1, borderColor: 'divider' }}
+      >
+        <Tab label="Xe bảo hiểm" />
+        <Tab label="Phụ tùng giá vốn" />
+      </Tabs>
 
-      <Paper sx={{ overflowX: 'auto' }}>
-        <Table size="small">
-          <TableHead>
-            <TableRow>
-              {['Biển số', 'Loại xe', 'TT / RO', 'Giám định', 'Trạng thái BH', 'Hết hạn BH', 'Ghi chú', ''].map((h) => (
-                <TableCell key={h} sx={{ fontWeight: 700, bgcolor: 'grey.100' }}>{h}</TableCell>
-              ))}
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {loading && (
-              <TableRow>
-                <TableCell colSpan={8} align="center" sx={{ py: 3 }}>
-                  <CircularProgress size={24} />
-                </TableCell>
-              </TableRow>
-            )}
-            {!loading && items.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={8}>
-                  <Typography variant="body2" color="text.secondary">Chưa có xe bảo hiểm.</Typography>
-                </TableCell>
-              </TableRow>
-            )}
-            {!loading && items.map((row) => {
-              const warn = isInsuranceExpiringSoon(row.insuranceExpiryDate);
-              const label = formatExpiryLabel(row.insuranceExpiryDate);
-              return (
-                <TableRow
-                  key={row._id}
-                  sx={{
-                    bgcolor: warn ? 'rgba(211, 47, 47, 0.06)' : undefined,
-                    '&:hover': { bgcolor: warn ? 'rgba(211, 47, 47, 0.1)' : 'action.hover' },
-                  }}
-                >
-                  <TableCell>
-                    <Typography fontWeight={700} color={warn ? 'error.main' : 'inherit'}>
-                      {row.plateNumber}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>{row.externalCarTypeName || '—'}</TableCell>
-                  <TableCell>
-                    <Typography variant="body2">
-                      {pickTtCode(row.soChungTu) || row.soChungTu || '—'}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {pickRoNumber(row.roNumber, row.roCode) || '—'}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Typography variant="body2">{row.insuranceAssessor || '—'}</Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {row.insuranceAssessorPhone || ''}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
-                      {row.insuranceApproved && <Chip size="small" color="success" label="Duyệt giá" />}
-                      {row.insuranceFileCompleted && <Chip size="small" color="info" label="HT hồ sơ" />}
-                      {!row.insuranceApproved && !row.insuranceFileCompleted && (
-                        <Typography variant="caption" color="text.secondary">—</Typography>
-                      )}
-                    </Stack>
-                  </TableCell>
-                  <TableCell>
-                    <Typography
-                      variant="body2"
-                      fontWeight={warn ? 800 : 600}
-                      color={warn ? 'error.main' : 'inherit'}
-                    >
-                      {formatDateDisplay(row.insuranceExpiryDate)}
-                    </Typography>
-                    {label && (
-                      <Chip
-                        size="small"
-                        label={label}
-                        color={warn ? 'error' : 'default'}
-                        sx={{ mt: 0.5 }}
-                      />
-                    )}
-                  </TableCell>
-                  <TableCell sx={{ maxWidth: 180 }}>
-                    <Typography variant="body2" noWrap title={row.notes || ''}>
-                      {row.notes || '—'}
-                    </Typography>
-                  </TableCell>
-                  <TableCell align="right">
-                    <Tooltip title="Sửa">
-                      <IconButton size="small" onClick={() => openEdit(row)}>
-                        <EditIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip title="Xóa">
-                      <IconButton size="small" color="error" onClick={() => handleDelete(row)}>
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                  </TableCell>
+      {mainTab === 0 && (
+        <>
+          <FilterPanel title="Tìm kiếm">
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems={{ sm: 'center' }}>
+              <TextField
+                size="small"
+                label="Biển số / TT / RO / ghi chú"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleSearch();
+                }}
+                fullWidth
+              />
+              <Button
+                variant="outlined"
+                startIcon={loading ? <CircularProgress size={16} /> : <SearchIcon />}
+                onClick={handleSearch}
+                disabled={loading}
+              >
+                Tìm
+              </Button>
+              {filteredHint && <Chip color="error" label={filteredHint} />}
+            </Stack>
+          </FilterPanel>
+
+          <Paper sx={{ overflowX: 'auto' }}>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  {['Biển số', 'Loại xe', 'TT / RO', 'Giám định', 'Trạng thái BH', 'Ngày duyệt BH', 'Hết hạn BH', 'Ghi chú', ''].map((h) => (
+                    <TableCell key={h || 'actions'} sx={{ fontWeight: 700, bgcolor: 'grey.100' }}>{h}</TableCell>
+                  ))}
                 </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
-        <TablePagination
-          component="div"
-          count={total}
-          page={page}
-          onPageChange={(_, next) => setPage(next)}
-          rowsPerPage={rowsPerPage}
-          onRowsPerPageChange={(e) => {
-            setRowsPerPage(parseInt(e.target.value, 10));
-            setPage(0);
-          }}
-          rowsPerPageOptions={PAGE_SIZE_OPTIONS}
-          labelRowsPerPage="Mỗi trang"
-          labelDisplayedRows={({ from, to, count }) => `${from}–${to} / ${count !== -1 ? count : `hơn ${to}`}`}
-        />
-      </Paper>
+              </TableHead>
+              <TableBody>
+                {loading && (
+                  <TableRow>
+                    <TableCell colSpan={9} align="center" sx={{ py: 3 }}>
+                      <CircularProgress size={24} />
+                    </TableCell>
+                  </TableRow>
+                )}
+                {!loading && items.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={9}>
+                      <Typography variant="body2" color="text.secondary">Chưa có xe bảo hiểm.</Typography>
+                    </TableCell>
+                  </TableRow>
+                )}
+                {!loading && items.map((row) => {
+                  const warn = isInsuranceExpiringSoon(row.insuranceExpiryDate);
+                  const fileIncomplete = !row.insuranceFileCompleted;
+                  const label = formatExpiryLabel(row.insuranceExpiryDate);
+                  const rowBg = warn
+                    ? 'rgba(211, 47, 47, 0.06)'
+                    : fileIncomplete
+                      ? 'rgba(255, 152, 0, 0.08)'
+                      : undefined;
+                  const rowHoverBg = warn
+                    ? 'rgba(211, 47, 47, 0.1)'
+                    : fileIncomplete
+                      ? 'rgba(255, 152, 0, 0.14)'
+                      : 'action.hover';
+                  return (
+                    <TableRow
+                      key={row._id}
+                      sx={{
+                        bgcolor: rowBg,
+                        '&:hover': { bgcolor: rowHoverBg },
+                      }}
+                    >
+                      <TableCell>
+                        <Typography fontWeight={700} color={warn ? 'error.main' : 'inherit'}>
+                          {row.plateNumber}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>{row.externalCarTypeName || '—'}</TableCell>
+                      <TableCell>
+                        <Typography variant="body2">
+                          {pickTtCode(row.soChungTu) || row.soChungTu || '—'}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {pickRoNumber(row.roNumber, row.roCode) || '—'}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2">{row.insuranceAssessor || '—'}</Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {row.insuranceAssessorPhone || ''}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
+                          {row.insuranceApproved && <Chip size="small" color="success" label="Duyệt giá" />}
+                          {row.insuranceFileCompleted && <Chip size="small" color="info" label="HT hồ sơ" />}
+                          {fileIncomplete && (
+                            <Chip size="small" color="warning" variant="outlined" label="Chưa HT hồ sơ" />
+                          )}
+                        </Stack>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2">
+                          {formatDateDisplay(row.insuranceApprovedDate)}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Typography
+                          variant="body2"
+                          fontWeight={warn ? 800 : 600}
+                          color={warn ? 'error.main' : 'inherit'}
+                        >
+                          {formatDateDisplay(row.insuranceExpiryDate)}
+                        </Typography>
+                        {label && (
+                          <Chip
+                            size="small"
+                            label={label}
+                            color={warn ? 'error' : 'default'}
+                            sx={{ mt: 0.5 }}
+                          />
+                        )}
+                      </TableCell>
+                      <TableCell sx={{ maxWidth: 180 }}>
+                        <Typography variant="body2" noWrap title={row.notes || ''}>
+                          {row.notes || '—'}
+                        </Typography>
+                      </TableCell>
+                      <TableCell align="right">
+                        <Tooltip title="Sửa">
+                          <IconButton size="small" onClick={() => openEdit(row)}>
+                            <EditIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Xóa">
+                          <IconButton size="small" color="error" onClick={() => handleDelete(row)}>
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+            <TablePagination
+              component="div"
+              count={total}
+              page={page}
+              onPageChange={(_, next) => setPage(next)}
+              rowsPerPage={rowsPerPage}
+              onRowsPerPageChange={(e) => {
+                setRowsPerPage(parseInt(e.target.value, 10));
+                setPage(0);
+              }}
+              rowsPerPageOptions={PAGE_SIZE_OPTIONS}
+              labelRowsPerPage="Mỗi trang"
+              labelDisplayedRows={({ from, to, count }) => `${from}–${to} / ${count !== -1 ? count : `hơn ${to}`}`}
+            />
+          </Paper>
+        </>
+      )}
+
+      {mainTab === 1 && (
+        <>
+          <FilterPanel title="Tìm kiếm">
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems={{ sm: 'center' }}>
+              <TextField
+                size="small"
+                label="Tên / loại xe / hãng / ghi chú"
+                value={partSearch}
+                onChange={(e) => setPartSearch(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handlePartSearch();
+                }}
+                fullWidth
+              />
+              <Button
+                variant="outlined"
+                startIcon={partsLoading ? <CircularProgress size={16} /> : <SearchIcon />}
+                onClick={handlePartSearch}
+                disabled={partsLoading}
+              >
+                Tìm
+              </Button>
+            </Stack>
+          </FilterPanel>
+
+          <Paper sx={{ overflowX: 'auto' }}>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  {['Tên phụ tùng', 'Giá vốn', 'Loại xe', 'Hãng xe', 'Ghi chú', ''].map((h) => (
+                    <TableCell key={h || 'actions'} sx={{ fontWeight: 700, bgcolor: 'grey.100' }}>{h}</TableCell>
+                  ))}
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {partsLoading && (
+                  <TableRow>
+                    <TableCell colSpan={6} align="center" sx={{ py: 3 }}>
+                      <CircularProgress size={24} />
+                    </TableCell>
+                  </TableRow>
+                )}
+                {!partsLoading && parts.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={6}>
+                      <Typography variant="body2" color="text.secondary">Chưa có phụ tùng.</Typography>
+                    </TableCell>
+                  </TableRow>
+                )}
+                {!partsLoading && parts.map((row) => (
+                  <TableRow key={row._id} hover>
+                    <TableCell>
+                      <Typography fontWeight={700}>{row.name}</Typography>
+                    </TableCell>
+                    <TableCell>{formatMoneyDisplay(row.costPrice)}</TableCell>
+                    <TableCell>{row.carTypeName || '—'}</TableCell>
+                    <TableCell>{row.carBrand || '—'}</TableCell>
+                    <TableCell sx={{ maxWidth: 200 }}>
+                      <Typography variant="body2" noWrap title={row.notes || ''}>
+                        {row.notes || '—'}
+                      </Typography>
+                    </TableCell>
+                    <TableCell align="right">
+                      <Tooltip title="Sửa">
+                        <IconButton size="small" onClick={() => openEditPart(row)}>
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="Xóa">
+                        <IconButton size="small" color="error" onClick={() => handleDeletePart(row)}>
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+            <TablePagination
+              component="div"
+              count={partTotal}
+              page={partPage}
+              onPageChange={(_, next) => setPartPage(next)}
+              rowsPerPage={partRowsPerPage}
+              onRowsPerPageChange={(e) => {
+                setPartRowsPerPage(parseInt(e.target.value, 10));
+                setPartPage(0);
+              }}
+              rowsPerPageOptions={PAGE_SIZE_OPTIONS}
+              labelRowsPerPage="Mỗi trang"
+              labelDisplayedRows={({ from, to, count }) => `${from}–${to} / ${count !== -1 ? count : `hơn ${to}`}`}
+            />
+          </Paper>
+        </>
+      )}
 
       <Dialog open={dialogOpen} onClose={closeDialog} fullWidth maxWidth="md">
         <DialogTitle>{editingId ? 'Cập nhật xe bảo hiểm' : 'Thêm xe bảo hiểm'}</DialogTitle>
@@ -884,9 +1160,10 @@ const InsurancePage = () => {
             </Box>
 
             <TextField
+              key={`notes-${notesFieldKeyRef.current}`}
               label="Ghi chú"
-              value={form.notes}
-              onChange={handleChange('notes')}
+              defaultValue={form.notes}
+              inputRef={notesInputRef}
               fullWidth
               multiline
               minRows={2}
@@ -918,6 +1195,62 @@ const InsurancePage = () => {
           <Button onClick={closeDialog}>Hủy</Button>
           <Button variant="contained" onClick={handleSave} disabled={saving}>
             {saving ? 'Đang lưu...' : 'Lưu'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={partDialogOpen} onClose={closePartDialog} fullWidth maxWidth="sm">
+        <DialogTitle>{editingPartId ? 'Cập nhật phụ tùng' : 'Thêm phụ tùng'}</DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={2} sx={{ pt: 0.5 }}>
+            <TextField
+              label="Tên phụ tùng *"
+              value={partForm.name}
+              onChange={handlePartChange('name')}
+              fullWidth
+              required
+              size="small"
+            />
+            <TextField
+              label="Giá vốn"
+              value={partForm.costPrice}
+              onChange={handlePartChange('costPrice')}
+              fullWidth
+              size="small"
+              type="number"
+              helperText={money(partForm.costPrice) ? `${money(partForm.costPrice)} đ` : ' '}
+            />
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
+              <TextField
+                label="Loại xe"
+                value={partForm.carTypeName}
+                onChange={handlePartChange('carTypeName')}
+                fullWidth
+                size="small"
+              />
+              <TextField
+                label="Hãng xe"
+                value={partForm.carBrand}
+                onChange={handlePartChange('carBrand')}
+                fullWidth
+                size="small"
+              />
+            </Stack>
+            <TextField
+              label="Ghi chú"
+              value={partForm.notes}
+              onChange={handlePartChange('notes')}
+              fullWidth
+              multiline
+              minRows={2}
+              size="small"
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closePartDialog}>Hủy</Button>
+          <Button variant="contained" onClick={handleSavePart} disabled={partSaving}>
+            {partSaving ? 'Đang lưu...' : 'Lưu'}
           </Button>
         </DialogActions>
       </Dialog>

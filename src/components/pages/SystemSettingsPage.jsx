@@ -12,6 +12,7 @@ import {
   DialogTitle,
   Divider,
   Grid,
+  LinearProgress,
   Paper,
   Stack,
   TextField,
@@ -28,6 +29,12 @@ import CloudOffIcon from '@mui/icons-material/CloudOff';
 import CampaignIcon from '@mui/icons-material/Campaign';
 import NotificationsOffIcon from '@mui/icons-material/NotificationsOff';
 import SystemUpdateAltIcon from '@mui/icons-material/SystemUpdateAlt';
+import DirectionsCarIcon from '@mui/icons-material/DirectionsCar';
+import BuildIcon from '@mui/icons-material/Build';
+import HistoryIcon from '@mui/icons-material/History';
+import PeopleIcon from '@mui/icons-material/People';
+import PlaceIcon from '@mui/icons-material/Place';
+import StorageIcon from '@mui/icons-material/Storage';
 import {
   getSystemSettings,
   updateSystemSettings,
@@ -115,6 +122,113 @@ const SectionCard = ({ title, children, action }) => (
     {children}
   </Paper>
 );
+
+const formatCount = (value) => {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return '—';
+  return n.toLocaleString('vi-VN');
+};
+
+const TRIM_ICONS = {
+  car: DirectionsCarIcon,
+  repairItem: BuildIcon,
+  operationLog: HistoryIcon,
+  worker: PeopleIcon,
+  master: PlaceIcon,
+};
+
+const TrimCapacityPanel = ({ items = [] }) => {
+  if (!items.length) {
+    return (
+      <Typography variant="body2" color="text.secondary">
+        Chưa có dữ liệu trim.
+      </Typography>
+    );
+  }
+
+  return (
+    <Stack spacing={2}>
+      {items.map((item) => {
+        const Icon = TRIM_ICONS[item.key] || StorageIcon;
+        const used = Number(item.used) || 0;
+        const max = item.max == null ? null : Number(item.max);
+        const hasMax = Number.isFinite(max) && max > 0;
+        const ratio = hasMax ? Math.min(100, (used / max) * 100) : 0;
+        const warn = hasMax && ratio >= 80;
+        const critical = hasMax && ratio >= 95;
+
+        return (
+          <Box key={item.key}>
+            <Stack direction="row" spacing={1.5} alignItems="center">
+              <Box
+                sx={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: '50%',
+                  bgcolor: critical ? 'error.50' : warn ? 'warning.50' : 'primary.50',
+                  color: critical ? 'error.main' : warn ? 'warning.main' : 'primary.main',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                }}
+              >
+                <Icon fontSize="small" />
+              </Box>
+              <Box sx={{ flex: 1, minWidth: 0 }}>
+                <Stack direction="row" justifyContent="space-between" alignItems="baseline" gap={1}>
+                  <Typography variant="body2" fontWeight={600} noWrap>
+                    {item.label}
+                  </Typography>
+                  <Typography variant="body2" sx={{ whiteSpace: 'nowrap' }}>
+                    <Box
+                      component="span"
+                      fontWeight={800}
+                      color={critical ? 'error.main' : 'text.primary'}
+                    >
+                      {formatCount(used)}
+                    </Box>
+                    {hasMax ? (
+                      <Box component="span" color="text.secondary">
+                        /{formatCount(max)}
+                      </Box>
+                    ) : null}
+                  </Typography>
+                </Stack>
+                <LinearProgress
+                  variant="determinate"
+                  value={hasMax ? ratio : 8}
+                  color={hasMax ? (critical ? 'error' : warn ? 'warning' : 'primary') : 'inherit'}
+                  sx={{
+                    mt: 0.75,
+                    height: 6,
+                    borderRadius: 999,
+                    bgcolor: 'grey.200',
+                    ...(!hasMax
+                      ? { '& .MuiLinearProgress-bar': { bgcolor: 'grey.400' } }
+                      : null),
+                  }}
+                />
+                {item.hint && (
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ display: 'block', mt: 0.35 }}
+                  >
+                    {item.hint}
+                    {item.details?.active != null
+                      ? ` · đang làm: ${formatCount(item.details.active)}`
+                      : ''}
+                  </Typography>
+                )}
+              </Box>
+            </Stack>
+          </Box>
+        );
+      })}
+    </Stack>
+  );
+};
 
 const SystemSettingsPage = () => {
   const toast = useToast();
@@ -550,6 +664,12 @@ const SystemSettingsPage = () => {
                 label="Auto-trim DB"
                 value={runtime.features?.autoTrimCollections ? 'Bật' : 'Tắt'}
               />
+            </SectionCard>
+          </Grid>
+
+          <Grid size={{ xs: 12, md: 6 }}>
+            <SectionCard title="Dung lượng dữ liệu">
+              <TrimCapacityPanel items={runtime.features?.trim?.items || []} />
             </SectionCard>
           </Grid>
 
