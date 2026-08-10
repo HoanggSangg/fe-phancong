@@ -345,7 +345,7 @@ const AdminDashboardPage = () => {
               <FormControlLabel
                 value="cost"
                 control={<Radio size="small" />}
-                label="Giá vốn (costAmount từ API)"
+                label="Giá vốn (giaVon API = tổng, không × SL)"
               />
             </RadioGroup>
           </FormControl>

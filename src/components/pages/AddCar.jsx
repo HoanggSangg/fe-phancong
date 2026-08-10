@@ -32,6 +32,7 @@ import { queryKeys } from '../../lib/queryKeys';
 import { useToast } from '../../context/ToastContext';
 import { useUnsavedChanges } from '../../context/UnsavedChangesContext';
 import { extractSoChungTu, isValidSoChungTu } from '../../utils/uploadUrl';
+import { filterQuoteChiTiet, sanitizeBaoGiaPayload } from '../../utils/externalQuoteItems';
 import { ACCESS_HINT } from '../../constants/accessUrls';
 
 const ADD_CAR_SCANNER_ID = 'add-car-qr-reader';
@@ -82,7 +83,8 @@ const getExternalContext = (externalData) => {
     || loaiXe.ma
     || '';
 
-  const chiTiet = (bg.chiTiet || raw.chiTiet || []).filter((x) => x.huy !== 1);
+  // Bỏ Hủy / Ghi thêm — không load vào báo giá
+  const chiTiet = filterQuoteChiTiet(bg.chiTiet || raw.chiTiet || []);
 
   return {
     raw,
@@ -203,6 +205,13 @@ const AddCar = ({ onSuccess }) => {
           : '';
       const res = await lookupCarOrRO(cleanKeyword, plateParam);
       const data = res.data;
+      // Lọc Hủy / Ghi thêm ngay khi nhận lookup (thêm xe)
+      if (data?.raw?.baogiaGanNhat) {
+        data.raw.baogiaGanNhat = sanitizeBaoGiaPayload(data.raw.baogiaGanNhat);
+      }
+      if (data?.raw?.chiTiet) {
+        data.raw.chiTiet = filterQuoteChiTiet(data.raw.chiTiet);
+      }
 
       setExternalData(data);
 
@@ -338,7 +347,8 @@ const AddCar = ({ onSuccess }) => {
 
     return chiTiet.map((item) => {
       const quantity = item.soLuong || 1;
-      const unitCostPrice = Number(item.giaVon || 0);
+      // giaVon từ API báo giá đã là tổng giá vốn (không phải đơn giá)
+      const totalCost = Math.round(Number(item.giaVon || 0));
 
       return {
         groupName: item.khoanMucSuaChua || 'Khác',
@@ -346,8 +356,8 @@ const AddCar = ({ onSuccess }) => {
         quantity,
         unit: item.donViTinh || '',
         unitPrice: item.donGia || 0,
-        unitCostPrice,
-        costAmount: Math.round(unitCostPrice * Number(quantity || 1)),
+        unitCostPrice: totalCost,
+        costAmount: totalCost,
         amount: item.thanhTien || 0,
       taxRate: item.tyLeThue || 0,
       taxAmount: item.tienThue || 0,

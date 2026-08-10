@@ -2,12 +2,14 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Box,
   Button,
+  Checkbox,
   Chip,
   CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
+  FormControlLabel,
   IconButton,
   Paper,
   Stack,
@@ -59,12 +61,35 @@ const emptyForm = () => ({
   roCode: '',
   externalCarTypeName: '',
   advisorName: '',
+  insuranceCompanyKey: '',
+  insurancePolicyNumber: '',
+  insuranceAssessor: '',
+  insuranceAssessorPhone: '',
+  insuranceApproved: false,
+  insuranceApprovedDate: '',
+  insuranceFileCompleted: false,
+  deductibleAmount: '',
   notes: '',
   deliveryDate: '',
   insuranceExpiryDate: '',
 });
 
 const cleanText = (val) => String(val || '').toUpperCase().replace(/\s/g, '');
+
+/** API OtoBaThanh: YYYYMMDD → YYYY-MM-DD */
+const yyyymmddToInput = (value) => {
+  const s = String(value || '').trim();
+  if (!/^\d{8}$/.test(s)) return '';
+  return `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`;
+};
+
+const isFlagOn = (value) => value === 1 || value === true || value === '1';
+
+const money = (value) => {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n === 0) return '';
+  return n.toLocaleString('vi-VN');
+};
 
 const getExternalContext = (externalData) => {
   const raw = externalData?.raw || {};
@@ -80,19 +105,36 @@ const getExternalContext = (externalData) => {
     || '',
   );
 
-  const headerTt = String(header.soChungtu || '').toUpperCase().trim();
+  const headerTt = String(header.soChungtu || header.khoa || '').toUpperCase().trim();
   const selectedRo = String(externalData?.selectedRO || header.khoa || raw.khoaBaoGiaGanNhat || '')
     .toUpperCase()
     .trim();
-  const soChungTu = headerTt.startsWith('TT') ? headerTt : '';
+  const soChungTu = (headerTt.startsWith('TT') ? headerTt : '')
+    || (selectedRo.startsWith('TT') ? selectedRo : '');
+
+  const deliveryDate = yyyymmddToInput(
+    header.ngayDuKienHoanThanh || header.ngayXuatXuong || header.ngayHoanTat || '',
+  );
+  const insuranceExpiryDate = yyyymmddToInput(raw.ngayHetHanBaoHiem || '');
+  const insuranceApprovedDate = yyyymmddToInput(header.ngayDuyetGiaBH || '');
 
   return {
     plateNumber,
     roCode: selectedRo,
     soChungTu,
-    roNumber: soChungTu || selectedRo,
+    roNumber: soChungTu || selectedRo || String(header.soChungtu || '').toUpperCase().trim(),
     externalCarTypeName: loaiXe.tenViet || loaiXe.tenAnh || loaiXe.ma || '',
     advisorName: header.coVanDichVu1 || '',
+    insuranceCompanyKey: String(header.khoaHangBaoHiem || raw.khoaHangBaoHiem || '').trim(),
+    insurancePolicyNumber: String(raw.soBaoHiem || '').trim(),
+    insuranceAssessor: String(header.lienHeBaoHiem || '').trim(),
+    insuranceAssessorPhone: String(header.dienThoaiLienHe || '').trim(),
+    insuranceApproved: isFlagOn(header.isDuyetGiaBH),
+    insuranceApprovedDate,
+    insuranceFileCompleted: isFlagOn(header.hoanTatBaoHiem),
+    deductibleAmount: Number(header.mucMienThuong) > 0 ? Number(header.mucMienThuong) : '',
+    deliveryDate,
+    insuranceExpiryDate,
   };
 };
 
@@ -108,6 +150,14 @@ const toPayload = (form) => ({
   roCode: String(form.roCode || '').trim().toUpperCase(),
   externalCarTypeName: String(form.externalCarTypeName || '').trim(),
   advisorName: String(form.advisorName || '').trim(),
+  insuranceCompanyKey: String(form.insuranceCompanyKey || '').trim(),
+  insurancePolicyNumber: String(form.insurancePolicyNumber || '').trim(),
+  insuranceAssessor: String(form.insuranceAssessor || '').trim(),
+  insuranceAssessorPhone: String(form.insuranceAssessorPhone || '').trim(),
+  insuranceApproved: Boolean(form.insuranceApproved),
+  insuranceApprovedDate: form.insuranceApprovedDate || null,
+  insuranceFileCompleted: Boolean(form.insuranceFileCompleted),
+  deductibleAmount: Number(form.deductibleAmount) || 0,
   notes: String(form.notes || '').trim(),
   deliveryDate: form.deliveryDate || null,
   insuranceExpiryDate: form.insuranceExpiryDate || null,
@@ -182,6 +232,18 @@ const InsurancePage = () => {
       roNumber: ctx.roNumber || prev.roNumber,
       externalCarTypeName: ctx.externalCarTypeName || prev.externalCarTypeName,
       advisorName: ctx.advisorName || prev.advisorName,
+      insuranceCompanyKey: ctx.insuranceCompanyKey || prev.insuranceCompanyKey,
+      insurancePolicyNumber: ctx.insurancePolicyNumber || prev.insurancePolicyNumber,
+      insuranceAssessor: ctx.insuranceAssessor || prev.insuranceAssessor,
+      insuranceAssessorPhone: ctx.insuranceAssessorPhone || prev.insuranceAssessorPhone,
+      insuranceApproved: ctx.insuranceApproved || prev.insuranceApproved,
+      insuranceApprovedDate: ctx.insuranceApprovedDate || prev.insuranceApprovedDate,
+      insuranceFileCompleted: ctx.insuranceFileCompleted || prev.insuranceFileCompleted,
+      deductibleAmount: ctx.deductibleAmount !== '' && ctx.deductibleAmount != null
+        ? ctx.deductibleAmount
+        : prev.deductibleAmount,
+      deliveryDate: ctx.deliveryDate || prev.deliveryDate,
+      insuranceExpiryDate: ctx.insuranceExpiryDate || prev.insuranceExpiryDate,
     }));
     if (ctx.soChungTu?.startsWith('TT') || ctx.roCode?.startsWith('TT')) {
       setLookupKeyword(ctx.soChungTu || ctx.roCode);
@@ -237,17 +299,32 @@ const InsurancePage = () => {
     setIsStartingQr(true);
     try {
       await stopQrScanner();
+      // Hiện khung trước rồi mới gắn camera — tránh #scanner bị display:none
+      setIsScanningQr(true);
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
       const scanner = new Html5Qrcode(SCANNER_ID, { verbose: false });
       scannerRef.current = scanner;
       await scanner.start(
         { facingMode: 'environment' },
-        { fps: 10, qrbox: { width: 240, height: 240 }, aspectRatio: 1 },
+        {
+          fps: 12,
+          qrbox: (viewWidth, viewHeight) => {
+            const edge = Math.min(
+              Math.floor(viewWidth * 0.78),
+              Math.floor(viewHeight * 0.78),
+              280,
+            );
+            return { width: edge, height: edge };
+          },
+          aspectRatio: 1,
+          disableFlip: false,
+        },
         async (decodedText) => {
           await handleQrScanned(decodedText);
         },
         () => {},
       );
-      setIsScanningQr(true);
     } catch (err) {
       console.error(err);
       scannerRef.current = null;
@@ -274,6 +351,14 @@ const InsurancePage = () => {
       roCode: row.roCode || '',
       externalCarTypeName: row.externalCarTypeName || '',
       advisorName: row.advisorName || '',
+      insuranceCompanyKey: row.insuranceCompanyKey || '',
+      insurancePolicyNumber: row.insurancePolicyNumber || '',
+      insuranceAssessor: row.insuranceAssessor || '',
+      insuranceAssessorPhone: row.insuranceAssessorPhone || '',
+      insuranceApproved: Boolean(row.insuranceApproved),
+      insuranceApprovedDate: formatDateInput(row.insuranceApprovedDate),
+      insuranceFileCompleted: Boolean(row.insuranceFileCompleted),
+      deductibleAmount: row.deductibleAmount > 0 ? row.deductibleAmount : '',
       notes: row.notes || '',
       deliveryDate: formatDateInput(row.deliveryDate),
       insuranceExpiryDate: formatDateInput(row.insuranceExpiryDate),
@@ -382,7 +467,7 @@ const InsurancePage = () => {
         <Table size="small">
           <TableHead>
             <TableRow>
-              {['Biển số', 'Loại xe', 'TT / RO', 'Ngày giao', 'Hết hạn BH', 'Ghi chú', ''].map((h) => (
+              {['Biển số', 'Loại xe', 'TT / RO', 'Giám định', 'Trạng thái BH', 'Hết hạn BH', 'Ghi chú', ''].map((h) => (
                 <TableCell key={h} sx={{ fontWeight: 700, bgcolor: 'grey.100' }}>{h}</TableCell>
               ))}
             </TableRow>
@@ -390,14 +475,14 @@ const InsurancePage = () => {
           <TableBody>
             {loading && (
               <TableRow>
-                <TableCell colSpan={7} align="center" sx={{ py: 3 }}>
+                <TableCell colSpan={8} align="center" sx={{ py: 3 }}>
                   <CircularProgress size={24} />
                 </TableCell>
               </TableRow>
             )}
             {!loading && items.length === 0 && (
               <TableRow>
-                <TableCell colSpan={7}>
+                <TableCell colSpan={8}>
                   <Typography variant="body2" color="text.secondary">Chưa có xe bảo hiểm.</Typography>
                 </TableCell>
               </TableRow>
@@ -423,7 +508,21 @@ const InsurancePage = () => {
                     <Typography variant="body2">{row.soChungTu || '—'}</Typography>
                     <Typography variant="caption" color="text.secondary">{row.roCode || row.roNumber || ''}</Typography>
                   </TableCell>
-                  <TableCell>{formatDateDisplay(row.deliveryDate)}</TableCell>
+                  <TableCell>
+                    <Typography variant="body2">{row.insuranceAssessor || '—'}</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {row.insuranceAssessorPhone || ''}
+                    </Typography>
+                  </TableCell>
+                  <TableCell>
+                    <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
+                      {row.insuranceApproved && <Chip size="small" color="success" label="Duyệt giá" />}
+                      {row.insuranceFileCompleted && <Chip size="small" color="info" label="HT hồ sơ" />}
+                      {!row.insuranceApproved && !row.insuranceFileCompleted && (
+                        <Typography variant="caption" color="text.secondary">—</Typography>
+                      )}
+                    </Stack>
+                  </TableCell>
                   <TableCell>
                     <Typography
                       variant="body2"
@@ -441,7 +540,7 @@ const InsurancePage = () => {
                       />
                     )}
                   </TableCell>
-                  <TableCell sx={{ maxWidth: 220 }}>
+                  <TableCell sx={{ maxWidth: 180 }}>
                     <Typography variant="body2" noWrap title={row.notes || ''}>
                       {row.notes || '—'}
                     </Typography>
@@ -498,15 +597,46 @@ const InsurancePage = () => {
               </Button>
             </Stack>
 
-            <Box
-              id={SCANNER_ID}
-              sx={{
-                display: isScanningQr ? 'block' : 'none',
-                maxWidth: 360,
-                mx: 'auto',
-                '& video': { borderRadius: 1 },
-              }}
-            />
+            {(isScanningQr || isStartingQr) && (
+              <Box
+                sx={{
+                  width: '100%',
+                  maxWidth: 420,
+                  mx: 'auto',
+                  borderRadius: 2,
+                  border: '2px solid',
+                  borderColor: 'primary.main',
+                  bgcolor: '#111',
+                  overflow: 'hidden',
+                  position: 'relative',
+                }}
+              >
+                <Typography
+                  variant="caption"
+                  sx={{
+                    display: 'block',
+                    textAlign: 'center',
+                    color: 'rgba(255,255,255,0.85)',
+                    py: 0.75,
+                    bgcolor: 'rgba(0,0,0,0.55)',
+                  }}
+                >
+                  {isStartingQr ? 'Đang mở camera…' : 'Đưa mã QR vào khung vuông để quét'}
+                </Typography>
+                <Box
+                  id={SCANNER_ID}
+                  sx={{
+                    width: '100%',
+                    minHeight: 300,
+                    '& video': {
+                      width: '100% !important',
+                      borderRadius: 0,
+                    },
+                    '& img': { display: 'none' },
+                  }}
+                />
+              </Box>
+            )}
 
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
               <TextField
@@ -565,7 +695,110 @@ const InsurancePage = () => {
                 error={isInsuranceExpiringSoon(form.insuranceExpiryDate)}
                 helperText={formatExpiryLabel(form.insuranceExpiryDate)}
               />
+              <Button
+                variant="outlined"
+                startIcon={<EventAvailableIcon />}
+                onClick={handleSuggestExpiry}
+                sx={{ minWidth: 140, whiteSpace: 'nowrap' }}
+              >
+                +1 năm
+              </Button>
             </Stack>
+
+            <Box
+              sx={{
+                p: 1.5,
+                borderRadius: 1,
+                border: '1px solid',
+                borderColor: 'divider',
+                bgcolor: 'grey.50',
+              }}
+            >
+              <Typography variant="subtitle2" sx={{ mb: 1.25, fontWeight: 700 }}>
+                Thông tin bảo hiểm (từ báo giá)
+              </Typography>
+
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ mb: 1.5 }}>
+                <TextField
+                  label="Mã hãng BH"
+                  value={form.insuranceCompanyKey}
+                  onChange={handleChange('insuranceCompanyKey')}
+                  fullWidth
+                  size="small"
+                />
+                <TextField
+                  label="Số bảo hiểm"
+                  value={form.insurancePolicyNumber}
+                  onChange={handleChange('insurancePolicyNumber')}
+                  fullWidth
+                  size="small"
+                />
+                <TextField
+                  label="Mức miễn thường"
+                  value={form.deductibleAmount}
+                  onChange={handleChange('deductibleAmount')}
+                  fullWidth
+                  size="small"
+                  type="number"
+                  helperText={money(form.deductibleAmount) ? `${money(form.deductibleAmount)} đ` : ' '}
+                />
+              </Stack>
+
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ mb: 1.5 }}>
+                <TextField
+                  label="Giám định / liên hệ BH"
+                  value={form.insuranceAssessor}
+                  onChange={handleChange('insuranceAssessor')}
+                  fullWidth
+                  size="small"
+                />
+                <TextField
+                  label="Điện thoại giám định"
+                  value={form.insuranceAssessorPhone}
+                  onChange={handleChange('insuranceAssessorPhone')}
+                  fullWidth
+                  size="small"
+                />
+              </Stack>
+
+              <TextField
+                label="Ngày duyệt giá BH"
+                type="date"
+                value={form.insuranceApprovedDate}
+                onChange={handleChange('insuranceApprovedDate')}
+                fullWidth
+                size="small"
+                InputLabelProps={{ shrink: true }}
+                sx={{ mb: 1, maxWidth: { sm: 280 } }}
+              />
+
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+                <FormControlLabel
+                  control={(
+                    <Checkbox
+                      checked={Boolean(form.insuranceApproved)}
+                      onChange={(e) => setForm((prev) => ({
+                        ...prev,
+                        insuranceApproved: e.target.checked,
+                      }))}
+                    />
+                  )}
+                  label="Bảo hiểm chấp thuận (duyệt giá)"
+                />
+                <FormControlLabel
+                  control={(
+                    <Checkbox
+                      checked={Boolean(form.insuranceFileCompleted)}
+                      onChange={(e) => setForm((prev) => ({
+                        ...prev,
+                        insuranceFileCompleted: e.target.checked,
+                      }))}
+                    />
+                  )}
+                  label="Hoàn tất hồ sơ bảo hiểm"
+                />
+              </Stack>
+            </Box>
 
             <TextField
               label="Ghi chú"

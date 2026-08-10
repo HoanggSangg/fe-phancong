@@ -2,11 +2,17 @@ export const normalizeRevenueBase = (value) => (value === 'cost' ? 'cost' : 'amo
 
 export const getItemRevenueBaseAmount = (item = {}, revenueBase = 'amount') => {
   if (normalizeRevenueBase(revenueBase) === 'cost') {
+    // giaVon API đã là tổng giá vốn — không nhân SL
+    if (item.raw?.giaVon != null && item.raw?.giaVon !== '') {
+      return Math.round(Number(item.raw.giaVon) || 0);
+    }
+
     const costAmount = Number(item.costAmount ?? 0);
     if (costAmount > 0) return costAmount;
 
-    const unitCostPrice = Number(item.unitCostPrice ?? item.raw?.giaVon ?? 0);
-    const quantity = Number(item.quantity ?? item.raw?.soLuong ?? 1) || 1;
+    // Manual: đơn giá × SL
+    const unitCostPrice = Number(item.unitCostPrice ?? 0);
+    const quantity = Number(item.quantity ?? 1) || 1;
     return Math.round(unitCostPrice * quantity);
   }
 
