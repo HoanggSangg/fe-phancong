@@ -70,7 +70,7 @@ import PageHeader from '../common/PageHeader';
 
 dayjs.extend(customParseFormat);
 
-const CAR_SYNC_INTERVAL_MS = 15_000;
+const CAR_SYNC_INTERVAL_MS = 45_000;
 
 const ManageCars = () => {
   const { user } = useAuth();
@@ -160,13 +160,13 @@ const ManageCars = () => {
 
     const syncCars = () => {
       if (document.visibilityState === 'hidden') return;
+      // Chỉ sync list đang xem — không invalidate toàn dashboard mỗi lần
       refreshManageCarsList().catch(() => {});
-      invalidateHomeDashboard();
     };
 
     const timer = window.setInterval(syncCars, CAR_SYNC_INTERVAL_MS);
     return () => window.clearInterval(timer);
-  }, [ktvSyncReady, pageVisible, refreshManageCarsList, invalidateHomeDashboard]);
+  }, [ktvSyncReady, pageVisible, refreshManageCarsList]);
 
   const repair = useRepairItems({
     allWorkers,

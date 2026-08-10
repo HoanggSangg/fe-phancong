@@ -35,8 +35,8 @@ const useHomeDashboard = () => {
       return res.data || {};
     },
     enabled,
-    staleTime: 30_000,
-    refetchInterval: 30_000,
+    staleTime: 45_000,
+    refetchInterval: 45_000,
     refetchIntervalInBackground: false,
     retry: (failureCount, error) => {
       if (error?.response?.status === 401 || error?.response?.status === 403) {

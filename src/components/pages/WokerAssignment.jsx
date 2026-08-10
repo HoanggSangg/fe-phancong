@@ -41,7 +41,6 @@ import { useUnsavedChanges } from "../../context/UnsavedChangesContext";
 import { ACTIVE_CAR_STATUSES, BUSY_CAR_STATUSES, CAR_STATUS_LABELS, hasPermission, isKtv } from "../../utils/permissions";
 import { filterWorkersByKeyword } from "../../utils/workerSearch";
 import useIsMobile from "../../hooks/useIsMobile";
-import useDeferredReady from "../../hooks/useDeferredReady";
 import useDebouncedValue from "../../hooks/useDebouncedValue";
 import usePageVisible from "../../hooks/usePageVisible";
 import FullscreenDialog from "../common/FullscreenDialog";
@@ -74,30 +73,27 @@ const WokerAssignment = () => {
   const pageVisible = usePageVisible();
 
   const carsParams = isKtvUser
-    ? { mine: '1', statusFilter: 'not_delivered' }
-    : { statusFilter: 'not_delivered' };
+    ? { mine: '1', statusFilter: 'not_delivered', slim: '1' }
+    : { statusFilter: 'not_delivered', slim: '1' };
 
-  // 1) API chính: danh sách xe chưa giao (payload nhỏ hơn full list)
+  // Xe + thợ độc lập → tải song song (slim payload cho phân công)
   const carsQuery = useQuery({
-    queryKey: [...(isKtvUser ? queryKeys.carsMine : queryKeys.cars), 'not_delivered'],
+    queryKey: [...(isKtvUser ? queryKeys.carsMine : queryKeys.cars), 'not_delivered', 'slim'],
     queryFn: async () => (await getAllCars(carsParams)).data,
     staleTime: 45_000,
-    refetchInterval: pageVisible ? 45_000 : false,
+    refetchInterval: pageVisible ? 60_000 : false,
     refetchIntervalInBackground: false,
   });
 
-  // 2) Sau khi cars xong mới tải thợ
-  const workersReady = useDeferredReady(carsQuery.isFetched, 450);
   const workersQuery = useQuery({
     queryKey: queryKeys.workers.all,
     queryFn: async () => {
       const res = await getAllWorkers();
       return res?.data?.workers || res?.data || [];
     },
-    staleTime: 30_000,
-    refetchInterval: workersReady && pageVisible ? 30_000 : false,
+    staleTime: 45_000,
+    refetchInterval: pageVisible ? 60_000 : false,
     refetchIntervalInBackground: false,
-    enabled: workersReady,
   });
 
   const workers = workersQuery.data || [];

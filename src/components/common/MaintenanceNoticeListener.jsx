@@ -1,19 +1,18 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import {
   Alert,
   Box,
   Typography,
 } from '@mui/material';
 import CampaignIcon from '@mui/icons-material/Campaign';
-import { getSystemStatus } from '../apis';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { isKtv, isGiamSatLike } from '../../utils/permissions';
 import { showBrowserNotification } from '../../utils/browserNotifications';
 import usePageVisible from '../../hooks/usePageVisible';
+import useSystemStatus from '../../hooks/queries/useSystemStatus';
 import { LAYOUT } from '../../constants/layout';
 
-const POLL_MS = 15_000;
 const NOTIFIED_KEY = 'maintenanceNoticeNotifiedAt';
 
 const isTargetRole = (user) => isGiamSatLike(user) || isKtv(user);
@@ -22,52 +21,42 @@ const MaintenanceNoticeListener = () => {
   const { user } = useAuth();
   const toast = useToast();
   const pageVisible = usePageVisible();
-  const [notice, setNotice] = useState(null);
+  const target = isTargetRole(user);
 
-  const checkNotice = useCallback(async () => {
-    if (!isTargetRole(user)) return;
+  const { data } = useSystemStatus({
+    enabled: target && pageVisible,
+    refetchInterval: 30_000,
+  });
 
-    try {
-      const res = await getSystemStatus();
-      const active = Boolean(res.data?.maintenanceNoticeActive)
-        && !res.data?.maintenanceMode;
+  const notice = useMemo(() => {
+    if (!target || !data) return null;
+    const active = Boolean(data.maintenanceNoticeActive) && !data.maintenanceMode;
+    if (!active) return null;
 
-      if (!active) {
-        setNotice(null);
-        return;
-      }
-
-      const noticeAt = res.data.maintenanceNoticeAt
-        ? String(res.data.maintenanceNoticeAt)
-        : 'active';
-      const message = res.data.maintenanceNoticeMessage
-        || 'Hệ thống sắp bảo trì trong vòng 3 phút. Vui lòng hoàn tất công việc đang làm.';
-
-      setNotice({ message, noticeAt });
-
-      if (sessionStorage.getItem(NOTIFIED_KEY) !== noticeAt) {
-        toast.warning(message, { duration: 10000 });
-        showBrowserNotification({
-          title: 'Thông báo bảo trì sắp tới',
-          body: message,
-          tag: `maintenance-notice-${noticeAt}`,
-        });
-        sessionStorage.setItem(NOTIFIED_KEY, noticeAt);
-      }
-    } catch {
-      // ignore poll errors
-    }
-  }, [user, toast]);
+    return {
+      noticeAt: data.maintenanceNoticeAt
+        ? String(data.maintenanceNoticeAt)
+        : 'active',
+      message: data.maintenanceNoticeMessage
+        || 'Hệ thống sắp bảo trì trong vòng 3 phút. Vui lòng hoàn tất công việc đang làm.',
+    };
+  }, [data, target]);
 
   useEffect(() => {
-    if (!isTargetRole(user) || !pageVisible) return undefined;
+    if (!notice) return;
 
-    checkNotice();
-    const id = setInterval(checkNotice, POLL_MS);
-    return () => clearInterval(id);
-  }, [user, pageVisible, checkNotice]);
+    if (sessionStorage.getItem(NOTIFIED_KEY) !== notice.noticeAt) {
+      toast.warning(notice.message, { duration: 10000 });
+      showBrowserNotification({
+        title: 'Thông báo bảo trì sắp tới',
+        body: notice.message,
+        tag: `maintenance-notice-${notice.noticeAt}`,
+      });
+      sessionStorage.setItem(NOTIFIED_KEY, notice.noticeAt);
+    }
+  }, [notice, toast]);
 
-  if (!isTargetRole(user) || !notice) return null;
+  if (!target || !notice) return null;
 
   return (
     <Box

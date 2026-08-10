@@ -7,7 +7,6 @@ import AdminLayout from './components/admin/AdminLayout';
 import LoginPage from './components/pages/LoginPage';
 import RegisterPage from './components/pages/RegisterPage';
 import KtvReadNotificationListener from './components/common/KtvReadNotificationListener';
-import KtvInboxNotificationListener from './components/common/KtvInboxNotificationListener';
 import MaintenanceGate from './components/common/MaintenanceGate';
 import MaintenanceNoticeListener from './components/common/MaintenanceNoticeListener';
 import SystemUpdateListener from './components/common/SystemUpdateListener';
@@ -112,7 +111,6 @@ const AppShell = () => {
       <AppBarComponent />
       <MaintenanceNoticeListener />
       <KtvReadNotificationListener user={user} />
-      <KtvInboxNotificationListener user={user} />
       <Box component="main">
         <Outlet />
       </Box>
@@ -141,7 +139,6 @@ const PublicUploadShell = () => {
       <AppBarComponent />
       <MaintenanceNoticeListener />
       <KtvReadNotificationListener user={user} />
-      <KtvInboxNotificationListener user={user} />
       <Box component="main">
         {withSuspense(<UploadImageByQr />)}
       </Box>
@@ -155,7 +152,6 @@ const AdminShell = () => {
   return (
     <AdminOnlyRoute>
       <KtvReadNotificationListener user={user} />
-      <KtvInboxNotificationListener user={user} />
       <AdminLayout />
     </AdminOnlyRoute>
   );

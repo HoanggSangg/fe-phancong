@@ -12,4 +12,5 @@ export const queryKeys = {
   revenueSettings: ['revenueSettings'],
   homeDashboard: ['homeDashboard'],
   overdueCars: ['overdueCars'],
+  systemStatus: ['systemStatus'],
 };

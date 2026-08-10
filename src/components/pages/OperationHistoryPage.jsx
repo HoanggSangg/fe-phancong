@@ -38,7 +38,7 @@ import PageHeader from '../common/PageHeader';
 import FilterPanel from '../common/FilterPanel';
 import { extractSoChungTu, isValidSoChungTu } from '../../utils/uploadUrl';
 
-const POLL_INTERVAL_MS = 15_000;
+const POLL_INTERVAL_MS = 45_000;
 
 const MODULE_LABELS = {
   auth: 'Xác thực',
