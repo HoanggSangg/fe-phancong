@@ -18,6 +18,7 @@ export const buildDocKey = (soChungTu, kind = IMAGE_KIND_CAR) => {
 export const getDocumentFiles = async (soChungTu) => {
   const { data } = await api.get('/document-images/files', {
     params: { soChungTu },
+    skipAuthRedirect: true,
   });
   return Array.isArray(data) ? data : [];
 };
@@ -33,6 +34,7 @@ export const uploadDocumentFile = (soChungTu, file, onProgress) => {
 
   return api.post(`/document-images/upload?${params.toString()}`, formData, {
     timeout: 0,
+    skipAuthRedirect: true,
     onUploadProgress: (event) => {
       if (event.total) onProgress?.(event.loaded / event.total);
     },
@@ -42,6 +44,7 @@ export const uploadDocumentFile = (soChungTu, file, onProgress) => {
 export const getDocumentImageContext = async (soChungTu) => {
   const { data } = await api.get('/document-images/context', {
     params: { soChungTu },
+    skipAuthRedirect: true,
   });
   return data;
 };

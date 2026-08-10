@@ -13,6 +13,7 @@ import QrCodeScannerIcon from '@mui/icons-material/QrCodeScanner';
 import CameraswitchIcon from '@mui/icons-material/Cameraswitch';
 import StopCircleIcon from '@mui/icons-material/StopCircle';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import ImageSearchIcon from '@mui/icons-material/ImageSearch';
 import { Html5Qrcode } from 'html5-qrcode';
 import { useSearchParams } from 'react-router-dom';
 import PageLayout from '../common/PageLayout';
@@ -25,7 +26,10 @@ import {
 } from '../../utils/uploadUrl';
 import { ACCESS_HINT } from '../../constants/accessUrls';
 import { getDocumentImageContext } from '../../utils/documentImageApi';
+import { decodeQrFromImageFile } from '../../utils/decodeQrFromImage';
 import { useToast } from '../../context/ToastContext';
+import { useAuth } from '../../context/AuthContext';
+import { hasPermission } from '../../utils/permissions';
 import { LAYOUT } from '../../constants/layout';
 
 export { buildUploadUrl, extractSoChungTu, isValidSoChungTu };
@@ -41,10 +45,12 @@ const isSecureCameraContext = () => {
 
 const UploadImageByQr = () => {
   const toast = useToast();
+  const { user, isAuthenticated } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const scannerRef = useRef(null);
   const handlingRef = useRef(false);
   const hydratedQueryRef = useRef('');
+  const qrImageInputRef = useRef(null);
 
   const [manualCode, setManualCode] = useState('');
   const [scannedCode, setScannedCode] = useState('');
@@ -52,7 +58,10 @@ const UploadImageByQr = () => {
   const [carInfoLoading, setCarInfoLoading] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
+  const [isDecodingImage, setIsDecodingImage] = useState(false);
   const [cameraError, setCameraError] = useState('');
+
+  const allowDelete = Boolean(isAuthenticated && hasPermission(user, 'cars.upload-image'));
 
   const stopScanner = useCallback(async () => {
     const scanner = scannerRef.current;
@@ -231,12 +240,35 @@ const UploadImageByQr = () => {
     setSearchParams({}, { replace: true });
   };
 
+  const handlePickQrImage = () => {
+    qrImageInputRef.current?.click();
+  };
+
+  const handleQrImageSelected = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    setIsDecodingImage(true);
+    setCameraError('');
+    try {
+      await stopScanner();
+      const { soChungTu } = await decodeQrFromImageFile(file);
+      await openSoChungTu(soChungTu, { announce: true, syncQuery: true });
+    } catch (error) {
+      console.error(error);
+      toast.error(error?.message || 'Không đọc được QR từ ảnh.');
+    } finally {
+      setIsDecodingImage(false);
+    }
+  };
+
   return (
     <PageLayout maxWidth={scannedCode ? 'medium' : 'narrow'}>
       <PageHeader
         icon={<QrCodeScannerIcon />}
         title="Tải ảnh"
-        subtitle="Quét QR trực tiếp bằng camera — không cần chụp ảnh."
+        subtitle="Quét QR bằng camera hoặc tải ảnh chứa QR — không cần đăng nhập."
       />
 
       <Stack spacing={LAYOUT.sectionGap}>
@@ -278,7 +310,7 @@ const UploadImageByQr = () => {
                 Quét mã QR trên phiếu sửa chữa
               </Typography>
               <Typography variant="caption" color="text.secondary">
-                Camera mở trực tiếp trong trang — không cần chụp rồi mới đọc.
+                Dùng camera trực tiếp, hoặc chọn ảnh QR đã chụp sẵn.
               </Typography>
             </Box>
           )}
@@ -303,7 +335,7 @@ const UploadImageByQr = () => {
                   isStarting ? <CircularProgress size={16} color="inherit" /> : <QrCodeScannerIcon />
                 }
                 onClick={startScanner}
-                disabled={isStarting}
+                disabled={isStarting || isDecodingImage}
               >
                 {isStarting ? 'Đang mở camera…' : 'Quét QR'}
               </Button>
@@ -318,12 +350,23 @@ const UploadImageByQr = () => {
               </Button>
             )}
 
+            <Button
+              variant="outlined"
+              startIcon={
+                isDecodingImage ? <CircularProgress size={16} color="inherit" /> : <ImageSearchIcon />
+              }
+              onClick={handlePickQrImage}
+              disabled={isStarting || isScanning || isDecodingImage}
+            >
+              {isDecodingImage ? 'Đang đọc ảnh…' : 'Tải ảnh để đọc QR'}
+            </Button>
+
             {scannedCode && !isScanning && (
               <Button
                 variant="outlined"
                 startIcon={<CameraswitchIcon />}
                 onClick={handleRescan}
-                disabled={isStarting}
+                disabled={isStarting || isDecodingImage}
               >
                 Quét mã khác
               </Button>
@@ -335,6 +378,14 @@ const UploadImageByQr = () => {
               </Button>
             )}
           </Stack>
+
+          <input
+            ref={qrImageInputRef}
+            type="file"
+            hidden
+            accept="image/*,.jpg,.jpeg,.png,.gif,.bmp,.webp"
+            onChange={handleQrImageSelected}
+          />
 
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} useFlexGap>
             <TextField
@@ -364,7 +415,11 @@ const UploadImageByQr = () => {
         )}
 
         {scannedCode && (
-          <DocumentImageUploader soChungTu={scannedCode} carInfo={carInfo} />
+          <DocumentImageUploader
+            soChungTu={scannedCode}
+            carInfo={carInfo}
+            allowDelete={allowDelete}
+          />
         )}
       </Stack>
     </PageLayout>

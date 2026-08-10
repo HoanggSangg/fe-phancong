@@ -120,6 +120,7 @@ const DocumentImageUploader = ({
   seedFiles = [],
   seedToken = 0,
   carInfo = null,
+  allowDelete = true,
 }) => {
   const toast = useToast();
   const fileInputRef = useRef(null);
@@ -761,20 +762,22 @@ const DocumentImageUploader = ({
                         <DownloadIcon fontSize="small" />
                       </IconButton>
                     </Tooltip>
-                    <Tooltip title="Xóa ảnh">
-                      <IconButton
-                        size="small"
-                        color="error"
-                        onClick={(e) => handleDelete(item, e)}
-                        disabled={deletingName === item.name}
-                      >
-                        {deletingName === item.name ? (
-                          <CircularProgress size={16} color="inherit" />
-                        ) : (
-                          <DeleteOutlineIcon fontSize="small" />
-                        )}
-                      </IconButton>
-                    </Tooltip>
+                    {allowDelete && (
+                      <Tooltip title="Xóa ảnh">
+                        <IconButton
+                          size="small"
+                          color="error"
+                          onClick={(e) => handleDelete(item, e)}
+                          disabled={deletingName === item.name}
+                        >
+                          {deletingName === item.name ? (
+                            <CircularProgress size={16} color="inherit" />
+                          ) : (
+                            <DeleteOutlineIcon fontSize="small" />
+                          )}
+                        </IconButton>
+                      </Tooltip>
+                    )}
                   </Stack>
                 </Paper>
               </Grid>
@@ -796,12 +799,14 @@ const DocumentImageUploader = ({
             >
               <DownloadIcon />
             </IconButton>
-            <IconButton
-              onClick={(e) => preview && handleDelete(preview, e)}
-              sx={{ color: '#fff', bgcolor: 'rgba(0,0,0,0.35)' }}
-            >
-              <DeleteOutlineIcon />
-            </IconButton>
+            {allowDelete && (
+              <IconButton
+                onClick={(e) => preview && handleDelete(preview, e)}
+                sx={{ color: '#fff', bgcolor: 'rgba(0,0,0,0.35)' }}
+              >
+                <DeleteOutlineIcon />
+              </IconButton>
+            )}
             <IconButton
               onClick={() => setPreview(null)}
               sx={{ color: '#fff', bgcolor: 'rgba(0,0,0,0.35)' }}

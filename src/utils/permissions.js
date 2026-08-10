@@ -18,8 +18,8 @@ export const ROLE_LABELS = {
 
 export const ROLE_DESCRIPTIONS = {
   admin: 'Toàn quyền: quản lý xe, thợ, báo cáo, địa điểm, giám sát và tài khoản',
-  giam_sat: 'Quản lý xe, phân công thợ, xem báo cáo — không xóa xe hay quản lý hệ thống',
-  ktv: 'Xem tất cả xe trong ngày, quản lý xe của mình và chi tiết công việc được giao',
+  giam_sat: 'Quản lý xe, phân công thợ, xem báo cáo, tải ảnh chứng từ — không xóa xe hay quản lý hệ thống',
+  ktv: 'Xem tất cả xe trong ngày, quản lý xe của mình, chi tiết công việc và tải ảnh chứng từ',
   lai_xe: 'Quyền như KTV, thêm chức năng tải ảnh chứng từ',
   kho: 'Quyền như KTV, thêm chức năng tải ảnh chứng từ',
   cvdv: 'Quyền như Giám sát, thêm chức năng tải ảnh chứng từ',
@@ -28,8 +28,8 @@ export const ROLE_DESCRIPTIONS = {
 /** Role dùng trong form tạo/sửa tài khoản */
 export const ASSIGNABLE_ROLES = ['admin', 'giam_sat', 'ktv', 'lai_xe', 'kho', 'cvdv'];
 
-/** Role được tải ảnh mặc định */
-export const UPLOAD_IMAGE_ROLES = ['admin', 'lai_xe', 'kho', 'cvdv'];
+/** Role thấy mục Tải ảnh trên menu (trang /upload-image cũng mở công khai không cần đăng nhập) */
+export const UPLOAD_IMAGE_ROLES = ['admin', 'giam_sat', 'ktv', 'lai_xe', 'kho', 'cvdv'];
 
 /** Role xem/hành xử như KTV (lọc xe của mình khi liên kết thợ) */
 export const KTV_LIKE_ROLES = ['ktv', 'lai_xe', 'kho'];
@@ -78,7 +78,7 @@ export const PERMISSION_CATALOG = [
     label: 'Tải ảnh',
     group: 'Quản lý xe',
     path: '/upload-image',
-    defaultRoles: ['admin', 'lai_xe', 'kho', 'cvdv'],
+    defaultRoles: ['admin', 'giam_sat', 'ktv', 'lai_xe', 'kho', 'cvdv'],
   },
   { key: 'cars.delete', label: 'Xóa xe', group: 'Quản lý xe', defaultRoles: ['admin'] },
   { key: 'cars.voice', label: 'Nghe thông báo thao tác (Quản lý xe)', group: 'Quản lý xe', defaultRoles: ['admin', 'giam_sat', 'cvdv'] },

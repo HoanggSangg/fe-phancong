@@ -120,6 +120,35 @@ const AppShell = () => {
   );
 };
 
+/** Trang tải ảnh công khai: có AppBar khi đã đăng nhập, không thì chỉ nội dung trang. */
+const PublicUploadShell = () => {
+  const { user, isAuthenticated, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <Box display="flex" justifyContent="center" alignItems="center" minHeight="100vh">
+        <CircularProgress />
+      </Box>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return withSuspense(<UploadImageByQr />);
+  }
+
+  return (
+    <>
+      <AppBarComponent />
+      <MaintenanceNoticeListener />
+      <KtvReadNotificationListener user={user} />
+      <KtvInboxNotificationListener user={user} />
+      <Box component="main">
+        {withSuspense(<UploadImageByQr />)}
+      </Box>
+    </>
+  );
+};
+
 const AdminShell = () => {
   const { user } = useAuth();
 
@@ -139,7 +168,6 @@ const AppLayout = () => (
       <Route path="/cars" element={withSuspense(<PermissionRoute permission="cars.today"><CarsTodayPage /></PermissionRoute>)} />
       <Route path="/cars/add" element={withSuspense(<PermissionRoute permission="cars.add"><AddCarPage /></PermissionRoute>)} />
       <Route path="/cars/manage" element={withSuspense(<PermissionRoute permission="cars.manage"><ManageCarsPage /></PermissionRoute>)} />
-      <Route path="/upload-image" element={withSuspense(<PermissionRoute permission="cars.upload-image"><UploadImageByQr /></PermissionRoute>)} />
       <Route path="/workers/available" element={withSuspense(<PermissionRoute permission="workers.available"><AvailableWorkersPage /></PermissionRoute>)} />
       <Route path="/workers/revenue-chart" element={withSuspense(<PermissionRoute permission="reports.revenue"><WorkerRevenueChart /></PermissionRoute>)} />
       <Route path="/workers/weekly-praise" element={withSuspense(<PermissionRoute permission="reports.praise"><WeeklyPraiseForm /></PermissionRoute>)} />
@@ -194,6 +222,8 @@ function App() {
           <Routes>
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
+            {/* Công khai: ai cũng tải/xem ảnh xe theo QR hoặc số TT */}
+            <Route path="/upload-image" element={<PublicUploadShell />} />
             <Route
               path="/admin"
               element={(

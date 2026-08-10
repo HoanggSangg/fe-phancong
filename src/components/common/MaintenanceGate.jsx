@@ -7,7 +7,7 @@ import { canAccessAdminArea } from '../../utils/permissions';
 import MaintenancePage from '../pages/MaintenancePage';
 
 const POLL_MS = 30_000;
-const AUTH_PATHS = new Set(['/login', '/register']);
+const AUTH_PATHS = new Set(['/login', '/register', '/upload-image']);
 
 /**
  * Khi backend bật bảo trì: chặn mọi user không phải admin.
