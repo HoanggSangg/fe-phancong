@@ -4,7 +4,6 @@ import {
   deleteCar,
   updateCarStatusWithWorker,
   getCarWorkerHistory,
-  notifyAdminAboutCar,
   getCarById,
   getManageCarsList,
   syncCarFromExternal,
@@ -63,7 +62,6 @@ import StatusUpdateDialog from '../ManageCars/StatusUpdateDialog';
 import CarEditDialog from '../ManageCars/CarEditDialog';
 import RepairItemsDialog from '../ManageCars/RepairItemsDialog';
 import CarsPanel from '../ManageCars/CarsPanel';
-import CarNotifyAdminDialog from '../ManageCars/CarNotifyAdminDialog';
 import EnablePushNotificationButton from '../common/EnablePushNotificationButton';
 import PageLayout from '../common/PageLayout';
 import PageHeader from '../common/PageHeader';
@@ -102,9 +100,6 @@ const ManageCars = () => {
   const [historyError, setHistoryError] = useState('');
   const [tableSupervisor, setTableSupervisor] = useState('');
   const [pageFullscreen, setPageFullscreen] = useState(false);
-  const [notifyDialogOpen, setNotifyDialogOpen] = useState(false);
-  const [notifyCar, setNotifyCar] = useState(null);
-  const [notifySending, setNotifySending] = useState(false);
   const [highlightCarId, setHighlightCarId] = useState('');
   const [searchParams, setSearchParams] = useSearchParams();
   const openCarHandledRef = useRef(false);
@@ -175,10 +170,10 @@ const ManageCars = () => {
   });
 
   useEffect(() => {
-    const dirty = editOpen || statusUpdateOpen || repair.repairDialogOpen || notifyDialogOpen;
+    const dirty = editOpen || statusUpdateOpen || repair.repairDialogOpen;
     setHasUnsavedChanges(dirty, 'manage-cars');
     return () => setHasUnsavedChanges(false, 'manage-cars');
-  }, [editOpen, statusUpdateOpen, repair.repairDialogOpen, notifyDialogOpen, setHasUnsavedChanges]);
+  }, [editOpen, statusUpdateOpen, repair.repairDialogOpen, setHasUnsavedChanges]);
 
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -616,37 +611,6 @@ const ManageCars = () => {
     return all.filter((w, i, arr) => arr.findIndex((a) => a._id === w._id) === i);
   };
 
-  const handleOpenNotifyAdmin = (car) => {
-    setNotifyCar(car);
-    setNotifyDialogOpen(true);
-  };
-
-  const handleSendNotifyAdmin = async (payload) => {
-    if (!notifyCar) return;
-
-    setNotifySending(true);
-    try {
-      const message = typeof payload === 'string' ? payload : payload?.message || '';
-      const res = await notifyAdminAboutCar(notifyCar._id, message);
-      setNotifyDialogOpen(false);
-      setNotifyCar(null);
-      toast.fromSnackbar({
-        open: true,
-        message: res.data?.message || 'Đã gửi thông báo cho admin',
-        severity: 'success',
-      });
-    } catch (err) {
-      console.error('Lỗi khi gửi thông báo cho admin:', err);
-      toast.fromSnackbar({
-        open: true,
-        message: err.response?.data?.message || 'Gửi thông báo thất bại',
-        severity: 'error',
-      });
-    } finally {
-      setNotifySending(false);
-    }
-  };
-
   const panelProps = {
     isMobile,
     displayedCars,
@@ -672,7 +636,6 @@ const ManageCars = () => {
     onTableSupervisorChange: handleTableSupervisorChange,
     canManage,
     canDelete,
-    canNotifyAdmin: isKtvUser,
     getStatusConfig,
     renderStatusIcon,
     onStatusChange: handleStatusChangeClick,
@@ -680,7 +643,6 @@ const ManageCars = () => {
     onEdit: handleEditClick,
     onDelete: handleDelete,
     onOpenHistory: handleOpenWorkerHistory,
-    onNotifyAdmin: handleOpenNotifyAdmin,
     highlightCarId,
   };
 
@@ -772,19 +734,6 @@ const ManageCars = () => {
         loading={historyLoading}
         error={historyError}
         data={historyData}
-      />
-
-      <CarNotifyAdminDialog
-        open={notifyDialogOpen}
-        onClose={() => {
-          if (notifySending) return;
-          setNotifyDialogOpen(false);
-          setNotifyCar(null);
-        }}
-        car={notifyCar}
-        getStatusConfig={getStatusConfig}
-        onSend={handleSendNotifyAdmin}
-        sending={notifySending}
       />
 
       <FullscreenDialog

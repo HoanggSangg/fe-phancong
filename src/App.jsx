@@ -6,7 +6,6 @@ import AppBarComponent from './components/Appbar';
 import AdminLayout from './components/admin/AdminLayout';
 import LoginPage from './components/pages/LoginPage';
 import RegisterPage from './components/pages/RegisterPage';
-import KtvReadNotificationListener from './components/common/KtvReadNotificationListener';
 import MaintenanceGate from './components/common/MaintenanceGate';
 import MaintenanceNoticeListener from './components/common/MaintenanceNoticeListener';
 import SystemUpdateListener from './components/common/SystemUpdateListener';
@@ -36,7 +35,6 @@ const TeamManagement = lazy(() => import('./components/pages/TeamManagement'));
 const UserManagement = lazy(() => import('./components/pages/UserManagement'));
 const AccountPermissionsPage = lazy(() => import('./components/pages/AccountPermissionsPage'));
 const OperationHistoryPage = lazy(() => import('./components/pages/OperationHistoryPage'));
-const KtvMessagesPage = lazy(() => import('./components/pages/KtvMessagesPage'));
 const PayrollPage = lazy(() => import('./components/pages/PayrollPage'));
 const AttendancePayrollPage = lazy(() => import('./components/pages/AttendancePayrollPage'));
 const SystemSettingsPage = lazy(() => import('./components/pages/SystemSettingsPage'));
@@ -103,24 +101,19 @@ const PreferAdminPath = ({ permission, children }) => {
   return children;
 };
 
-const AppShell = () => {
-  const { user } = useAuth();
-
-  return (
-    <>
-      <AppBarComponent />
-      <MaintenanceNoticeListener />
-      <KtvReadNotificationListener user={user} />
-      <Box component="main">
-        <Outlet />
-      </Box>
-    </>
-  );
-};
+const AppShell = () => (
+  <>
+    <AppBarComponent />
+    <MaintenanceNoticeListener />
+    <Box component="main">
+      <Outlet />
+    </Box>
+  </>
+);
 
 /** Trang tải ảnh công khai: có AppBar khi đã đăng nhập, không thì chỉ nội dung trang. */
 const PublicUploadShell = () => {
-  const { user, isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, loading } = useAuth();
 
   if (loading) {
     return (
@@ -138,7 +131,6 @@ const PublicUploadShell = () => {
     <>
       <AppBarComponent />
       <MaintenanceNoticeListener />
-      <KtvReadNotificationListener user={user} />
       <Box component="main">
         {withSuspense(<UploadImageByQr />)}
       </Box>
@@ -146,16 +138,11 @@ const PublicUploadShell = () => {
   );
 };
 
-const AdminShell = () => {
-  const { user } = useAuth();
-
-  return (
-    <AdminOnlyRoute>
-      <KtvReadNotificationListener user={user} />
-      <AdminLayout />
-    </AdminOnlyRoute>
-  );
-};
+const AdminShell = () => (
+  <AdminOnlyRoute>
+    <AdminLayout />
+  </AdminOnlyRoute>
+);
 
 const AppLayout = () => (
   <Routes>
@@ -199,7 +186,6 @@ const AppLayout = () => (
       <Route path="/users" element={<Navigate to="/admin/users" replace />} />
       <Route path="/account-permissions" element={<Navigate to="/admin/account-permissions" replace />} />
       <Route path="/audit-logs" element={<Navigate to="/admin/audit-logs" replace />} />
-      <Route path="/ktv-messages" element={<Navigate to="/admin/ktv-messages" replace />} />
       <Route path="/settings" element={<Navigate to="/admin/settings" replace />} />
       <Route path="/payroll" element={<Navigate to="/admin/payroll" replace />} />
       <Route path="/attendance-payroll" element={<Navigate to="/admin/attendance-payroll" replace />} />
@@ -238,7 +224,6 @@ function App() {
               <Route path="users" element={withSuspense(<PermissionRoute permission="system.users"><UserManagement /></PermissionRoute>)} />
               <Route path="account-permissions" element={withSuspense(<PermissionRoute permission="system.permissions"><AccountPermissionsPage /></PermissionRoute>)} />
               <Route path="audit-logs" element={withSuspense(<PermissionRoute permission="system.audit-logs"><OperationHistoryPage /></PermissionRoute>)} />
-              <Route path="ktv-messages" element={withSuspense(<PermissionRoute permission="system.ktv-messages"><KtvMessagesPage /></PermissionRoute>)} />
               <Route path="settings" element={withSuspense(<PermissionRoute permission="system.settings"><SystemSettingsPage /></PermissionRoute>)} />
               <Route path="payroll" element={withSuspense(<PermissionRoute permission="payroll.manage"><PayrollPage /></PermissionRoute>)} />
               <Route path="attendance-payroll" element={withSuspense(<PermissionRoute permission="payroll.day-work"><AttendancePayrollPage /></PermissionRoute>)} />

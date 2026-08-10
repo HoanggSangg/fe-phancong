@@ -186,17 +186,6 @@ export const PERMISSION_CATALOG = [
     defaultRoles: ['admin'],
   },
   {
-    key: 'system.ktv-messages',
-    label: 'Tin nhắn KTV',
-    group: 'Hệ thống',
-    path: '/ktv-messages',
-    adminPath: '/admin/ktv-messages',
-    adminArea: true,
-    adminGroup: 'Hệ thống',
-    hideFromNav: true,
-    defaultRoles: ['admin', 'giam_sat', 'cvdv'],
-  },
-  {
     key: 'system.settings',
     label: 'Cài đặt',
     group: 'Hệ thống',

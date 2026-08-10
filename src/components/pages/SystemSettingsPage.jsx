@@ -567,10 +567,6 @@ const SystemSettingsPage = () => {
                 label="Lịch sử thao tác"
                 value={`${runtime.features?.trim?.operationLogDays ?? '—'} ngày`}
               />
-              <InfoRow
-                label="Tin nhắn KTV"
-                value={`${runtime.features?.trim?.ktvMessageDays ?? '—'} ngày / max ${runtime.features?.trim?.ktvMessageMax?.toLocaleString?.('vi-VN') ?? '—'}`}
-              />
             </SectionCard>
           </Grid>
         </Grid>

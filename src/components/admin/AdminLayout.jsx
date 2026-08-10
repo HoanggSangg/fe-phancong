@@ -27,7 +27,6 @@ import SupervisorAccountIcon from '@mui/icons-material/SupervisorAccount';
 import PeopleIcon from '@mui/icons-material/People';
 import SecurityIcon from '@mui/icons-material/Security';
 import HistoryIcon from '@mui/icons-material/History';
-import MessageIcon from '@mui/icons-material/Message';
 import PaymentsIcon from '@mui/icons-material/Payments';
 import EventAvailableIcon from '@mui/icons-material/EventAvailable';
 import SettingsIcon from '@mui/icons-material/Settings';
@@ -51,7 +50,6 @@ const NAV_ICONS = {
   'system.users': <PeopleIcon fontSize="small" />,
   'system.permissions': <SecurityIcon fontSize="small" />,
   'system.audit-logs': <HistoryIcon fontSize="small" />,
-  'system.ktv-messages': <MessageIcon fontSize="small" />,
   'system.settings': <SettingsIcon fontSize="small" />,
   'payroll.manage': <PaymentsIcon fontSize="small" />,
   'payroll.day-work': <EventAvailableIcon fontSize="small" />,

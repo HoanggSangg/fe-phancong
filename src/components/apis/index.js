@@ -33,8 +33,6 @@ export const syncCarFromExternal = (id) => api.post(`/cars/${id}/sync-external`)
 export const deleteCar = (id) => api.delete(`/cars/${id}`);
 export const updateCarStatusWithWorker = (id, status, newWorkerId = null) =>
   api.put(`/cars/${id}/status`, { status, ...(newWorkerId && { newWorkerId }) });
-export const notifyAdminAboutCar = (id, message) =>
-  api.post(`/cars/${id}/notify-admin`, { message });
 export const getWorkingAndPendingCars = (date) =>
   api.get('/cars/working-pending', { params: date ? { date } : undefined });
 export const getOverdueCars = () => api.get('/cars/overdue');
@@ -87,20 +85,6 @@ export const removeManualJobFromWorker = (workerId, jobId) =>
   api.delete(`/worker/${workerId}/manual-jobs/${jobId}`);
 export const getOperationLogs = (params, config = {}) =>
   api.get('/audit-logs', { ...config, params });
-
-export const getKtvMessageSettings = () => api.get('/ktv-messages/settings');
-export const updateKtvMessageSettings = (receiverUserIds) =>
-  api.put('/ktv-messages/settings', { receiverUserIds });
-export const getKtvMessages = (params) =>
-  api.get('/ktv-messages', { params });
-export const sendKtvMessageToAdmin = (payload) =>
-  api.post('/ktv-messages', payload);
-export const markKtvMessageRead = (id) =>
-  api.patch(`/ktv-messages/${id}/read`);
-export const getKtvSentMessages = (params) =>
-  api.get('/ktv-messages/sent', { params });
-export const acknowledgeKtvMessageRead = (id) =>
-  api.patch(`/ktv-messages/${id}/acknowledge`);
 
 export const getPayrollSettings = () => api.get('/payroll/settings');
 export const updatePayrollSettings = (payload) => api.put('/payroll/settings', payload);

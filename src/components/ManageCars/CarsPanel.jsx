@@ -31,7 +31,6 @@ import {
   Edit,
   Error,
   History,
-  Message,
   ReceiptLong,
 } from '@mui/icons-material';
 import DirectionsCarIcon from '@mui/icons-material/DirectionsCar';
@@ -75,29 +74,12 @@ const CarActions = ({
   car,
   canManage,
   canDelete,
-  canNotifyAdmin,
   onLoadRepairItems,
   onEdit,
   onDelete,
   onOpenHistory,
-  onNotifyAdmin,
 }) => (
   <Box sx={{ display: 'flex', gap: 0.5 }}>
-    {canNotifyAdmin && (
-      <Tooltip title="Báo admin về trạng thái xe">
-        <span>
-          <IconButton
-            size="small"
-            color="warning"
-            onClick={() => onNotifyAdmin(car)}
-            sx={{ borderRadius: 2 }}
-            aria-label="Báo admin"
-          >
-            <Message />
-          </IconButton>
-        </span>
-      </Tooltip>
-    )}
     <Tooltip title="Chi tiết lệnh sửa chữa (API + công việc ngoài báo giá)">
       <span>
         <IconButton size="small" color="info" onClick={() => onLoadRepairItems(car)} sx={{ borderRadius: 2 }}>
@@ -139,7 +121,6 @@ const CarCard = ({
   car,
   canManage,
   canDelete,
-  canNotifyAdmin,
   getStatusConfig,
   renderStatusIcon,
   onStatusChange,
@@ -147,7 +128,6 @@ const CarCard = ({
   onEdit,
   onDelete,
   onOpenHistory,
-  onNotifyAdmin,
   highlightCarId = '',
 }) => (
   <Card
@@ -245,12 +225,10 @@ const CarCard = ({
         car={car}
         canManage={canManage}
         canDelete={canDelete}
-        canNotifyAdmin={canNotifyAdmin}
         onLoadRepairItems={onLoadRepairItems}
         onEdit={onEdit}
         onDelete={onDelete}
         onOpenHistory={onOpenHistory}
-        onNotifyAdmin={onNotifyAdmin}
       />
     </CardActions>
   </Card>
@@ -266,7 +244,6 @@ const CarTable = ({
   supervisors,
   canManage,
   canDelete,
-  canNotifyAdmin,
   getStatusConfig,
   renderStatusIcon,
   onStatusChange,
@@ -274,7 +251,6 @@ const CarTable = ({
   onEdit,
   onDelete,
   onOpenHistory,
-  onNotifyAdmin,
   statusFilter,
   onStatusFilterChange,
   highlightCarId = '',
@@ -412,12 +388,10 @@ const CarTable = ({
                     car={car}
                     canManage={canManage}
                     canDelete={canDelete}
-                    canNotifyAdmin={canNotifyAdmin}
                     onLoadRepairItems={onLoadRepairItems}
                     onEdit={onEdit}
                     onDelete={onDelete}
                     onOpenHistory={onOpenHistory}
-                    onNotifyAdmin={onNotifyAdmin}
                   />
                 </TableCell>
               </TableRow>
@@ -455,7 +429,6 @@ const CarsPanel = ({
   onTableSupervisorChange,
   canManage,
   canDelete,
-  canNotifyAdmin,
   getStatusConfig,
   renderStatusIcon,
   onStatusChange,
@@ -463,7 +436,6 @@ const CarsPanel = ({
   onEdit,
   onDelete,
   onOpenHistory,
-  onNotifyAdmin,
   highlightCarId = '',
 }) => {
   const deliveredCount = displayedCars.filter((car) => car.status === 'delivered').length;
@@ -637,7 +609,6 @@ const CarsPanel = ({
                   car={car}
                   canManage={canManage}
                   canDelete={canDelete}
-                  canNotifyAdmin={canNotifyAdmin}
                   getStatusConfig={getStatusConfig}
                   renderStatusIcon={renderStatusIcon}
                   onStatusChange={onStatusChange}
@@ -645,7 +616,6 @@ const CarsPanel = ({
                   onEdit={onEdit}
                   onDelete={onDelete}
                   onOpenHistory={onOpenHistory}
-                  onNotifyAdmin={onNotifyAdmin}
                   highlightCarId={highlightCarId}
                 />
               ))
@@ -662,7 +632,6 @@ const CarsPanel = ({
             supervisors={supervisors}
             canManage={canManage}
             canDelete={canDelete}
-            canNotifyAdmin={canNotifyAdmin}
             getStatusConfig={getStatusConfig}
             renderStatusIcon={renderStatusIcon}
             onStatusChange={onStatusChange}
@@ -670,7 +639,6 @@ const CarsPanel = ({
             onEdit={onEdit}
             onDelete={onDelete}
             onOpenHistory={onOpenHistory}
-            onNotifyAdmin={onNotifyAdmin}
             statusFilter={statusFilter}
             onStatusFilterChange={onStatusFilterChange}
             highlightCarId={highlightCarId}

@@ -2,18 +2,15 @@ import fs from 'node:fs'
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import { ensureCert, keyFile, certFile } from './scripts/ensure-dev-cert.mjs'
-import { httpToHttpsRedirectPlugin } from './plugins/httpToHttpsRedirect.js'
 import { printAccessUrlsPlugin } from './plugins/printAccessUrls.js'
 
 // https://vite.dev/config/
 export default defineConfig(async ({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
-  // HTTPS mặc định: camera điện thoại cần secure context trên IP LAN.
+  // HTTPS mặc định: camera điện thoại cần secure context trên IP LAN/Tailscale.
   // Tắt: .env.local → VITE_DEV_HTTPS=false
   const useHttps = (env.VITE_DEV_HTTPS || process.env.VITE_DEV_HTTPS || 'true') !== 'false'
   const publicPort = Number(env.VITE_DEV_PORT || process.env.VITE_DEV_PORT || 5173)
-  // Vite HTTPS nội bộ; proxy công khai :publicPort nhận cả http→https và TLS.
-  const vitePort = useHttps ? publicPort + 2 : publicPort
 
   let httpsOption = false
   if (useHttps) {
@@ -32,25 +29,15 @@ export default defineConfig(async ({ mode }) => {
   }
 
   return {
-    plugins: [
-      react(),
-      ...(useHttps
-        ? [
-            httpToHttpsRedirectPlugin({
-              enabled: true,
-              publicPort,
-              vitePort,
-            }),
-          ]
-        : [printAccessUrlsPlugin()]),
-    ],
+    plugins: [react(), printAccessUrlsPlugin({ useHttps })],
     server: {
-      // HTTPS: chỉ localhost; LAN/Tailscale vào qua proxy :publicPort
-      host: useHttps ? '127.0.0.1' : '0.0.0.0',
-      port: vitePort,
+      // Lắng nghe trực tiếp LAN/Tailscale — không dùng TCP proxy peek (dễ timeout lazy import / HMR / API).
+      host: '0.0.0.0',
+      port: publicPort,
       strictPort: true,
       https: httpsOption,
       allowedHosts: true,
+      // HMR dùng cùng host/port trình duyệt đang mở (wss khi HTTPS).
       hmr: useHttps
         ? {
             protocol: 'wss',
@@ -58,15 +45,20 @@ export default defineConfig(async ({ mode }) => {
           }
         : true,
       proxy: {
+        // DEV: FE https://host:5173/api → backend http://127.0.0.1:3000 (tránh mixed content).
         '/api': {
           target: 'http://127.0.0.1:3000',
           changeOrigin: true,
+          timeout: 0,
+          proxyTimeout: 0,
         },
         '/socket.io': {
           target: 'http://127.0.0.1:3000',
           changeOrigin: true,
           ws: true,
           secure: false,
+          timeout: 0,
+          proxyTimeout: 0,
         },
       },
     },
@@ -74,6 +66,22 @@ export default defineConfig(async ({ mode }) => {
       host: '0.0.0.0',
       port: publicPort,
       https: httpsOption,
+      proxy: {
+        '/api': {
+          target: 'http://127.0.0.1:3000',
+          changeOrigin: true,
+          timeout: 0,
+          proxyTimeout: 0,
+        },
+        '/socket.io': {
+          target: 'http://127.0.0.1:3000',
+          changeOrigin: true,
+          ws: true,
+          secure: false,
+          timeout: 0,
+          proxyTimeout: 0,
+        },
+      },
     },
     build: {
       rollupOptions: {
