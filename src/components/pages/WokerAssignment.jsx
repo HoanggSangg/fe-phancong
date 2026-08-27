@@ -207,7 +207,6 @@ const WokerAssignment = () => {
       await reloadWorkers();
       toast.success("Đã giao việc cho thợ");
     } catch (err) {
-      console.log(err);
       toast.error(err.response?.data?.message || "Lỗi khi giao việc");
     }
   };
@@ -220,7 +219,6 @@ const WokerAssignment = () => {
       await reloadWorkers();
       toast.success("Đã xóa công việc");
     } catch (err) {
-      console.log(err);
       toast.error(err.response?.data?.message || "Lỗi khi xóa công việc");
     }
   };

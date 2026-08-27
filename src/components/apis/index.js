@@ -104,28 +104,9 @@ export const refreshPayrollRevenue = (year, month) =>
 export const recalculatePayroll = (year, month) =>
   api.post(`/payroll/${year}/${month}/recalculate`);
 
-// —— Lương ngày công / chấm công (module riêng, không gắn LNS) ——
-export const getAttendanceSettings = () => api.get('/attendance/settings');
-export const updateAttendanceSettings = (payload) =>
-  api.put('/attendance/settings', payload);
-
 export const getSystemStatus = () => api.get('/system/status');
 export const getSystemSettings = () => api.get('/system/settings');
 export const updateSystemSettings = (payload) => api.put('/system/settings', payload);
 export const getSystemVersion = () => api.get('/system/version');
 export const getOnlineClients = () => api.get('/system/online-clients');
 export const publishSystemUpdate = (payload) => api.post('/system/publish-update', payload);
-export const getAttendanceWorkers = (params) =>
-  api.get('/attendance/workers', { params });
-export const getAttendanceCalendar = (workerId, year, month) =>
-  api.get(`/attendance/calendar/${workerId}/${year}/${month}`);
-export const upsertAttendanceDays = (workerId, year, month, payload) =>
-  api.put(`/attendance/calendar/${workerId}/${year}/${month}`, payload);
-export const deleteAttendanceDay = (workerId, date) =>
-  api.delete(`/attendance/calendar/${workerId}/${date}`);
-export const getDayWorkPayroll = (year, month) =>
-  api.get(`/attendance/payroll/${year}/${month}`);
-export const syncDayWorkPayroll = (year, month) =>
-  api.post(`/attendance/payroll/${year}/${month}/sync`);
-export const saveDayWorkPayroll = (year, month, payload) =>
-  api.put(`/attendance/payroll/${year}/${month}`, payload);

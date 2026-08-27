@@ -50,6 +50,7 @@ const MODULE_LABELS = {
   supervisor: 'Giám sát',
   team: 'Tổ',
   document_image: 'Tải ảnh',
+  xuat_kho: 'Xuất kho',
 };
 
 const ACTION_LABELS = {
@@ -68,6 +69,7 @@ const ACTION_LABELS = {
   remove_job: 'Xóa việc',
   add_member: 'Thêm thành viên',
   remove_member: 'Xóa thành viên',
+  xuat_kho: 'Xuất kho',
 };
 
 const moduleColor = {
@@ -80,6 +82,7 @@ const moduleColor = {
   supervisor: 'warning',
   team: 'info',
   document_image: 'secondary',
+  xuat_kho: 'warning',
 };
 
 const formatDateTime = (value) => {
@@ -94,8 +97,21 @@ const formatDateTime = (value) => {
   });
 };
 
+const isFailedLog = (log) => log?.metadata?.success === false;
+
+const getActionLabel = (log) => {
+  const base = ACTION_LABELS[log.action] || log.action;
+  return isFailedLog(log) ? `${base} (thất bại)` : base;
+};
+
 const getLogSoChungTu = (log) =>
-  extractSoChungTu(log?.metadata?.baseTt || log?.metadata?.soChungTu || log?.targetLabel || '');
+  extractSoChungTu(
+    log?.metadata?.khoaBaoGia
+    || log?.metadata?.baseTt
+    || log?.metadata?.soChungTu
+    || log?.targetLabel
+    || '',
+  );
 
 const OperationHistoryPage = () => {
   const toast = useToast();
@@ -199,6 +215,8 @@ const OperationHistoryPage = () => {
 
   const renderDetails = (log) => {
     const meta = log.metadata || {};
+    const failed = isFailedLog(log);
+    const errorMessage = String(meta.errorMessage || '').trim();
     const fileName = String(meta.fileName || '').trim();
     const isDocImage = log.module === 'document_image';
     const detailLines = Array.isArray(meta.details) ? meta.details.filter(Boolean) : [];
@@ -221,7 +239,22 @@ const OperationHistoryPage = () => {
 
     return (
       <Stack spacing={0.5}>
-        <Typography variant="body2">{log.description}</Typography>
+        {failed && (
+          <Chip
+            size="small"
+            color="error"
+            label="Không thực hiện được"
+            sx={{ alignSelf: 'flex-start', fontWeight: 700 }}
+          />
+        )}
+        <Typography variant="body2" color={failed ? 'error.main' : 'text.primary'}>
+          {log.description}
+        </Typography>
+        {failed && errorMessage && !String(log.description || '').includes(errorMessage) && (
+          <Typography variant="body2" color="error.main" fontWeight={600}>
+            Lý do: {errorMessage}
+          </Typography>
+        )}
         {fileName && (
           <Typography
             variant="body2"
@@ -250,7 +283,7 @@ const OperationHistoryPage = () => {
             ))}
           </Stack>
         )}
-        {isDocImage && isValidSoChungTu(getLogSoChungTu(log)) && (
+        {(isDocImage || log.module === 'xuat_kho') && isValidSoChungTu(getLogSoChungTu(log)) && (
           <Box>
             <Button
               size="small"
@@ -268,7 +301,11 @@ const OperationHistoryPage = () => {
   };
 
   const renderLogRow = (log) => (
-    <TableRow key={log._id} hover>
+    <TableRow
+      key={log._id}
+      hover
+      sx={isFailedLog(log) ? { bgcolor: '#fef2f2' } : undefined}
+    >
       <TableCell sx={{ whiteSpace: 'nowrap' }}>{formatDateTime(log.createdAt)}</TableCell>
       <TableCell>
         <Stack spacing={0.5}>
@@ -293,7 +330,8 @@ const OperationHistoryPage = () => {
       <TableCell>
         <Chip
           size="small"
-          label={ACTION_LABELS[log.action] || log.action}
+          label={getActionLabel(log)}
+          color={isFailedLog(log) ? 'error' : 'default'}
           variant="outlined"
         />
       </TableCell>
@@ -306,16 +344,21 @@ const OperationHistoryPage = () => {
     <Card key={log._id} variant="outlined" sx={{ borderRadius: 2 }}>
       <CardContent>
         <Stack spacing={1}>
-          <Stack direction="row" justifyContent="space-between" alignItems="center">
+          <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={1}>
             <Typography variant="caption" color="text.secondary">
               {formatDateTime(log.createdAt)}
             </Typography>
-            <Chip
-              size="small"
-              label={MODULE_LABELS[log.module] || log.module}
-              color={moduleColor[log.module] || 'default'}
-              variant="outlined"
-            />
+            <Stack direction="row" spacing={0.5} flexWrap="wrap" justifyContent="flex-end">
+              {isFailedLog(log) && (
+                <Chip size="small" color="error" label="Thất bại" />
+              )}
+              <Chip
+                size="small"
+                label={MODULE_LABELS[log.module] || log.module}
+                color={moduleColor[log.module] || 'default'}
+                variant="outlined"
+              />
+            </Stack>
           </Stack>
           <Typography variant="body2" fontWeight={600}>
             {log.fullName || log.username}

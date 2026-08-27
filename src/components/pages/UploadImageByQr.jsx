@@ -14,11 +14,13 @@ import CameraswitchIcon from '@mui/icons-material/Cameraswitch';
 import StopCircleIcon from '@mui/icons-material/StopCircle';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import ImageSearchIcon from '@mui/icons-material/ImageSearch';
+import Inventory2Icon from '@mui/icons-material/Inventory2';
 import { Html5Qrcode } from 'html5-qrcode';
 import { useSearchParams } from 'react-router-dom';
 import PageLayout from '../common/PageLayout';
 import PageHeader from '../common/PageHeader';
 import DocumentImageUploader from './DocumentImageUploader';
+import XuatKhoDialog from './XuatKhoDialog';
 import {
   buildUploadUrl,
   extractSoChungTu,
@@ -60,6 +62,7 @@ const UploadImageByQr = () => {
   const [isStarting, setIsStarting] = useState(false);
   const [isDecodingImage, setIsDecodingImage] = useState(false);
   const [cameraError, setCameraError] = useState('');
+  const [xuatKhoOpen, setXuatKhoOpen] = useState(false);
 
   const allowDelete = Boolean(isAuthenticated && hasPermission(user, 'cars.upload-image'));
 
@@ -226,6 +229,7 @@ const UploadImageByQr = () => {
   };
 
   const handleRescan = async () => {
+    setXuatKhoOpen(false);
     setScannedCode('');
     setCarInfo(null);
     hydratedQueryRef.current = '';
@@ -234,6 +238,7 @@ const UploadImageByQr = () => {
   };
 
   const handleClearResult = () => {
+    setXuatKhoOpen(false);
     setScannedCode('');
     setCarInfo(null);
     hydratedQueryRef.current = '';
@@ -415,6 +420,18 @@ const UploadImageByQr = () => {
         )}
 
         {scannedCode && (
+          <Button
+            variant="contained"
+            startIcon={<Inventory2Icon />}
+            onClick={() => setXuatKhoOpen(true)}
+            fullWidth
+            sx={{ height: 44 }}
+          >
+            Xuất phụ tùng
+          </Button>
+        )}
+
+        {scannedCode && (
           <DocumentImageUploader
             soChungTu={scannedCode}
             carInfo={carInfo}
@@ -422,6 +439,14 @@ const UploadImageByQr = () => {
           />
         )}
       </Stack>
+
+      <XuatKhoDialog
+        open={xuatKhoOpen}
+        onClose={() => setXuatKhoOpen(false)}
+        khoaBaoGia={scannedCode}
+        plateNumber={carInfo?.plateNumber || ''}
+        roCode={carInfo?.roCode || carInfo?.roNumber || ''}
+      />
     </PageLayout>
   );
 };

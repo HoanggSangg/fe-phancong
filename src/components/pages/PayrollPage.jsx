@@ -285,7 +285,7 @@ const PayrollPage = () => {
         subtitle={
           isYearView
             ? `Tổng lương thực nhận theo từng tháng — năm ${year}`
-            : 'Lương năng suất theo doanh thu — tách riêng khỏi lương ngày công'
+            : 'Lương năng suất theo doanh thu'
         }
         actions={(
           <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>

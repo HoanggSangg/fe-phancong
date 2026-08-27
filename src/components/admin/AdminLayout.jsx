@@ -28,7 +28,7 @@ import PeopleIcon from '@mui/icons-material/People';
 import SecurityIcon from '@mui/icons-material/Security';
 import HistoryIcon from '@mui/icons-material/History';
 import PaymentsIcon from '@mui/icons-material/Payments';
-import EventAvailableIcon from '@mui/icons-material/EventAvailable';
+import QrCode2Icon from '@mui/icons-material/QrCode2';
 import SettingsIcon from '@mui/icons-material/Settings';
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
@@ -52,7 +52,7 @@ const NAV_ICONS = {
   'system.audit-logs': <HistoryIcon fontSize="small" />,
   'system.settings': <SettingsIcon fontSize="small" />,
   'payroll.manage': <PaymentsIcon fontSize="small" />,
-  'payroll.day-work': <EventAvailableIcon fontSize="small" />,
+  'labels.qr': <QrCode2Icon fontSize="small" />,
 };
 
 const AdminSidebarContent = ({ onNavigate, selectedPath }) => {

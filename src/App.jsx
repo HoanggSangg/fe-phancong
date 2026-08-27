@@ -36,7 +36,7 @@ const UserManagement = lazy(() => import('./components/pages/UserManagement'));
 const AccountPermissionsPage = lazy(() => import('./components/pages/AccountPermissionsPage'));
 const OperationHistoryPage = lazy(() => import('./components/pages/OperationHistoryPage'));
 const PayrollPage = lazy(() => import('./components/pages/PayrollPage'));
-const AttendancePayrollPage = lazy(() => import('./components/pages/AttendancePayrollPage'));
+const QrLabelPage = lazy(() => import('./components/pages/QrLabelPage'));
 const SystemSettingsPage = lazy(() => import('./components/pages/SystemSettingsPage'));
 const UploadImageByQr = lazy(() => import('./components/pages/UploadImageByQr'));
 
@@ -188,7 +188,7 @@ const AppLayout = () => (
       <Route path="/audit-logs" element={<Navigate to="/admin/audit-logs" replace />} />
       <Route path="/settings" element={<Navigate to="/admin/settings" replace />} />
       <Route path="/payroll" element={<Navigate to="/admin/payroll" replace />} />
-      <Route path="/attendance-payroll" element={<Navigate to="/admin/attendance-payroll" replace />} />
+      <Route path="/qr-labels" element={<Navigate to="/admin/qr-labels" replace />} />
 
       <Route path="*" element={<Navigate to="/cars" replace />} />
     </Route>
@@ -226,7 +226,7 @@ function App() {
               <Route path="audit-logs" element={withSuspense(<PermissionRoute permission="system.audit-logs"><OperationHistoryPage /></PermissionRoute>)} />
               <Route path="settings" element={withSuspense(<PermissionRoute permission="system.settings"><SystemSettingsPage /></PermissionRoute>)} />
               <Route path="payroll" element={withSuspense(<PermissionRoute permission="payroll.manage"><PayrollPage /></PermissionRoute>)} />
-              <Route path="attendance-payroll" element={withSuspense(<PermissionRoute permission="payroll.day-work"><AttendancePayrollPage /></PermissionRoute>)} />
+              <Route path="qr-labels" element={withSuspense(<PermissionRoute permission="labels.qr"><QrLabelPage /></PermissionRoute>)} />
               <Route path="*" element={<Navigate to="/admin" replace />} />
             </Route>
             <Route

@@ -32,6 +32,8 @@ import {
   IMAGE_KIND_PARTS,
   buildDocKey,
   deleteDocumentFile,
+  downloadDocumentFile,
+  fetchDocumentImageBlob,
   getDocumentFileUrl,
   getDocumentFiles,
   getPublicDocumentFileUrl,
@@ -137,6 +139,7 @@ const DocumentImageUploader = ({
   const [deletingName, setDeletingName] = useState('');
   const [overallProgress, setOverallProgress] = useState(0);
   const [preview, setPreview] = useState(null);
+  const [blobUrls, setBlobUrls] = useState({});
 
   const baseCode = String(soChungTu || '')
     .trim()
@@ -159,6 +162,41 @@ const DocumentImageUploader = ({
       setLoadingFiles(false);
     }
   }, [doc, toast]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const created = [];
+
+    const loadBlobs = async () => {
+      const imageNames = files.filter((name) => isImageName(name));
+      if (!doc || !imageNames.length) {
+        if (!cancelled) setBlobUrls({});
+        return;
+      }
+
+      const next = {};
+      await Promise.all(
+        imageNames.map(async (name) => {
+          try {
+            const blob = await fetchDocumentImageBlob(doc, name);
+            if (cancelled) return;
+            const url = URL.createObjectURL(blob);
+            created.push(url);
+            next[name] = url;
+          } catch {
+            // giữ URL HTTPS làm dự phòng
+          }
+        }),
+      );
+      if (!cancelled) setBlobUrls(next);
+    };
+
+    loadBlobs();
+    return () => {
+      cancelled = true;
+      created.forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, [doc, files]);
 
   const addFiles = useCallback(
     (fileList) => {
@@ -358,15 +396,22 @@ const DocumentImageUploader = ({
     }
   };
 
-  const handleDownload = (item, event) => {
+  const handleDownload = async (item, event) => {
     event?.stopPropagation?.();
-    const link = document.createElement('a');
-    link.href = getDocumentFileUrl(doc, item.name, { download: true });
-    link.download = item.name;
-    link.rel = 'noopener';
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
+    try {
+      if (blobUrls[item.name]) {
+        const link = document.createElement('a');
+        link.href = blobUrls[item.name];
+        link.download = item.name;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        return;
+      }
+      await downloadDocumentFile(doc, item.name);
+    } catch (error) {
+      toast.error(error?.message || 'Không tải được ảnh.');
+    }
   };
 
   const handleDelete = async (item, event) => {
@@ -394,12 +439,12 @@ const DocumentImageUploader = ({
     () =>
       files.map((name) => ({
         name,
-        url: getDocumentFileUrl(doc, name),
+        url: blobUrls[name] || getDocumentFileUrl(doc, name),
         publicUrl: getPublicDocumentFileUrl(doc, name),
         isImage: isImageName(name),
         isVideo: isVideoName(name),
       })),
-    [doc, files],
+    [blobUrls, doc, files],
   );
 
   if (!baseCode) return null;

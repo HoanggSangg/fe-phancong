@@ -78,3 +78,57 @@ export const getDocumentFileUrl = (soChungTu, fileName, { download = false } = {
   if (token) params.set('access_token', token);
   return `${API_BASE}/document-images/content?${params.toString()}`;
 };
+
+const readBlobError = async (blob) => {
+  if (!(blob instanceof Blob)) return '';
+  try {
+    const text = await blob.text();
+    const parsed = JSON.parse(text);
+    return parsed?.message || parsed?.detail || '';
+  } catch {
+    return '';
+  }
+};
+
+export const fetchDocumentImageBlob = async (soChungTu, fileName) => {
+  try {
+    const { data } = await api.get('/document-images/content', {
+      params: {
+        soChungTu: String(soChungTu || '').trim(),
+        fileName: String(fileName || '').trim(),
+      },
+      responseType: 'blob',
+      timeout: 0,
+      skipAuthRedirect: true,
+    });
+    if (data?.type?.includes('application/json')) {
+      throw new Error((await readBlobError(data)) || 'Không tải được ảnh');
+    }
+    return data;
+  } catch (error) {
+    const fromBlob = await readBlobError(error?.response?.data);
+    throw new Error(
+      fromBlob
+      || error?.response?.data?.message
+      || error?.message
+      || 'Không tải được ảnh',
+    );
+  }
+};
+
+/** Tải file qua blob — không đi qua trình quản lý tải HTTPS của Chrome. */
+export const downloadDocumentFile = async (soChungTu, fileName, existingBlob = null) => {
+  const name = String(fileName || '').trim();
+  const data = existingBlob || await fetchDocumentImageBlob(soChungTu, name);
+  const url = URL.createObjectURL(data);
+  try {
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = name;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  } finally {
+    window.setTimeout(() => URL.revokeObjectURL(url), 1500);
+  }
+};
