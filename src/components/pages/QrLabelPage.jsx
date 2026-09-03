@@ -11,6 +11,7 @@ import {
 } from '@mui/material';
 import QrCode2Icon from '@mui/icons-material/QrCode2';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
+import PrintIcon from '@mui/icons-material/Print';
 import PageLayout from '../common/PageLayout';
 import PageHeader from '../common/PageHeader';
 import { useToast } from '../../context/ToastContext';
@@ -20,6 +21,7 @@ import {
   LABEL_W_MM,
   exportQrLabelsPdf,
   parseLabelCodes,
+  printQrLabels,
   renderQrLabelCanvas,
 } from '../../utils/qrLabel';
 
@@ -30,6 +32,7 @@ const QrLabelPage = () => {
   const [previewUrl, setPreviewUrl] = useState('');
   const [rendering, setRendering] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [printing, setPrinting] = useState(false);
   const [error, setError] = useState('');
 
   const codes = useMemo(() => parseLabelCodes(rawCodes), [rawCodes]);
@@ -68,6 +71,8 @@ const QrLabelPage = () => {
     };
   }, [previewCode]);
 
+  const labelPages = () => codes.flatMap((code) => Array.from({ length: copyCount }, () => code));
+
   const handleExport = async () => {
     if (!codes.length) {
       toast.error('Nhập mã hàng hóa để xuất PDF.');
@@ -75,13 +80,27 @@ const QrLabelPage = () => {
     }
     setExporting(true);
     try {
-      const pages = codes.flatMap((code) => Array.from({ length: copyCount }, () => code));
-      const fileName = await exportQrLabelsPdf(pages);
+      const fileName = await exportQrLabelsPdf(labelPages());
       toast.success(`Đã tải ${fileName}`);
     } catch (err) {
       toast.error(err?.message || 'Không xuất được PDF.');
     } finally {
       setExporting(false);
+    }
+  };
+
+  const handlePrint = async () => {
+    if (!codes.length) {
+      toast.error('Nhập mã hàng hóa để in tem.');
+      return;
+    }
+    setPrinting(true);
+    try {
+      await printQrLabels(labelPages());
+    } catch (err) {
+      toast.error(err?.message || 'Không in được tem.');
+    } finally {
+      setPrinting(false);
     }
   };
 
@@ -92,14 +111,24 @@ const QrLabelPage = () => {
         title="Tạo tem QR"
         subtitle={`Tem ${LABEL_W_MM} × ${LABEL_H_MM} mm · mẫu logo Bá Thành`}
         actions={(
-          <Button
-            variant="contained"
-            startIcon={exporting ? <CircularProgress size={16} color="inherit" /> : <PictureAsPdfIcon />}
-            onClick={handleExport}
-            disabled={exporting || !codes.length}
-          >
-            Xuất PDF{pdfCount > 1 ? ` (${pdfCount} tem)` : ''}
-          </Button>
+          <>
+            <Button
+              variant="contained"
+              startIcon={printing ? <CircularProgress size={16} color="inherit" /> : <PrintIcon />}
+              onClick={handlePrint}
+              disabled={printing || exporting || !codes.length}
+            >
+              In tem{pdfCount > 1 ? ` (${pdfCount})` : ''}
+            </Button>
+            <Button
+              variant="outlined"
+              startIcon={exporting ? <CircularProgress size={16} color="inherit" /> : <PictureAsPdfIcon />}
+              onClick={handleExport}
+              disabled={exporting || printing || !codes.length}
+            >
+              Xuất PDF{pdfCount > 1 ? ` (${pdfCount} tem)` : ''}
+            </Button>
+          </>
         )}
       />
 
@@ -154,10 +183,10 @@ const QrLabelPage = () => {
                 src={previewUrl}
                 alt={`Tem QR ${previewCode}`}
                 sx={{
-                  width: 'min(100%, 700px)',
+                  width: 'min(100%, 480px)',
                   maxWidth: '100%',
                   height: 'auto',
-                  aspectRatio: '70 / 30',
+                  aspectRatio: `${LABEL_W_MM} / ${LABEL_H_MM}`,
                   objectFit: 'contain',
                   display: 'block',
                   boxShadow: '0 8px 24px rgba(15, 23, 42, 0.18)',
@@ -169,8 +198,8 @@ const QrLabelPage = () => {
             )}
           </Box>
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1.25 }}>
-            File PDF mỗi trang đúng {LABEL_W_MM}mm × {LABEL_H_MM}mm. Khi in, chọn khổ giấy tùy chỉnh
-            {` ${LABEL_W_MM}×${LABEL_H_MM} mm`}, scale 100%, không căn lề.
+            Bấm In tem để mở hộp thoại in của máy tính. Chọn máy in tem, khổ giấy
+            {` ${LABEL_W_MM}×${LABEL_H_MM} mm`}, lề Không, tỷ lệ 100%. Xuất PDF nếu cần lưu file.
           </Typography>
         </Paper>
       </Stack>

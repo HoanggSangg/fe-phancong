@@ -1,8 +1,8 @@
 import QRCode from 'qrcode';
 import { jsPDF } from 'jspdf';
 
-export const LABEL_W_MM = 70;
-export const LABEL_H_MM = 30;
+export const LABEL_W_MM = 60;
+export const LABEL_H_MM = 40;
 export const QR_PARTS = 6;
 export const TOTAL_PARTS = 10;
 
@@ -277,4 +277,121 @@ export const exportQrLabelsPdf = async (codes) => {
     : `tem-qr-${list.length}-tem-${stamp}.pdf`;
   doc.save(name);
   return name;
+};
+
+const waitForImages = (doc) =>
+  new Promise((resolve) => {
+    const imgs = Array.from(doc.images || []);
+    if (!imgs.length) {
+      resolve();
+      return;
+    }
+    let pending = imgs.length;
+    const mark = () => {
+      pending -= 1;
+      if (pending <= 0) resolve();
+    };
+    imgs.forEach((img) => {
+      if (img.complete) mark();
+      else {
+        img.addEventListener('load', mark, { once: true });
+        img.addEventListener('error', mark, { once: true });
+      }
+    });
+  });
+
+export const printQrLabels = async (codes) => {
+  const list = Array.isArray(codes) ? codes.map((item) => String(item).trim()).filter(Boolean) : [];
+  if (!list.length) {
+    throw new Error('Nhập ít nhất một mã hàng hóa.');
+  }
+
+  const images = [];
+  for (const code of list) {
+    const canvas = await renderQrLabelCanvas(code);
+    images.push(canvas.toDataURL('image/png'));
+  }
+
+  const iframe = document.createElement('iframe');
+  iframe.setAttribute('aria-hidden', 'true');
+  iframe.style.cssText = [
+    'position:fixed',
+    `width:${LABEL_W_MM}mm`,
+    `height:${LABEL_H_MM}mm`,
+    'left:-100vw',
+    'top:0',
+    'border:0',
+    'opacity:0',
+    'pointer-events:none',
+  ].join(';');
+  document.body.appendChild(iframe);
+
+  const doc = iframe.contentDocument;
+  if (!doc) {
+    iframe.remove();
+    throw new Error('Không mở được hộp thoại in.');
+  }
+
+  const labelsHtml = images
+    .map((src) => `<div class="label"><img src="${src}" alt="" /></div>`)
+    .join('');
+
+  doc.open();
+  doc.write(`<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>In tem QR ${LABEL_W_MM}x${LABEL_H_MM}mm</title>
+  <style>
+    @page { size: ${LABEL_W_MM}mm ${LABEL_H_MM}mm; margin: 0; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: ${LABEL_W_MM}mm;
+      background: #fff;
+    }
+    .label {
+      width: ${LABEL_W_MM}mm;
+      height: ${LABEL_H_MM}mm;
+      overflow: hidden;
+      page-break-after: always;
+      break-after: page;
+    }
+    .label:last-child {
+      page-break-after: auto;
+      break-after: auto;
+    }
+    img {
+      width: ${LABEL_W_MM}mm;
+      height: ${LABEL_H_MM}mm;
+      display: block;
+      print-color-adjust: exact;
+      -webkit-print-color-adjust: exact;
+    }
+  </style>
+</head>
+<body>${labelsHtml}</body>
+</html>`);
+  doc.close();
+
+  await waitForImages(doc);
+  await new Promise((resolve) => window.setTimeout(resolve, 80));
+
+  const win = iframe.contentWindow;
+  if (!win) {
+    iframe.remove();
+    throw new Error('Không mở được hộp thoại in.');
+  }
+
+  let cleaned = false;
+  const cleanup = () => {
+    if (cleaned) return;
+    cleaned = true;
+    iframe.remove();
+  };
+
+  win.addEventListener('afterprint', cleanup);
+  win.focus();
+  win.print();
+  window.setTimeout(cleanup, 120000);
 };
