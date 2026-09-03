@@ -43,6 +43,19 @@ export const lookupHanghoa = async (q, params = {}) => {
   }
 };
 
+export const hanghoaNameOf = (item) =>
+  String(item?.ten || item?.tenViet || item?.tenAnh || '').trim();
+
+/** Tra cứu đúng mã — dùng cho tem QR (một request). */
+export const lookupHanghoaByCode = async (q, params = {}) => {
+  const code = String(q || '').trim();
+  const { data } = await api.get('/hanghoa/lookup', {
+    params: { q: code, ...params },
+    skipAuthRedirect: true,
+  });
+  return data;
+};
+
 export const getHanghoa = async (id, params = {}) => {
   const { data } = await api.get(`/hanghoa/${encodeURIComponent(id)}`, {
     params,
