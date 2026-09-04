@@ -51,6 +51,7 @@ const MODULE_LABELS = {
   team: 'Tổ',
   document_image: 'Tải ảnh',
   xuat_kho: 'Xuất kho',
+  label: 'In tem',
 };
 
 const ACTION_LABELS = {
@@ -70,6 +71,8 @@ const ACTION_LABELS = {
   add_member: 'Thêm thành viên',
   remove_member: 'Xóa thành viên',
   xuat_kho: 'Xuất kho',
+  print: 'In tem',
+  export_pdf: 'Xuất PDF tem',
 };
 
 const moduleColor = {
@@ -83,6 +86,7 @@ const moduleColor = {
   team: 'info',
   document_image: 'secondary',
   xuat_kho: 'warning',
+  label: 'primary',
 };
 
 const formatDateTime = (value) => {

@@ -91,6 +91,8 @@ export const removeManualJobFromWorker = (workerId, jobId) =>
 export const getOperationLogs = (params, config = {}) =>
   api.get('/audit-logs', { ...config, params });
 
+export const logQrLabelPrint = (payload) => api.post('/labels/print', payload);
+
 export const getPayrollSettings = () => api.get('/payroll/settings');
 export const updatePayrollSettings = (payload) => api.put('/payroll/settings', payload);
 export const getMonthlyPayroll = (year, month) =>

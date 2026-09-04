@@ -235,8 +235,7 @@ const WorkerRevenueChart = () => {
       setLoading(true);
       const res = await getWorkerRevenueChart(from, to);
       setData(Array.isArray(res.data?.data) ? res.data.data : []);
-    } catch (error) {
-      console.error('Lỗi lấy biểu đồ doanh thu:', error);
+    } catch {
       setData([]);
     } finally {
       setLoading(false);
@@ -248,8 +247,7 @@ const WorkerRevenueChart = () => {
       setWeeklyLoading(true);
       const res = await getWorkerWeeklyRevenueSummary(selectedDate);
       setWeeklySummary(res.data || null);
-    } catch (error) {
-      console.error('Lỗi tổng kết tuần:', error);
+    } catch {
       setWeeklySummary(null);
     } finally {
       setWeeklyLoading(false);

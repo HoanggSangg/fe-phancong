@@ -103,7 +103,7 @@ const LocationManager = () => {
       const res = await getAllLocations();
       setLocations(res.data || []);
     } catch (err) {
-      console.error('Lỗi khi tải địa điểm:', err);
+      toast.error(err.response?.data?.message || 'Không tải được danh sách địa điểm');
     }
   };
 
@@ -127,7 +127,7 @@ const LocationManager = () => {
       setNewName('');
       fetchLocations();
     } catch (err) {
-      console.error('Lỗi khi tạo địa điểm:', err);
+      toast.error(err.response?.data?.message || 'Không tạo được địa điểm');
     } finally {
       setLoading(false);
     }
@@ -145,7 +145,7 @@ const LocationManager = () => {
       setEditOpen(false);
       fetchLocations();
     } catch (err) {
-      console.error('Lỗi khi cập nhật địa điểm:', err);
+      toast.error(err.response?.data?.message || 'Không cập nhật được địa điểm');
     }
   };
 
@@ -174,7 +174,7 @@ const LocationManager = () => {
       await deleteLocation(id);
       fetchLocations();
     } catch (err) {
-      console.error('Lỗi khi xóa địa điểm:', err);
+      toast.error(err.response?.data?.message || 'Không xóa được địa điểm');
     }
   };
 

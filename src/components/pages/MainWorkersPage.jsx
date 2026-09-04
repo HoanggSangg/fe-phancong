@@ -167,7 +167,7 @@ const WorkersPage = () => {
     const res = await getAllWorkers();
     setWorkers(res.data.workers || res.data || []);
   } catch (error) {
-    console.error('Lỗi khi lấy danh sách thợ:', error);
+    toast.error(error.response?.data?.message || 'Không tải được danh sách thợ');
   }
 };
 
@@ -200,7 +200,7 @@ const WorkersPage = () => {
       await deleteWorker(id);
       fetchWorkers();
     } catch (error) {
-      console.error('Lỗi khi xoá thợ:', error);
+      toast.error(error.response?.data?.message || 'Xoá thợ thất bại');
     }
   };
 
@@ -239,8 +239,7 @@ const WorkersPage = () => {
         avatarFile: compressedFile,
         avatarPreview: URL.createObjectURL(compressedFile),
       }));
-    } catch (error) {
-      console.error('Lỗi nén ảnh:', error);
+    } catch {
       toast.error('Không thể xử lý ảnh. Vui lòng thử ảnh khác.');
     }
   };
@@ -270,7 +269,6 @@ const WorkersPage = () => {
       setEditOpen(false);
       fetchWorkers();
     } catch (error) {
-      console.error('Lỗi khi cập nhật thợ:', error);
       toast.error(error.response?.data?.message || 'Lỗi khi cập nhật thợ');
     } finally {
       setEditSaving(false);
@@ -288,7 +286,6 @@ const WorkersPage = () => {
         )
       );
     } catch (error) {
-      console.error('Lỗi khi cập nhật trạng thái tính doanh thu:', error);
       toast.error(error.response?.data?.message || 'Không thể cập nhật trạng thái tính doanh thu');
     } finally {
       setTogglingRevenueId(null);
@@ -360,7 +357,6 @@ const WorkersPage = () => {
       toast.success(res.data.message || `Đã import ${parsedWorkers.length} thợ`);
       await fetchWorkers();
     } catch (err) {
-      console.error('Lỗi import Excel:', err);
       toast.error(err.response?.data?.message || err.message || 'Import Excel thất bại');
     } finally {
       setImporting(false);

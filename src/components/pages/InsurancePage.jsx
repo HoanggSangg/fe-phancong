@@ -441,8 +441,7 @@ const InsurancePage = () => {
         },
         () => {},
       );
-    } catch (err) {
-      console.error(err);
+    } catch {
       scannerRef.current = null;
       setIsScanningQr(false);
       toast.error('Không mở được camera quét QR.');

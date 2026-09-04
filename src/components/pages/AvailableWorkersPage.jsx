@@ -107,8 +107,8 @@ const AvailableWorkersPage = () => {
       const res = await getAvailableWorkers();
       setWorkers(res.data.workers || res.data || []);
       setLastUpdated(new Date());
-    } catch (err) {
-      console.error('Lỗi khi lấy danh sách thợ rảnh:', err);
+    } catch {
+      // ignore
     } finally {
       if (!silent) setLoading(false);
     }

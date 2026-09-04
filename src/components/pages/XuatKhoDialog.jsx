@@ -23,7 +23,7 @@ import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import { useToast } from '../../context/ToastContext';
 import { ACCESS_HINT } from '../../constants/accessUrls';
 import { useIsMobile } from '../../hooks/useIsMobile';
-import { commitXuatKho, getXuatKhoLichSu, lookupHanghoa } from '../../utils/xuatKhoApi';
+import { commitXuatKho, getXuatKhoLichSu, lookupHanghoaByCode } from '../../utils/xuatKhoApi';
 
 const SCANNER_ID = 'xuat-kho-hanghoa-reader';
 
@@ -70,6 +70,18 @@ const fmtQty = (value) => {
   if (!Number.isFinite(n)) return '0';
   if (Number.isInteger(n)) return String(n);
   return String(Math.round(n * 1000) / 1000);
+};
+
+const normHanghoa = (value) => String(value || '').trim().toUpperCase().replace(/\s+/g, '');
+
+const rowMatchesHanghoa = (row, item, scanned) => {
+  const scannedNorm = normHanghoa(scanned);
+  const rowMa = normHanghoa(row?.ma);
+  const rowKhoa = normHanghoa(row?.khoa);
+  if (item?.khoa && row?.khoa && String(row.khoa) === String(item.khoa)) return true;
+  if (item?.ma && rowMa && rowMa === normHanghoa(item.ma)) return true;
+  if (scannedNorm && (rowMa === scannedNorm || rowKhoa === scannedNorm)) return true;
+  return false;
 };
 
 const QtyStepper = ({ value, min = 1, max, disabled, onChange }) => {
@@ -130,8 +142,10 @@ const XuatKhoDialog = ({
   const toast = useToast();
   const isMobile = useIsMobile();
   const scannerRef = useRef(null);
-  const handlingRef = useRef(false);
-  const lookingRef = useRef(false);
+  const lookingCodesRef = useRef(new Set());
+  const pendingByCodeRef = useRef(new Map());
+  const cartRef = useRef([]);
+  const cameraHoldRef = useRef({ code: '', lastSeen: 0 });
   const inputRef = useRef(null);
 
   const [manualCode, setManualCode] = useState('');
@@ -144,6 +158,10 @@ const XuatKhoDialog = ({
   const [historyLoading, setHistoryLoading] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
+
+  useEffect(() => {
+    cartRef.current = cart;
+  }, [cart]);
 
   const stopScanner = useCallback(async () => {
     const scanner = scannerRef.current;
@@ -174,8 +192,10 @@ const XuatKhoDialog = ({
     setHistorySummary([]);
     setHistoryOpen(false);
     setHistoryLoading(false);
-    handlingRef.current = false;
-    lookingRef.current = false;
+    cartRef.current = [];
+    lookingCodesRef.current.clear();
+    pendingByCodeRef.current.clear();
+    cameraHoldRef.current = { code: '', lastSeen: 0 };
   }, []);
 
   const loadHistory = useCallback(async () => {
@@ -217,66 +237,116 @@ const XuatKhoDialog = ({
     stopScanner();
   }, [stopScanner]);
 
+  useEffect(() => {
+    if (!isScanning) {
+      cameraHoldRef.current = { code: '', lastSeen: 0 };
+      return undefined;
+    }
+    const timer = window.setInterval(() => {
+      const hold = cameraHoldRef.current;
+      if (hold.code && Date.now() - hold.lastSeen > 450) {
+        hold.code = '';
+      }
+    }, 150);
+    return () => window.clearInterval(timer);
+  }, [isScanning]);
+
+  const applyCartQty = useCallback((item, scanned, addQty) => {
+    const qty = Math.max(1, Number(addQty) || 1);
+    const prev = cartRef.current;
+    const idx = prev.findIndex((row) => rowMatchesHanghoa(row, item, scanned));
+    if (idx >= 0) {
+      const nextQty = Number(prev[idx].soLuong) + qty;
+      const next = prev.map((row, index) => (
+        index === idx
+          ? { ...row, soLuong: nextQty, tonHienTai: item.tonHienTai ?? row.tonHienTai }
+          : row
+      ));
+      cartRef.current = next;
+      setCart(next);
+      return { mode: 'inc', nextQty, label: next[idx].ma || next[idx].khoa };
+    }
+    const next = [...prev, {
+      khoa: item.khoa,
+      ma: item.ma,
+      ten: item.ten,
+      donViTinh: item.donViTinh,
+      tonHienTai: item.tonHienTai,
+      quayKe: item.quayKe,
+      soLuong: qty,
+    }];
+    cartRef.current = next;
+    setCart(next);
+    return { mode: 'add', nextQty: qty, label: item.ten || item.ma || item.khoa };
+  }, []);
+
   const addHanghoa = useCallback(async (rawCode) => {
     const code = extractHanghoaCode(rawCode);
     if (!code) {
       toast.error('Chưa có mã hàng hóa.');
       return false;
     }
-    if (lookingRef.current || submitting) return false;
+    if (submitting) return false;
 
-    lookingRef.current = true;
+    const codeKey = normHanghoa(code);
+    const existing = cartRef.current.find((row) => rowMatchesHanghoa(row, null, code));
+    if (existing) {
+      const result = applyCartQty(existing, code, 1);
+      toast.success(`+1 ${result.label} → ${fmtQty(result.nextQty)}`);
+      setManualCode('');
+      setNotice(null);
+      return true;
+    }
+
+    if (lookingCodesRef.current.has(codeKey)) {
+      pendingByCodeRef.current.set(codeKey, (pendingByCodeRef.current.get(codeKey) || 0) + 1);
+      setManualCode('');
+      return true;
+    }
+
+    lookingCodesRef.current.add(codeKey);
     setLooking(true);
     setNotice(null);
     try {
-      const item = await lookupHanghoa(code);
+      const item = await lookupHanghoaByCode(code);
       if (!item?.khoa) {
         toast.error(`Không đúng mã hàng hóa '${code}'.`);
         return false;
       }
 
-      const existing = cart.find((row) => row.khoa === item.khoa);
-      if (existing) {
-        const nextQty = Number(existing.soLuong) + 1;
-        setCart((prev) => prev.map((row) =>
-          (row.khoa === item.khoa ? { ...row, soLuong: nextQty, tonHienTai: item.tonHienTai } : row),
-        ));
-        toast.success(`+1 ${item.ma || item.khoa} → ${fmtQty(nextQty)}`);
+      const extra = pendingByCodeRef.current.get(codeKey) || 0;
+      pendingByCodeRef.current.delete(codeKey);
+      const result = applyCartQty(item, code, 1 + extra);
+      if (result.mode === 'inc') {
+        toast.success(`+${fmtQty(1 + extra)} ${result.label} → ${fmtQty(result.nextQty)}`);
+      } else if (result.nextQty > 1) {
+        toast.success(`Đã thêm ${fmtQty(result.nextQty)} × ${result.label}`);
       } else {
-        setCart((prev) => [...prev, {
-          khoa: item.khoa,
-          ma: item.ma,
-          ten: item.ten,
-          donViTinh: item.donViTinh,
-          tonHienTai: item.tonHienTai,
-          quayKe: item.quayKe,
-          soLuong: 1,
-        }]);
-        toast.success(`Đã thêm: ${item.ten || item.ma}`);
+        toast.success(`Đã thêm: ${result.label}`);
       }
       setManualCode('');
       return true;
     } catch (err) {
+      pendingByCodeRef.current.delete(codeKey);
       const message = err?.response?.data?.message || err?.message || `Không đúng mã hàng hóa '${code}'.`;
       setNotice({ severity: 'error', message });
       toast.error(message);
       return false;
     } finally {
-      lookingRef.current = false;
-      setLooking(false);
+      lookingCodesRef.current.delete(codeKey);
+      setLooking(lookingCodesRef.current.size > 0);
     }
-  }, [cart, submitting, toast]);
+  }, [applyCartQty, submitting, toast]);
 
   const handleScanDecoded = useCallback(async (decodedText) => {
-    if (handlingRef.current) return;
-    handlingRef.current = true;
-    try {
-      await addHanghoa(decodedText);
-    } finally {
-      window.setTimeout(() => {
-        handlingRef.current = false;
-      }, 700);
-    }
+    const code = extractHanghoaCode(decodedText);
+    if (!code) return;
+    const codeKey = normHanghoa(code);
+    const hold = cameraHoldRef.current;
+    hold.lastSeen = Date.now();
+    if (hold.code === codeKey) return;
+    hold.code = codeKey;
+    await addHanghoa(decodedText);
   }, [addHanghoa]);
 
   const startScanner = useCallback(async () => {
@@ -313,8 +383,7 @@ const XuatKhoDialog = ({
         },
         () => {},
       );
-    } catch (error) {
-      console.error(error);
+    } catch {
       scannerRef.current = null;
       setIsScanning(false);
       toast.error('Không mở được camera để quét mã hàng hóa.');
@@ -458,7 +527,7 @@ const XuatKhoDialog = ({
             <Button
               variant="contained"
               onClick={startScanner}
-              disabled={isStarting || looking || submitting}
+              disabled={isStarting || submitting}
               sx={{ minWidth: 48, height: 44, px: 1.25 }}
               aria-label="Quét mã"
             >
@@ -489,7 +558,7 @@ const XuatKhoDialog = ({
             }}
             fullWidth
             autoComplete="off"
-            disabled={looking || submitting}
+            disabled={submitting}
             sx={{
               '& .MuiInputBase-root': { height: 44, fontSize: 16 },
             }}
@@ -497,7 +566,7 @@ const XuatKhoDialog = ({
           <Button
             variant="outlined"
             onClick={handleLookupManual}
-            disabled={looking || submitting || !manualCode.trim()}
+            disabled={submitting || !manualCode.trim()}
             sx={{ height: 44, minWidth: 64, px: 1.25, whiteSpace: 'nowrap' }}
           >
             {looking ? '…' : 'Tìm'}
@@ -524,7 +593,7 @@ const XuatKhoDialog = ({
         />
         {isScanning && (
           <Typography variant="caption" color="text.secondary" sx={{ mt: -0.5 }}>
-            Giữ camera, quét lần lượt từng mã.
+            Giữ camera, quét lần lượt từng mã. Quét trùng thì cộng số lượng.
           </Typography>
         )}
 
@@ -537,7 +606,7 @@ const XuatKhoDialog = ({
         <Box sx={{ flex: 1, minHeight: 0 }}>
           {cart.length === 0 ? (
             <Typography variant="body2" color="text.secondary" sx={{ py: 1 }}>
-              Quét mã để thêm, rồi xuất.
+              Quét mã để thêm. Quét lại cùng mã để cộng số lượng, rồi xuất.
             </Typography>
           ) : (
             <Stack spacing={0.75}>

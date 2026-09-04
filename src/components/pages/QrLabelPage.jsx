@@ -25,10 +25,11 @@ import {
   renderQrLabelCanvas,
 } from '../../utils/qrLabel';
 import { hanghoaNameOf, lookupHanghoaByCode } from '../../utils/xuatKhoApi';
+import { logQrLabelPrint } from '../apis';
 
 const QrLabelPage = () => {
   const toast = useToast();
-  const [rawCodes, setRawCodes] = useState('0005-0005099');
+  const [rawCodes, setRawCodes] = useState('');
   const [copies, setCopies] = useState(1);
   const [previewUrl, setPreviewUrl] = useState('');
   const [rendering, setRendering] = useState(false);
@@ -141,6 +142,19 @@ const QrLabelPage = () => {
     name: products[code]?.name || '',
   })));
 
+  const recordLabelPrint = async (method, pages) => {
+    try {
+      await logQrLabelPrint({
+        method,
+        widthMm: LABEL_W_MM,
+        heightMm: LABEL_H_MM,
+        items: pages,
+      });
+    } catch {
+      // in tem vẫn thành công — không chặn nếu ghi lịch sử lỗi
+    }
+  };
+
   const handleExport = async () => {
     if (!codes.length) {
       toast.error('Nhập mã hàng hóa để xuất PDF.');
@@ -148,7 +162,9 @@ const QrLabelPage = () => {
     }
     setExporting(true);
     try {
-      const fileName = await exportQrLabelsPdf(labelPages());
+      const pages = labelPages();
+      const fileName = await exportQrLabelsPdf(pages);
+      await recordLabelPrint('pdf', pages);
       toast.success(`Đã tải ${fileName}`);
     } catch (err) {
       toast.error(err?.message || 'Không xuất được PDF.');
@@ -164,7 +180,9 @@ const QrLabelPage = () => {
     }
     setPrinting(true);
     try {
-      await printQrLabels(labelPages());
+      const pages = labelPages();
+      await printQrLabels(pages);
+      await recordLabelPrint('print', pages);
     } catch (err) {
       toast.error(err?.message || 'Không in được tem.');
     } finally {

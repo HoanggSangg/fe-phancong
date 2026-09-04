@@ -71,7 +71,6 @@ const WeeklySummaryForm = ({ variant = 'praise' }) => {
         setWorker(res.data[config.workerKey]);
         setWeek(res.data.week);
       } catch (error) {
-        console.error(`Lỗi lấy dữ liệu ${config.errorLabel}:`, error);
         toast.error(error.response?.data?.message || `Lỗi lấy dữ liệu ${config.errorLabel}`);
       } finally {
         setLoading(false);

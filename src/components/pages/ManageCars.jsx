@@ -397,8 +397,7 @@ const ManageCars = () => {
     try {
       const res = await getCarWorkerHistory(car._id);
       setHistoryData(res.data.data);
-    } catch (err) {
-      console.error('Lỗi khi tải lịch sử thợ:', err);
+    } catch {
       setHistoryError('Lỗi khi tải lịch sử thay đổi thợ');
     } finally {
       setHistoryLoading(false);
@@ -437,8 +436,7 @@ const ManageCars = () => {
       });
 
       setEditOpen(true);
-    } catch (err) {
-      console.error('Lỗi khi tải chi tiết xe:', err);
+    } catch {
       toast.fromSnackbar({ open: true, message: 'Không tải được chi tiết xe', severity: 'error' });
     }
   };
@@ -482,7 +480,6 @@ const ManageCars = () => {
         severity: 'success',
       });
     } catch (err) {
-      console.error('Lỗi khi tải lại dữ liệu API:', err);
       toast.fromSnackbar({
         open: true,
         message: err.response?.data?.message || 'Không tải được dữ liệu từ API',
@@ -516,8 +513,7 @@ const ManageCars = () => {
       invalidateHomeDashboard();
       invalidateWorkerJobCaches();
       toast.fromSnackbar({ open: true, message: 'Cập nhật xe thành công', severity: 'success' });
-    } catch (err) {
-      console.error('Lỗi khi cập nhật xe:', err);
+    } catch {
       toast.fromSnackbar({ open: true, message: 'Cập nhật xe thất bại', severity: 'error' });
     }
   };
@@ -534,8 +530,7 @@ const ManageCars = () => {
           invalidateWorkerJobCaches();
           toast.fromSnackbar({ open: true, message: 'Xoá xe thành công', severity: 'success' });
         })
-        .catch((err) => {
-          console.error('Lỗi khi xoá xe:', err);
+        .catch(() => {
           toast.fromSnackbar({ open: true, message: 'Xoá xe thất bại', severity: 'error' });
         });
     }
@@ -551,8 +546,7 @@ const ManageCars = () => {
         setStatusUpdateData({ car: fullCar, newStatus, needsWorker: true });
         setSelectedNewWorker('');
         setStatusUpdateOpen(true);
-      } catch (err) {
-        console.error('Lỗi khi tải chi tiết xe:', err);
+      } catch {
         toast.fromSnackbar({ open: true, message: 'Không tải được chi tiết xe', severity: 'error' });
       }
     } else {
@@ -580,7 +574,6 @@ const ManageCars = () => {
         severity: 'success',
       });
     } catch (err) {
-      console.error('Lỗi khi cập nhật trạng thái xe:', err);
       toast.fromSnackbar({
         open: true,
         message: err.response?.data?.message || 'Cập nhật trạng thái thất bại',

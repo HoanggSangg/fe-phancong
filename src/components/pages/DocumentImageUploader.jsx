@@ -155,7 +155,6 @@ const DocumentImageUploader = ({
       const list = await getDocumentFiles(doc);
       setFiles(list);
     } catch (error) {
-      console.error(error);
       toast.error(error?.response?.data?.message || 'Không tải được danh sách ảnh.');
       setFiles([]);
     } finally {

@@ -55,7 +55,6 @@ const useRepairItems = ({ allWorkers, ensureAllWorkers, setSnackbar }) => {
       initialManualCountRef.current = mappedItems.filter((item) => item.isManual).length;
       setRepairItems(mappedItems);
     } catch (err) {
-      console.error('Lỗi khi tải chi tiết sửa chữa:', err);
       setSnackbar({
         open: true,
         message: err.response?.data?.message || 'Không tải được chi tiết sửa chữa',
@@ -238,7 +237,6 @@ const useRepairItems = ({ allWorkers, ensureAllWorkers, setSnackbar }) => {
         severity: 'success',
       });
     } catch (err) {
-      console.error('Lỗi khi lưu phân công:', err);
       setSnackbar({
         open: true,
         message: err.response?.data?.message || 'Lưu phân công thất bại',

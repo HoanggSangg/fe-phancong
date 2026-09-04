@@ -54,7 +54,6 @@ const AddWorkerForm = ({ onSuccess, embedded = false }) => {
       setAvatarFile(null);
       setAvatarPreview('');
     } catch (err) {
-      console.error('Lỗi khi tạo thợ:', err);
       toast.error(err.response?.data?.message || 'Lỗi khi tạo thợ');
     } finally {
       setLoading(false);

@@ -92,7 +92,7 @@ const SupervisorsPage = () => {
       const res = await getAllSupervisors();
       setSupervisors(res.data || []);
     } catch (error) {
-      console.error('Lỗi khi lấy danh sách giám sát:', error);
+      toast.error(error.response?.data?.message || 'Không tải được danh sách giám sát');
     }
   };
 
@@ -131,7 +131,7 @@ const SupervisorsPage = () => {
       await deleteSupervisor(id);
       fetchSupervisors();
     } catch (error) {
-      console.error('Lỗi khi xoá:', error);
+      toast.error(error.response?.data?.message || 'Xoá giám sát thất bại');
     }
   };
 
@@ -146,7 +146,7 @@ const SupervisorsPage = () => {
       setEditOpen(false);
       fetchSupervisors();
     } catch (error) {
-      console.error('Lỗi khi cập nhật:', error);
+      toast.error(error.response?.data?.message || 'Cập nhật giám sát thất bại');
     }
   };
 
@@ -161,7 +161,7 @@ const SupervisorsPage = () => {
       setNewSupervisor({ name: '' });
       fetchSupervisors();
     } catch (error) {
-      console.error('Lỗi khi thêm giám sát:', error);
+      toast.error(error.response?.data?.message || 'Thêm giám sát thất bại');
     }
   };
 

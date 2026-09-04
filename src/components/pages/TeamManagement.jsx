@@ -65,8 +65,7 @@ const TeamManagement = () => {
         const updatedTeam = data.find((team) => team._id === selectedTeam._id);
         setSelectedTeam(updatedTeam || null);
       }
-    } catch (error) {
-      console.error(error);
+    } catch {
       toast.error('Lỗi khi lấy danh sách tổ');
     }
   };
@@ -77,8 +76,7 @@ const TeamManagement = () => {
       const data = getDataArray(res);
       setWorkers(data);
       workersLoadedRef.current = true;
-    } catch (error) {
-      console.error(error);
+    } catch {
       toast.error('Lỗi khi lấy danh sách thợ');
     }
   }, [toast]);
@@ -93,8 +91,7 @@ const TeamManagement = () => {
       const res = await getTeamById(teamId);
       const data = res.data?.data || res.data;
       setSelectedTeam(data);
-    } catch (error) {
-      console.error(error);
+    } catch {
       toast.error('Lỗi khi lấy chi tiết tổ');
     }
   };
@@ -135,7 +132,6 @@ const TeamManagement = () => {
       resetForm();
       await fetchTeams();
     } catch (error) {
-      console.error(error);
       toast.error(error.response?.data?.message || 'Lỗi khi lưu tổ');
     } finally {
       setLoading(false);
@@ -166,7 +162,6 @@ const TeamManagement = () => {
 
       toast.success('Xóa tổ thành công');
     } catch (error) {
-      console.error(error);
       toast.error(error.response?.data?.message || 'Lỗi khi xóa tổ');
     }
   };
@@ -214,7 +209,6 @@ const TeamManagement = () => {
           : 'Thêm thợ vào tổ thành công'
       );
     } catch (error) {
-      console.error(error);
       toast.error(error.response?.data?.message || 'Lỗi khi thêm thợ vào tổ');
     }
   };
@@ -229,7 +223,6 @@ const TeamManagement = () => {
         // soft feedback
       }
     } catch (error) {
-      console.error(error);
       toast.error(error.response?.data?.message || 'Lỗi khi đổi chức vụ');
     }
   };
@@ -250,7 +243,6 @@ const TeamManagement = () => {
 
       toast.success('Xóa thợ khỏi tổ thành công');
     } catch (error) {
-      console.error(error);
       toast.error(error.response?.data?.message || 'Lỗi khi xóa thợ khỏi tổ');
     }
   };

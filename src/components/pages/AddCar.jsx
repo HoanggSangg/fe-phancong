@@ -156,8 +156,8 @@ const AddCar = ({ onSuccess }) => {
         const supervisorRes = await getAllSupervisors();
         if (cancelled) return;
         setSupervisors(supervisorRes.data || []);
-      } catch (error) {
-        console.error('Lỗi khi lấy dữ liệu form:', error);
+      } catch {
+        // ignore
       }
     };
 
@@ -178,8 +178,7 @@ const AddCar = ({ onSuccess }) => {
       setAvailableWorkers(data);
       setWorkersLoaded(true);
       return data;
-    } catch (error) {
-      console.error('Lỗi khi lấy thợ rảnh:', error);
+    } catch {
       return [];
     } finally {
       workersLoadingRef.current = false;
@@ -230,8 +229,7 @@ const AddCar = ({ onSuccess }) => {
       }));
 
       ensureAvailableWorkers();
-    } catch (err) {
-      console.error(err);
+    } catch {
       setLookupError(
         searchType === 'ro'
           ? cleanKeyword.startsWith('TT')
@@ -328,7 +326,6 @@ const AddCar = ({ onSuccess }) => {
 
       setIsScanningQr(true);
     } catch (err) {
-      console.error(err);
       scannerRef.current = null;
       setIsScanningQr(false);
       setCameraError(
@@ -463,7 +460,6 @@ const AddCar = ({ onSuccess }) => {
       const errorMsg =
         error.response?.data?.message || 'Đã xảy ra lỗi khi thêm xe';
       toast.error(errorMsg);
-      console.error('Lỗi khi thêm xe:', error);
     }
   };
 

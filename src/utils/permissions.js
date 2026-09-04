@@ -28,9 +28,6 @@ export const ROLE_DESCRIPTIONS = {
 /** Role dùng trong form tạo/sửa tài khoản */
 export const ASSIGNABLE_ROLES = ['admin', 'giam_sat', 'ktv', 'lai_xe', 'kho', 'cvdv'];
 
-/** Role thấy mục Tải ảnh trên menu (trang /upload-image cũng mở công khai không cần đăng nhập) */
-export const UPLOAD_IMAGE_ROLES = ['admin', 'giam_sat', 'ktv', 'lai_xe', 'kho', 'cvdv'];
-
 /** Role xem/hành xử như KTV (lọc xe của mình khi liên kết thợ) */
 export const KTV_LIKE_ROLES = ['ktv', 'lai_xe', 'kho'];
 

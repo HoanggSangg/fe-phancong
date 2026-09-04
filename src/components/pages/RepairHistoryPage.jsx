@@ -158,7 +158,6 @@ const RepairHistoryPage = () => {
         revenueBase,
       });
     } catch (err) {
-      console.error(err);
       toast.error(err.response?.data?.message || err.message || 'Xuất Excel thất bại');
     } finally {
       setExporting(false);

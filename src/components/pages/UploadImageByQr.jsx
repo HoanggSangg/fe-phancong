@@ -21,11 +21,7 @@ import PageLayout from '../common/PageLayout';
 import PageHeader from '../common/PageHeader';
 import DocumentImageUploader from './DocumentImageUploader';
 import XuatKhoDialog from './XuatKhoDialog';
-import {
-  buildUploadUrl,
-  extractSoChungTu,
-  isValidSoChungTu,
-} from '../../utils/uploadUrl';
+import { extractSoChungTu, isValidSoChungTu } from '../../utils/uploadUrl';
 import { ACCESS_HINT } from '../../constants/accessUrls';
 import { getDocumentImageContext } from '../../utils/documentImageApi';
 import { decodeQrFromImageFile } from '../../utils/decodeQrFromImage';
@@ -33,8 +29,6 @@ import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
 import { hasPermission } from '../../utils/permissions';
 import { LAYOUT } from '../../constants/layout';
-
-export { buildUploadUrl, extractSoChungTu, isValidSoChungTu };
 
 const SCANNER_ELEMENT_ID = 'qr-live-reader';
 
@@ -105,8 +99,7 @@ const UploadImageByQr = () => {
     try {
       const data = await getDocumentImageContext(soChungTu);
       setCarInfo(data || null);
-    } catch (error) {
-      console.error(error);
+    } catch {
       setCarInfo({
         baseTt: soChungTu,
         roNumber: soChungTu,
@@ -206,7 +199,6 @@ const UploadImageByQr = () => {
 
       setIsScanning(true);
     } catch (error) {
-      console.error('Không mở được camera:', error);
       scannerRef.current = null;
       setIsScanning(false);
 
@@ -261,7 +253,6 @@ const UploadImageByQr = () => {
       const { soChungTu } = await decodeQrFromImageFile(file);
       await openSoChungTu(soChungTu, { announce: true, syncQuery: true });
     } catch (error) {
-      console.error(error);
       toast.error(error?.message || 'Không đọc được QR từ ảnh.');
     } finally {
       setIsDecodingImage(false);

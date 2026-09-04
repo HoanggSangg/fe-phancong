@@ -1,16 +1,9 @@
 /** Trang tải ảnh ngoài (giữ HTTP như hệ thống cũ). */
 export const DEFAULT_UPLOAD_PAGE_URL = 'http://api2026.otobathanh.vn/upload.html';
-export const DEFAULT_PUBLIC_IMAGE_BASE = 'http://api2026.otobathanh.vn/';
 
 export const getUploadBaseUrl = () => {
   const fromEnv = String(import.meta.env.VITE_UPLOAD_PAGE_URL || '').trim();
   return fromEnv || DEFAULT_UPLOAD_PAGE_URL;
-};
-
-export const getPublicImageBase = () => {
-  const fromEnv = String(import.meta.env.VITE_DOCUMENT_IMAGE_PUBLIC_BASE || '').trim();
-  const base = fromEnv || DEFAULT_PUBLIC_IMAGE_BASE;
-  return base.replace(/\/?$/, '/');
 };
 
 const matchSoChungTu = (text) => {
