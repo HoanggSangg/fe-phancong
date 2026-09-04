@@ -206,7 +206,7 @@ export const PERMISSION_CATALOG = [
   },
   {
     key: 'labels.qr',
-    label: 'Tạo tem QR',
+    label: 'Tem QR',
     group: 'Hệ thống',
     path: '/qr-labels',
     adminPath: '/admin/qr-labels',

@@ -92,6 +92,7 @@ export const getOperationLogs = (params, config = {}) =>
   api.get('/audit-logs', { ...config, params });
 
 export const logQrLabelPrint = (payload) => api.post('/labels/print', payload);
+export const getQrLabelHistory = (params) => api.get('/labels/history', { params });
 
 export const getPayrollSettings = () => api.get('/payroll/settings');
 export const updatePayrollSettings = (payload) => api.put('/payroll/settings', payload);

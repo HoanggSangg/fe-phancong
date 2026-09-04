@@ -6,9 +6,12 @@ import {
   CircularProgress,
   Paper,
   Stack,
+  Tab,
+  Tabs,
   TextField,
   Typography,
 } from '@mui/material';
+import HistoryIcon from '@mui/icons-material/History';
 import QrCode2Icon from '@mui/icons-material/QrCode2';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import PrintIcon from '@mui/icons-material/Print';
@@ -26,9 +29,11 @@ import {
 } from '../../utils/qrLabel';
 import { hanghoaNameOf, lookupHanghoaByCode } from '../../utils/xuatKhoApi';
 import { logQrLabelPrint } from '../apis';
+import QrLabelHistory from './QrLabelHistory';
 
 const QrLabelPage = () => {
   const toast = useToast();
+  const [tab, setTab] = useState('create');
   const [rawCodes, setRawCodes] = useState('');
   const [copies, setCopies] = useState(1);
   const [previewUrl, setPreviewUrl] = useState('');
@@ -38,6 +43,7 @@ const QrLabelPage = () => {
   const [error, setError] = useState('');
   const [products, setProducts] = useState({});
   const [lookupBusy, setLookupBusy] = useState(false);
+  const [historyTick, setHistoryTick] = useState(0);
   const productCache = useRef(new Map());
 
   const codes = useMemo(() => parseLabelCodes(rawCodes), [rawCodes]);
@@ -46,6 +52,7 @@ const QrLabelPage = () => {
   const pdfCount = Math.max(1, codes.length) * copyCount;
   const previewProduct = products[previewCode];
   const allNamed = codes.length > 0 && codes.every((code) => products[code]?.name);
+  const isCreateTab = tab === 'create';
 
   useEffect(() => {
     let cancelled = false;
@@ -165,6 +172,7 @@ const QrLabelPage = () => {
       const pages = labelPages();
       const fileName = await exportQrLabelsPdf(pages);
       await recordLabelPrint('pdf', pages);
+      setHistoryTick((n) => n + 1);
       toast.success(`Đã tải ${fileName}`);
     } catch (err) {
       toast.error(err?.message || 'Không xuất được PDF.');
@@ -183,6 +191,7 @@ const QrLabelPage = () => {
       const pages = labelPages();
       await printQrLabels(pages);
       await recordLabelPrint('print', pages);
+      setHistoryTick((n) => n + 1);
     } catch (err) {
       toast.error(err?.message || 'Không in được tem.');
     } finally {
@@ -194,9 +203,9 @@ const QrLabelPage = () => {
     <PageLayout maxWidth="medium">
       <PageHeader
         icon={<QrCode2Icon />}
-        title="Tạo tem QR"
-        subtitle={`Tem ${LABEL_W_MM} × ${LABEL_H_MM} mm · mẫu logo Bá Thành`}
-        actions={(
+        title="Tem QR"
+        subtitle={`Tem ${LABEL_W_MM} × ${LABEL_H_MM} mm · in lại tem đã lưu hoặc tạo tem mới`}
+        actions={isCreateTab ? (
           <>
             <Button
               variant="contained"
@@ -215,9 +224,33 @@ const QrLabelPage = () => {
               Xuất PDF{pdfCount > 1 ? ` (${pdfCount} tem)` : ''}
             </Button>
           </>
-        )}
+        ) : null}
       />
 
+      <Tabs
+        value={tab}
+        onChange={(_, next) => setTab(next)}
+        sx={{ mb: 2, borderBottom: 1, borderColor: 'divider' }}
+      >
+        <Tab
+          value="create"
+          icon={<QrCode2Icon />}
+          iconPosition="start"
+          label="Tạo tem"
+        />
+        <Tab
+          value="history"
+          icon={<HistoryIcon />}
+          iconPosition="start"
+          label="Tem đã tạo"
+        />
+      </Tabs>
+
+      {tab === 'history' && (
+        <QrLabelHistory refreshKey={historyTick} />
+      )}
+
+      {tab === 'create' && (
       <Stack spacing={LAYOUT.sectionGap}>
         <Paper variant="outlined" sx={{ p: LAYOUT.paperPadding, borderRadius: 2 }}>
           <Stack spacing={2}>
@@ -312,6 +345,7 @@ const QrLabelPage = () => {
           </Typography>
         </Paper>
       </Stack>
+      )}
     </PageLayout>
   );
 };
