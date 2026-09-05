@@ -58,6 +58,7 @@ const decodeWithHtml5 = async (file) => {
 
 /**
  * Đọc mã QR từ file ảnh (chụp sẵn / chọn từ thư viện).
+ * soChungTu chỉ có khi nội dung là mã TT hợp lệ; mã phụ tùng trả về text thuần.
  * @returns {{ text: string, soChungTu: string }}
  */
 export const decodeQrFromImageFile = async (file) => {
@@ -88,11 +89,8 @@ export const decodeQrFromImageFile = async (file) => {
   }
 
   const soChungTu = extractSoChungTu(text);
-  if (!isValidSoChungTu(soChungTu)) {
-    throw new Error(
-      `Đã đọc QR nhưng không phải số chứng từ TT hợp lệ.\nNội dung: ${String(text).slice(0, 120)}`,
-    );
-  }
-
-  return { text, soChungTu };
+  return {
+    text,
+    soChungTu: isValidSoChungTu(soChungTu) ? soChungTu : '',
+  };
 };

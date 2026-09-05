@@ -14,7 +14,6 @@ import CameraswitchIcon from '@mui/icons-material/Cameraswitch';
 import StopCircleIcon from '@mui/icons-material/StopCircle';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import ImageSearchIcon from '@mui/icons-material/ImageSearch';
-import Inventory2Icon from '@mui/icons-material/Inventory2';
 import { Html5Qrcode } from 'html5-qrcode';
 import { useSearchParams } from 'react-router-dom';
 import PageLayout from '../common/PageLayout';
@@ -22,6 +21,7 @@ import PageHeader from '../common/PageHeader';
 import DocumentImageUploader from './DocumentImageUploader';
 import XuatKhoDialog from './XuatKhoDialog';
 import { extractSoChungTu, isValidSoChungTu } from '../../utils/uploadUrl';
+import { BARCODE_FORMATS, extractHanghoaCode, normHanghoa } from '../../utils/hanghoaScan';
 import { ACCESS_HINT } from '../../constants/accessUrls';
 import { getDocumentImageContext } from '../../utils/documentImageApi';
 import { decodeQrFromImageFile } from '../../utils/decodeQrFromImage';
@@ -47,6 +47,11 @@ const UploadImageByQr = () => {
   const handlingRef = useRef(false);
   const hydratedQueryRef = useRef('');
   const qrImageInputRef = useRef(null);
+  const scannedCodeRef = useRef('');
+  const xuatKhoRef = useRef(null);
+  const cameraHoldRef = useRef({ code: '', lastSeen: 0 });
+  const lastWarnRef = useRef(0);
+  const pendingPartRef = useRef('');
 
   const [manualCode, setManualCode] = useState('');
   const [scannedCode, setScannedCode] = useState('');
@@ -56,9 +61,12 @@ const UploadImageByQr = () => {
   const [isStarting, setIsStarting] = useState(false);
   const [isDecodingImage, setIsDecodingImage] = useState(false);
   const [cameraError, setCameraError] = useState('');
-  const [xuatKhoOpen, setXuatKhoOpen] = useState(false);
 
   const allowDelete = Boolean(isAuthenticated && hasPermission(user, 'cars.upload-image'));
+
+  useEffect(() => {
+    scannedCodeRef.current = scannedCode;
+  }, [scannedCode]);
 
   const stopScanner = useCallback(async () => {
     const scanner = scannerRef.current;
@@ -88,6 +96,20 @@ const UploadImageByQr = () => {
   useEffect(() => () => {
     stopScanner();
   }, [stopScanner]);
+
+  useEffect(() => {
+    if (!isScanning) {
+      cameraHoldRef.current = { code: '', lastSeen: 0 };
+      return undefined;
+    }
+    const timer = window.setInterval(() => {
+      const hold = cameraHoldRef.current;
+      if (hold.code && Date.now() - hold.lastSeen > 450) {
+        hold.code = '';
+      }
+    }, 150);
+    return () => window.clearInterval(timer);
+  }, [isScanning]);
 
   const loadCarInfo = useCallback(async (soChungTu) => {
     if (!isValidSoChungTu(soChungTu)) {
@@ -119,6 +141,10 @@ const UploadImageByQr = () => {
         return false;
       }
 
+      if (scannedCodeRef.current === soChungTu) {
+        return true;
+      }
+
       setScannedCode(soChungTu);
       setManualCode(soChungTu);
       hydratedQueryRef.current = soChungTu;
@@ -128,14 +154,13 @@ const UploadImageByQr = () => {
       }
 
       if (announce) {
-        toast.success(`Đã mở xe: ${soChungTu}`);
+        toast.success(`Đã mở xe: ${soChungTu}. Quét tiếp mã phụ tùng trên cùng khung này.`);
       }
 
-      await stopScanner();
       await loadCarInfo(soChungTu);
       return true;
     },
-    [loadCarInfo, setSearchParams, stopScanner, toast],
+    [loadCarInfo, setSearchParams, toast],
   );
 
   useEffect(() => {
@@ -146,16 +171,59 @@ const UploadImageByQr = () => {
     openSoChungTu(fromQuery, { announce: false, syncQuery: false });
   }, [openSoChungTu, searchParams]);
 
-  const applySuccess = useCallback(
+  const applyDecoded = useCallback(
     async (qrText) => {
+      const soChungTu = extractSoChungTu(qrText);
+      if (isValidSoChungTu(soChungTu)) {
+        if (handlingRef.current) return false;
+        handlingRef.current = true;
+        try {
+          return await openSoChungTu(qrText, { announce: true, syncQuery: true });
+        } finally {
+          handlingRef.current = false;
+        }
+      }
+
       if (handlingRef.current) return false;
-      handlingRef.current = true;
-      const ok = await openSoChungTu(qrText, { announce: true, syncQuery: true });
-      handlingRef.current = false;
-      return ok;
+
+      if (!scannedCodeRef.current) {
+        if (Date.now() - lastWarnRef.current > 2500) {
+          lastWarnRef.current = Date.now();
+          toast.error('Quét mã xe (TT…) trước, rồi quét mã phụ tùng trên cùng khung này.');
+        }
+        return false;
+      }
+
+      if (!xuatKhoRef.current) {
+        pendingPartRef.current = qrText;
+        return false;
+      }
+
+      return Boolean(await xuatKhoRef.current.addHanghoa(qrText));
     },
-    [openSoChungTu],
+    [openSoChungTu, toast],
   );
+
+  useEffect(() => {
+    const pending = pendingPartRef.current;
+    if (!scannedCode || !pending) return;
+    pendingPartRef.current = '';
+    xuatKhoRef.current?.addHanghoa(pending);
+  }, [scannedCode]);
+
+  const handleScanDecoded = useCallback(async (decodedText) => {
+    const soChungTu = extractSoChungTu(decodedText);
+    const holdKey = isValidSoChungTu(soChungTu)
+      ? soChungTu
+      : normHanghoa(extractHanghoaCode(decodedText));
+    if (!holdKey) return;
+
+    const hold = cameraHoldRef.current;
+    hold.lastSeen = Date.now();
+    if (hold.code === holdKey) return;
+    hold.code = holdKey;
+    await applyDecoded(decodedText);
+  }, [applyDecoded]);
 
   const startScanner = useCallback(async () => {
     if (isStarting || isScanning) return;
@@ -175,22 +243,25 @@ const UploadImageByQr = () => {
     try {
       await stopScanner();
 
-      const scanner = new Html5Qrcode(SCANNER_ELEMENT_ID, { verbose: false });
+      const scanner = new Html5Qrcode(SCANNER_ELEMENT_ID, {
+        verbose: false,
+        formatsToSupport: BARCODE_FORMATS,
+      });
       scannerRef.current = scanner;
 
       await scanner.start(
         { facingMode: 'environment' },
         {
-          fps: 12,
-          qrbox: (viewWidth, viewHeight) => {
-            const edge = Math.min(Math.floor(viewWidth * 0.78), Math.floor(viewHeight * 0.78), 280);
-            return { width: edge, height: edge };
-          },
+          fps: 10,
+          qrbox: (viewWidth, viewHeight) => ({
+            width: Math.min(Math.floor(viewWidth * 0.88), 320),
+            height: Math.min(Math.floor(viewHeight * 0.70), 280),
+          }),
           aspectRatio: 1,
           disableFlip: false,
         },
         async (decodedText) => {
-          await applySuccess(decodedText);
+          await handleScanDecoded(decodedText);
         },
         () => {
           // ignore frame miss
@@ -214,14 +285,13 @@ const UploadImageByQr = () => {
     } finally {
       setIsStarting(false);
     }
-  }, [applySuccess, isScanning, isStarting, stopScanner, toast]);
+  }, [handleScanDecoded, isScanning, isStarting, stopScanner, toast]);
 
   const handleOpenManual = () => {
     openSoChungTu(manualCode, { announce: true, syncQuery: true });
   };
 
   const handleRescan = async () => {
-    setXuatKhoOpen(false);
     setScannedCode('');
     setCarInfo(null);
     hydratedQueryRef.current = '';
@@ -230,7 +300,6 @@ const UploadImageByQr = () => {
   };
 
   const handleClearResult = () => {
-    setXuatKhoOpen(false);
     setScannedCode('');
     setCarInfo(null);
     hydratedQueryRef.current = '';
@@ -249,9 +318,16 @@ const UploadImageByQr = () => {
     setIsDecodingImage(true);
     setCameraError('');
     try {
-      await stopScanner();
-      const { soChungTu } = await decodeQrFromImageFile(file);
-      await openSoChungTu(soChungTu, { announce: true, syncQuery: true });
+      const { text, soChungTu } = await decodeQrFromImageFile(file);
+      if (soChungTu) {
+        await openSoChungTu(soChungTu, { announce: true, syncQuery: true });
+        return;
+      }
+      if (scannedCodeRef.current) {
+        await xuatKhoRef.current?.addHanghoa(text);
+        return;
+      }
+      toast.error('Quét hoặc mở mã xe (TT…) trước, rồi tải ảnh mã phụ tùng.');
     } catch (error) {
       toast.error(error?.message || 'Không đọc được QR từ ảnh.');
     } finally {
@@ -259,12 +335,18 @@ const UploadImageByQr = () => {
     }
   };
 
+  const scannerHint = isStarting
+    ? 'Đang mở camera…'
+    : scannedCode
+      ? `Đã mở xe ${scannedCode}. Quét tiếp mã phụ tùng hoặc mã xe khác.`
+      : 'Đưa mã xe (TT…) hoặc mã phụ tùng vào khung để quét…';
+
   return (
     <PageLayout maxWidth={scannedCode ? 'medium' : 'narrow'}>
       <PageHeader
         icon={<QrCodeScannerIcon />}
         title="Tải ảnh"
-        subtitle="Quét QR bằng camera hoặc tải ảnh chứa QR — không cần đăng nhập."
+        subtitle="Một khung quét cho cả mã xe và mã phụ tùng — không cần mở camera lần hai."
       />
 
       <Stack spacing={LAYOUT.sectionGap}>
@@ -289,26 +371,30 @@ const UploadImageByQr = () => {
           />
 
           {!isScanning && !isStarting && (
-            <Box
+            <Stack
+              direction="row"
+              spacing={1}
+              alignItems="center"
               sx={{
-                py: 3,
-                px: 2,
-                mb: 2,
-                textAlign: 'center',
+                py: 0.75,
+                px: 1.25,
+                mb: 1.5,
                 bgcolor: 'grey.50',
                 borderRadius: 1.5,
                 border: '1px dashed',
                 borderColor: 'grey.300',
               }}
             >
-              <QrCodeScannerIcon sx={{ fontSize: 48, color: 'primary.main', mb: 1 }} />
-              <Typography variant="body2" fontWeight={700} sx={{ mb: 0.5 }}>
-                Quét mã QR trên phiếu sửa chữa
-              </Typography>
-              <Typography variant="caption" color="text.secondary">
-                Dùng camera trực tiếp, hoặc chọn ảnh QR đã chụp sẵn.
-              </Typography>
-            </Box>
+              <QrCodeScannerIcon sx={{ fontSize: 22, color: 'primary.main', flexShrink: 0 }} />
+              <Box sx={{ minWidth: 0 }}>
+                <Typography variant="body2" fontWeight={700} noWrap>
+                  Quét mã xe hoặc mã phụ tùng
+                </Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                  Quét TT… để mở xe, rồi quét tiếp mã phụ tùng trên cùng khung.
+                </Typography>
+              </Box>
+            </Stack>
           )}
 
           {!!cameraError && (
@@ -319,7 +405,7 @@ const UploadImageByQr = () => {
 
           {(isStarting || isScanning) && (
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              {isStarting ? 'Đang mở camera…' : 'Đưa mã QR vào khung để quét…'}
+              {scannerHint}
             </Typography>
           )}
 
@@ -411,15 +497,12 @@ const UploadImageByQr = () => {
         )}
 
         {scannedCode && (
-          <Button
-            variant="contained"
-            startIcon={<Inventory2Icon />}
-            onClick={() => setXuatKhoOpen(true)}
-            fullWidth
-            sx={{ height: 44 }}
-          >
-            Xuất phụ tùng
-          </Button>
+          <XuatKhoDialog
+            ref={xuatKhoRef}
+            khoaBaoGia={scannedCode}
+            plateNumber={carInfo?.plateNumber || ''}
+            roCode={carInfo?.roCode || carInfo?.roNumber || ''}
+          />
         )}
 
         {scannedCode && (
@@ -430,14 +513,6 @@ const UploadImageByQr = () => {
           />
         )}
       </Stack>
-
-      <XuatKhoDialog
-        open={xuatKhoOpen}
-        onClose={() => setXuatKhoOpen(false)}
-        khoaBaoGia={scannedCode}
-        plateNumber={carInfo?.plateNumber || ''}
-        roCode={carInfo?.roCode || carInfo?.roNumber || ''}
-      />
     </PageLayout>
   );
 };

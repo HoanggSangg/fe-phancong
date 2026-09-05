@@ -93,6 +93,8 @@ export const getOperationLogs = (params, config = {}) =>
 
 export const logQrLabelPrint = (payload) => api.post('/labels/print', payload);
 export const getQrLabelHistory = (params) => api.get('/labels/history', { params });
+export const deleteQrLabel = (id) => api.delete(`/labels/history/${id}`);
+export const deleteQrLabels = (payload) => api.post('/labels/history/delete', payload);
 
 export const getPayrollSettings = () => api.get('/payroll/settings');
 export const updatePayrollSettings = (payload) => api.put('/payroll/settings', payload);

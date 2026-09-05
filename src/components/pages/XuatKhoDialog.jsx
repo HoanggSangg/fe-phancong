@@ -1,88 +1,23 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import {
   Alert,
   Box,
   Button,
   CircularProgress,
   Collapse,
-  Dialog,
   IconButton,
+  Paper,
   Stack,
-  TextField,
   Typography,
 } from '@mui/material';
-import CloseIcon from '@mui/icons-material/Close';
 import Inventory2Icon from '@mui/icons-material/Inventory2';
-import QrCodeScannerIcon from '@mui/icons-material/QrCodeScanner';
-import StopCircleIcon from '@mui/icons-material/StopCircle';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import AddIcon from '@mui/icons-material/Add';
 import RemoveIcon from '@mui/icons-material/Remove';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import { useToast } from '../../context/ToastContext';
-import { ACCESS_HINT } from '../../constants/accessUrls';
-import { useIsMobile } from '../../hooks/useIsMobile';
 import { commitXuatKho, getXuatKhoLichSu, lookupHanghoaByCode } from '../../utils/xuatKhoApi';
-
-const SCANNER_ID = 'xuat-kho-hanghoa-reader';
-
-const BARCODE_FORMATS = [
-  Html5QrcodeSupportedFormats.QR_CODE,
-  Html5QrcodeSupportedFormats.CODE_128,
-  Html5QrcodeSupportedFormats.CODE_39,
-  Html5QrcodeSupportedFormats.CODE_93,
-  Html5QrcodeSupportedFormats.EAN_13,
-  Html5QrcodeSupportedFormats.EAN_8,
-  Html5QrcodeSupportedFormats.UPC_A,
-  Html5QrcodeSupportedFormats.UPC_E,
-  Html5QrcodeSupportedFormats.CODABAR,
-];
-
-const isSecureCameraContext = () => {
-  if (typeof window === 'undefined') return false;
-  if (window.isSecureContext) return true;
-  const host = window.location.hostname;
-  return host === 'localhost' || host === '127.0.0.1';
-};
-
-const extractHanghoaCode = (rawValue) => {
-  const text = String(rawValue || '').trim();
-  if (!text) return '';
-  try {
-    const url = new URL(text);
-    const fromQuery = String(
-      url.searchParams.get('ma')
-      || url.searchParams.get('maHangHoa')
-      || url.searchParams.get('khoa')
-      || url.searchParams.get('khoaHangHoa')
-      || '',
-    ).trim();
-    if (fromQuery) return fromQuery;
-  } catch {
-    // không phải URL
-  }
-  return text.split(/\s|\n|\r/)[0] || text;
-};
-
-const fmtQty = (value) => {
-  const n = Number(value);
-  if (!Number.isFinite(n)) return '0';
-  if (Number.isInteger(n)) return String(n);
-  return String(Math.round(n * 1000) / 1000);
-};
-
-const normHanghoa = (value) => String(value || '').trim().toUpperCase().replace(/\s+/g, '');
-
-const rowMatchesHanghoa = (row, item, scanned) => {
-  const scannedNorm = normHanghoa(scanned);
-  const rowMa = normHanghoa(row?.ma);
-  const rowKhoa = normHanghoa(row?.khoa);
-  if (item?.khoa && row?.khoa && String(row.khoa) === String(item.khoa)) return true;
-  if (item?.ma && rowMa && rowMa === normHanghoa(item.ma)) return true;
-  if (scannedNorm && (rowMa === scannedNorm || rowKhoa === scannedNorm)) return true;
-  return false;
-};
+import { extractHanghoaCode, fmtQty, normHanghoa, rowMatchesHanghoa } from '../../utils/hanghoaScan';
 
 const QtyStepper = ({ value, min = 1, max, disabled, onChange }) => {
   const qty = Number(value) || 0;
@@ -132,23 +67,17 @@ const QtyStepper = ({ value, min = 1, max, disabled, onChange }) => {
   );
 };
 
-const XuatKhoDialog = ({
-  open,
-  onClose,
+const XuatKhoDialog = forwardRef(({
   khoaBaoGia = '',
   plateNumber = '',
   roCode = '',
-}) => {
+}, ref) => {
   const toast = useToast();
-  const isMobile = useIsMobile();
-  const scannerRef = useRef(null);
   const lookingCodesRef = useRef(new Set());
   const pendingByCodeRef = useRef(new Map());
   const cartRef = useRef([]);
-  const cameraHoldRef = useRef({ code: '', lastSeen: 0 });
-  const inputRef = useRef(null);
+  const prevKhoaRef = useRef('');
 
-  const [manualCode, setManualCode] = useState('');
   const [cart, setCart] = useState([]);
   const [looking, setLooking] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -156,46 +85,19 @@ const XuatKhoDialog = ({
   const [historySummary, setHistorySummary] = useState([]);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
-  const [isScanning, setIsScanning] = useState(false);
-  const [isStarting, setIsStarting] = useState(false);
 
   useEffect(() => {
     cartRef.current = cart;
   }, [cart]);
 
-  const stopScanner = useCallback(async () => {
-    const scanner = scannerRef.current;
-    if (!scanner) {
-      setIsScanning(false);
-      return;
-    }
-    try {
-      if (scanner.isScanning) await scanner.stop();
-    } catch {
-      // ignore
-    }
-    try {
-      await scanner.clear();
-    } catch {
-      // ignore
-    }
-    scannerRef.current = null;
-    setIsScanning(false);
-  }, []);
-
-  const resetState = useCallback(() => {
-    setManualCode('');
+  const resetCart = useCallback(() => {
     setCart([]);
     setLooking(false);
     setSubmitting(false);
     setNotice(null);
-    setHistorySummary([]);
-    setHistoryOpen(false);
-    setHistoryLoading(false);
     cartRef.current = [];
     lookingCodesRef.current.clear();
     pendingByCodeRef.current.clear();
-    cameraHoldRef.current = { code: '', lastSeen: 0 };
   }, []);
 
   const loadHistory = useCallback(async () => {
@@ -220,36 +122,13 @@ const XuatKhoDialog = ({
   }, [khoaBaoGia, roCode]);
 
   useEffect(() => {
-    if (!open) {
-      stopScanner();
-      resetState();
-      return undefined;
+    const khoa = String(khoaBaoGia || '').trim();
+    if (prevKhoaRef.current && prevKhoaRef.current !== khoa) {
+      resetCart();
     }
+    prevKhoaRef.current = khoa;
     loadHistory();
-    if (!isMobile) {
-      const timer = window.setTimeout(() => inputRef.current?.focus(), 250);
-      return () => window.clearTimeout(timer);
-    }
-    return undefined;
-  }, [open, isMobile, loadHistory, resetState, stopScanner]);
-
-  useEffect(() => () => {
-    stopScanner();
-  }, [stopScanner]);
-
-  useEffect(() => {
-    if (!isScanning) {
-      cameraHoldRef.current = { code: '', lastSeen: 0 };
-      return undefined;
-    }
-    const timer = window.setInterval(() => {
-      const hold = cameraHoldRef.current;
-      if (hold.code && Date.now() - hold.lastSeen > 450) {
-        hold.code = '';
-      }
-    }, 150);
-    return () => window.clearInterval(timer);
-  }, [isScanning]);
+  }, [khoaBaoGia, loadHistory, resetCart]);
 
   const applyCartQty = useCallback((item, scanned, addQty) => {
     const qty = Math.max(1, Number(addQty) || 1);
@@ -293,14 +172,12 @@ const XuatKhoDialog = ({
     if (existing) {
       const result = applyCartQty(existing, code, 1);
       toast.success(`+1 ${result.label} → ${fmtQty(result.nextQty)}`);
-      setManualCode('');
       setNotice(null);
       return true;
     }
 
     if (lookingCodesRef.current.has(codeKey)) {
       pendingByCodeRef.current.set(codeKey, (pendingByCodeRef.current.get(codeKey) || 0) + 1);
-      setManualCode('');
       return true;
     }
 
@@ -324,7 +201,6 @@ const XuatKhoDialog = ({
       } else {
         toast.success(`Đã thêm: ${result.label}`);
       }
-      setManualCode('');
       return true;
     } catch (err) {
       pendingByCodeRef.current.delete(codeKey);
@@ -338,63 +214,9 @@ const XuatKhoDialog = ({
     }
   }, [applyCartQty, submitting, toast]);
 
-  const handleScanDecoded = useCallback(async (decodedText) => {
-    const code = extractHanghoaCode(decodedText);
-    if (!code) return;
-    const codeKey = normHanghoa(code);
-    const hold = cameraHoldRef.current;
-    hold.lastSeen = Date.now();
-    if (hold.code === codeKey) return;
-    hold.code = codeKey;
-    await addHanghoa(decodedText);
-  }, [addHanghoa]);
-
-  const startScanner = useCallback(async () => {
-    if (isStarting || isScanning) return;
-    if (!isSecureCameraContext()) {
-      toast.error(`Cần HTTPS để mở camera. ${ACCESS_HINT}`);
-      return;
-    }
-
-    setIsStarting(true);
-    try {
-      await stopScanner();
-      setIsScanning(true);
-      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-
-      const scanner = new Html5Qrcode(SCANNER_ID, {
-        verbose: false,
-        formatsToSupport: BARCODE_FORMATS,
-      });
-      scannerRef.current = scanner;
-      await scanner.start(
-        { facingMode: 'environment' },
-        {
-          fps: 10,
-          qrbox: (viewWidth, viewHeight) => ({
-            width: Math.min(Math.floor(viewWidth * 0.92), Math.max(0, viewWidth - 16)),
-            height: Math.min(Math.floor(viewHeight * 0.62), Math.max(0, viewHeight - 16)),
-          }),
-          aspectRatio: 1,
-          disableFlip: false,
-        },
-        async (decodedText) => {
-          await handleScanDecoded(decodedText);
-        },
-        () => {},
-      );
-    } catch {
-      scannerRef.current = null;
-      setIsScanning(false);
-      toast.error('Không mở được camera để quét mã hàng hóa.');
-    } finally {
-      setIsStarting(false);
-    }
-  }, [handleScanDecoded, isScanning, isStarting, stopScanner, toast]);
-
-  const handleLookupManual = () => {
-    addHanghoa(manualCode);
-  };
+  useImperativeHandle(ref, () => ({
+    addHanghoa,
+  }), [addHanghoa]);
 
   const setQty = (khoa, nextQty) => {
     setCart((prev) => prev.map((row) => (
@@ -455,158 +277,33 @@ const XuatKhoDialog = ({
     }
   };
 
-  const handleClose = () => {
-    if (submitting) return;
-    stopScanner();
-    onClose?.();
-  };
-
   const vehicleLabel = [plateNumber, roCode || khoaBaoGia].filter(Boolean).join(' · ');
 
   return (
-    <Dialog
-      open={open}
-      onClose={handleClose}
-      fullScreen={isMobile}
-      fullWidth
-      maxWidth="sm"
-      PaperProps={{
-        sx: isMobile
-          ? {
-              m: 0,
-              height: '100dvh',
-              maxHeight: '100dvh',
-              borderRadius: 0,
-              display: 'flex',
-              flexDirection: 'column',
-            }
-          : { borderRadius: 2 },
-      }}
-    >
-      <Box
-        sx={{
-          px: 1.5,
-          pt: isMobile ? 'max(8px, env(safe-area-inset-top))' : 1,
-          pb: 1,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 1,
-          borderBottom: 1,
-          borderColor: 'divider',
-          flexShrink: 0,
-        }}
-      >
+    <Paper variant="outlined" sx={{ p: { xs: 1.5, sm: 2 }, borderRadius: 2 }}>
+      <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.25 }}>
         <Inventory2Icon color="primary" fontSize="small" />
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <Typography variant="subtitle1" fontWeight={800} lineHeight={1.2}>
             Xuất phụ tùng
           </Typography>
           <Typography variant="caption" color="text.secondary" noWrap>
-            {vehicleLabel}
+            {vehicleLabel || 'Quét mã phụ tùng trên khung camera phía trên'}
           </Typography>
         </Box>
-        <IconButton onClick={handleClose} disabled={submitting} aria-label="Đóng" size="small">
-          <CloseIcon />
-        </IconButton>
-      </Box>
+      </Stack>
 
-      <Box
-        sx={{
-          flex: 1,
-          minHeight: 0,
-          overflow: 'auto',
-          px: 1.5,
-          py: 1.25,
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 1.25,
-        }}
-      >
-        <Stack direction="row" spacing={0.75} alignItems="center">
-          {!isScanning ? (
-            <Button
-              variant="contained"
-              onClick={startScanner}
-              disabled={isStarting || submitting}
-              sx={{ minWidth: 48, height: 44, px: 1.25 }}
-              aria-label="Quét mã"
-            >
-              {isStarting ? <CircularProgress size={22} color="inherit" /> : <QrCodeScannerIcon />}
-            </Button>
-          ) : (
-            <Button
-              variant="contained"
-              color="error"
-              onClick={stopScanner}
-              sx={{ minWidth: 48, height: 44, px: 1.25 }}
-              aria-label="Dừng camera"
-            >
-              <StopCircleIcon />
-            </Button>
-          )}
-          <TextField
-            inputRef={inputRef}
-            size="small"
-            placeholder="Mã hàng hóa"
-            value={manualCode}
-            onChange={(e) => setManualCode(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault();
-                handleLookupManual();
-              }
-            }}
-            fullWidth
-            autoComplete="off"
-            disabled={submitting}
-            sx={{
-              '& .MuiInputBase-root': { height: 44, fontSize: 16 },
-            }}
-          />
-          <Button
-            variant="outlined"
-            onClick={handleLookupManual}
-            disabled={submitting || !manualCode.trim()}
-            sx={{ height: 44, minWidth: 64, px: 1.25, whiteSpace: 'nowrap' }}
-          >
-            {looking ? '…' : 'Tìm'}
-          </Button>
-        </Stack>
-
-        <Box
-          id={SCANNER_ID}
-          sx={{
-            width: '100%',
-            height: isScanning || isStarting ? (isMobile ? 'min(48dvh, 440px)' : 400) : 0,
-            minHeight: isScanning || isStarting ? (isMobile ? 320 : 360) : 0,
-            overflow: 'hidden',
-            borderRadius: 1.5,
-            bgcolor: isScanning || isStarting ? '#111' : 'transparent',
-            '& video': {
-              width: '100% !important',
-              height: '100% !important',
-              objectFit: 'cover',
-              borderRadius: 1.5,
-            },
-            '& img': { display: 'none' },
-          }}
-        />
-        {isScanning && (
-          <Typography variant="caption" color="text.secondary" sx={{ mt: -0.5 }}>
-            Giữ camera, quét lần lượt từng mã. Quét trùng thì cộng số lượng.
-          </Typography>
-        )}
-
+      <Stack spacing={1.25}>
         {notice && (
           <Alert severity={notice.severity} sx={{ py: 0.25, px: 1 }} onClose={() => setNotice(null)}>
             {notice.message}
           </Alert>
         )}
 
-        <Box sx={{ flex: 1, minHeight: 0 }}>
+        <Box>
           {cart.length === 0 ? (
-            <Typography variant="body2" color="text.secondary" sx={{ py: 1 }}>
-              Quét mã để thêm. Quét lại cùng mã để cộng số lượng, rồi xuất.
+            <Typography variant="body2" color="text.secondary" sx={{ py: 0.5 }}>
+              Quét mã phụ tùng trên cùng khung camera với mã xe. Quét lại cùng mã để cộng số lượng.
             </Typography>
           ) : (
             <Stack spacing={0.75}>
@@ -674,7 +371,6 @@ const XuatKhoDialog = ({
               borderColor: 'divider',
               borderRadius: 1.5,
               overflow: 'hidden',
-              flexShrink: 0,
             }}
           >
             <Button
@@ -718,25 +414,7 @@ const XuatKhoDialog = ({
             </Collapse>
           </Box>
         )}
-      </Box>
 
-      <Box
-        sx={{
-          px: 1.5,
-          pt: 1,
-          pb: isMobile ? 'max(12px, env(safe-area-inset-bottom))' : 1.25,
-          borderTop: 1,
-          borderColor: 'divider',
-          display: 'flex',
-          gap: 1,
-          flexShrink: 0,
-        }}
-      >
-        {!isMobile && (
-          <Button onClick={handleClose} disabled={submitting} color="inherit" sx={{ height: 44 }}>
-            Đóng
-          </Button>
-        )}
         <Button
           variant="contained"
           fullWidth
@@ -746,9 +424,11 @@ const XuatKhoDialog = ({
         >
           {submitting ? 'Đang lưu…' : `Xuất${cart.length ? ` (${cart.length})` : ''}`}
         </Button>
-      </Box>
-    </Dialog>
+      </Stack>
+    </Paper>
   );
-};
+});
+
+XuatKhoDialog.displayName = 'XuatKhoDialog';
 
 export default XuatKhoDialog;

@@ -1,8 +1,10 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Box,
   Button,
+  Checkbox,
   CircularProgress,
+  IconButton,
   InputAdornment,
   Paper,
   Stack,
@@ -13,8 +15,10 @@ import {
   TablePagination,
   TableRow,
   TextField,
+  Tooltip,
   Typography,
 } from '@mui/material';
+import DeleteIcon from '@mui/icons-material/Delete';
 import PrintIcon from '@mui/icons-material/Print';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import SearchIcon from '@mui/icons-material/Search';
@@ -26,7 +30,12 @@ import {
   exportQrLabelsPdf,
   printQrLabels,
 } from '../../utils/qrLabel';
-import { getQrLabelHistory, logQrLabelPrint } from '../apis';
+import {
+  deleteQrLabel,
+  deleteQrLabels,
+  getQrLabelHistory,
+  logQrLabelPrint,
+} from '../apis';
 
 const formatDateTime = (value) => {
   if (!value) return '—';
@@ -55,6 +64,12 @@ const QrLabelHistory = ({ refreshKey = 0 }) => {
   const [loading, setLoading] = useState(true);
   const [copiesMap, setCopiesMap] = useState({});
   const [busyKey, setBusyKey] = useState('');
+  const [selected, setSelected] = useState(() => new Set());
+
+  const selectedCount = selected.size;
+  const pageIds = useMemo(() => items.map((row) => String(row._id)), [items]);
+  const allOnPageSelected = pageIds.length > 0 && pageIds.every((id) => selected.has(id));
+  const someOnPageSelected = pageIds.some((id) => selected.has(id));
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -74,6 +89,7 @@ const QrLabelHistory = ({ refreshKey = 0 }) => {
       });
       setItems(Array.isArray(data?.items) ? data.items : []);
       setPagination(data?.pagination || { page: 1, limit: rowsPerPage, total: 0, totalPages: 1 });
+      setSelected(new Set());
     } catch (err) {
       toast.error(err?.response?.data?.message || 'Không tải được lịch sử tem.');
     } finally {
@@ -127,6 +143,83 @@ const QrLabelHistory = ({ refreshKey = 0 }) => {
     }
   };
 
+  const toggleRow = (id) => {
+    const key = String(id);
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const togglePage = () => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (allOnPageSelected) {
+        pageIds.forEach((id) => next.delete(id));
+      } else {
+        pageIds.forEach((id) => next.add(id));
+      }
+      return next;
+    });
+  };
+
+  const afterDelete = async (deletedCount) => {
+    toast.success(deletedCount > 1 ? `Đã xóa ${deletedCount} tem.` : 'Đã xóa tem.');
+    const remainOnPage = items.length - deletedCount;
+    if (page > 0 && remainOnPage <= 0) {
+      setPage((prev) => Math.max(0, prev - 1));
+      return;
+    }
+    await loadHistory();
+  };
+
+  const handleDeleteOne = async (row) => {
+    const label = row?.name ? `${row.name} (${row.code})` : row?.code;
+    if (!window.confirm(`Xóa tem “${label}” khỏi danh sách?`)) return;
+    setBusyKey(`${row._id}:delete`);
+    try {
+      await deleteQrLabel(row._id);
+      await afterDelete(1);
+    } catch (err) {
+      toast.error(err?.response?.data?.message || 'Không xóa được tem.');
+    } finally {
+      setBusyKey('');
+    }
+  };
+
+  const handleDeleteSelected = async () => {
+    const ids = [...selected];
+    if (!ids.length) return;
+    if (!window.confirm(`Xóa ${ids.length} tem đã chọn khỏi danh sách?`)) return;
+    setBusyKey('bulk-delete');
+    try {
+      const { data } = await deleteQrLabels({ ids });
+      await afterDelete(data?.deleted || ids.length);
+    } catch (err) {
+      toast.error(err?.response?.data?.message || 'Không xóa được tem đã chọn.');
+    } finally {
+      setBusyKey('');
+    }
+  };
+
+  const handleDeleteAll = async () => {
+    if (!pagination.total) return;
+    if (!window.confirm(`Xóa toàn bộ ${pagination.total} tem đã lưu? Không thể hoàn tác.`)) return;
+    setBusyKey('bulk-delete');
+    try {
+      const { data } = await deleteQrLabels({ all: true });
+      toast.success(`Đã xóa ${data?.deleted || pagination.total} tem.`);
+      if (page === 0) await loadHistory();
+      else setPage(0);
+    } catch (err) {
+      toast.error(err?.response?.data?.message || 'Không xóa được danh sách tem.');
+    } finally {
+      setBusyKey('');
+    }
+  };
+
   return (
     <Paper variant="outlined" sx={{ p: LAYOUT.paperPadding, borderRadius: 2 }}>
       <Stack spacing={1.5}>
@@ -147,6 +240,30 @@ const QrLabelHistory = ({ refreshKey = 0 }) => {
           }}
         />
 
+        {pagination.total > 0 && (
+          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+            <Button
+              size="small"
+              color="error"
+              variant="outlined"
+              startIcon={busyKey === 'bulk-delete' ? <CircularProgress size={14} color="inherit" /> : <DeleteIcon />}
+              onClick={handleDeleteSelected}
+              disabled={!selectedCount || Boolean(busyKey)}
+            >
+              Xóa đã chọn{selectedCount ? ` (${selectedCount})` : ''}
+            </Button>
+            <Button
+              size="small"
+              color="error"
+              variant="text"
+              onClick={handleDeleteAll}
+              disabled={Boolean(busyKey)}
+            >
+              Xóa tất cả
+            </Button>
+          </Stack>
+        )}
+
         {loading && !items.length ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
             <CircularProgress size={28} />
@@ -162,20 +279,41 @@ const QrLabelHistory = ({ refreshKey = 0 }) => {
             <Table size="small">
               <TableHead>
                 <TableRow>
+                  <TableCell padding="checkbox">
+                    <Checkbox
+                      size="small"
+                      checked={allOnPageSelected}
+                      indeterminate={someOnPageSelected && !allOnPageSelected}
+                      onChange={togglePage}
+                      disabled={Boolean(busyKey)}
+                      inputProps={{ 'aria-label': 'Chọn tất cả tem trên trang' }}
+                    />
+                  </TableCell>
                   <TableCell>Tên sản phẩm</TableCell>
                   <TableCell>Mã</TableCell>
                   <TableCell sx={{ whiteSpace: 'nowrap' }}>In gần nhất</TableCell>
                   <TableCell align="center" sx={{ width: 96 }}>Số bản</TableCell>
-                  <TableCell align="right">In lại</TableCell>
+                  <TableCell align="right">Thao tác</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {items.map((row) => {
+                  const rowId = String(row._id);
                   const printBusy = busyKey === `${row._id}:print`;
                   const pdfBusy = busyKey === `${row._id}:pdf`;
+                  const deleteBusy = busyKey === `${row._id}:delete`;
                   const disabled = Boolean(busyKey) || !row.name;
                   return (
-                    <TableRow key={row._id} hover>
+                    <TableRow key={row._id} hover selected={selected.has(rowId)}>
+                      <TableCell padding="checkbox">
+                        <Checkbox
+                          size="small"
+                          checked={selected.has(rowId)}
+                          onChange={() => toggleRow(rowId)}
+                          disabled={Boolean(busyKey)}
+                          inputProps={{ 'aria-label': `Chọn tem ${row.code}` }}
+                        />
+                      </TableCell>
                       <TableCell>
                         <Typography variant="body2" fontWeight={700}>
                           {row.name || '—'}
@@ -207,7 +345,7 @@ const QrLabelHistory = ({ refreshKey = 0 }) => {
                         />
                       </TableCell>
                       <TableCell align="right">
-                        <Stack direction="row" spacing={0.75} justifyContent="flex-end">
+                        <Stack direction="row" spacing={0.75} justifyContent="flex-end" alignItems="center">
                           <Button
                             size="small"
                             variant="contained"
@@ -226,6 +364,19 @@ const QrLabelHistory = ({ refreshKey = 0 }) => {
                           >
                             PDF
                           </Button>
+                          <Tooltip title="Xóa tem">
+                            <span>
+                              <IconButton
+                                size="small"
+                                color="error"
+                                onClick={() => handleDeleteOne(row)}
+                                disabled={Boolean(busyKey)}
+                                aria-label="Xóa tem"
+                              >
+                                {deleteBusy ? <CircularProgress size={16} /> : <DeleteIcon fontSize="small" />}
+                              </IconButton>
+                            </span>
+                          </Tooltip>
                         </Stack>
                       </TableCell>
                     </TableRow>
