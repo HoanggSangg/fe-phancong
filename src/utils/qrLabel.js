@@ -1,12 +1,46 @@
 import QRCode from 'qrcode';
 import { jsPDF } from 'jspdf';
 
+export const LABEL_SIZES = [
+  { id: '60x40', widthMm: 60, heightMm: 40, label: '60 × 40 mm' },
+  { id: '100x150', widthMm: 100, heightMm: 150, label: '100 × 150 mm' },
+];
+
+export const DEFAULT_LABEL_SIZE_ID = '60x40';
 export const LABEL_W_MM = 60;
 export const LABEL_H_MM = 40;
 
 const PRINT_DPI = 300;
 export const LABEL_PX_W = Math.round((LABEL_W_MM / 25.4) * PRINT_DPI);
 export const LABEL_PX_H = Math.round((LABEL_H_MM / 25.4) * PRINT_DPI);
+
+export const resolveLabelSize = (size) => {
+  if (typeof size === 'string') {
+    return LABEL_SIZES.find((item) => item.id === size) || LABEL_SIZES[0];
+  }
+  const widthMm = Number(size?.widthMm);
+  const heightMm = Number(size?.heightMm);
+  if (widthMm > 0 && heightMm > 0) {
+    const matched = LABEL_SIZES.find(
+      (item) => item.widthMm === widthMm && item.heightMm === heightMm
+    );
+    return matched || {
+      id: `${widthMm}x${heightMm}`,
+      widthMm,
+      heightMm,
+      label: `${widthMm} × ${heightMm} mm`,
+    };
+  }
+  return LABEL_SIZES[0];
+};
+
+export const getLabelPixels = (size) => {
+  const { widthMm, heightMm } = resolveLabelSize(size);
+  return {
+    w: Math.round((widthMm / 25.4) * PRINT_DPI),
+    h: Math.round((heightMm / 25.4) * PRINT_DPI),
+  };
+};
 
 const LABEL_BG_SRC = '/labels/ba-thanh-qr-bg.png';
 const BLUE = '#1A5BB5';
@@ -251,6 +285,48 @@ const drawSmallVectorBrand = (ctx, leftCx, leftW, h, topY) => {
   ctx.fillText('QUÉT MÃ', leftCx, topY + h * 0.24);
 };
 
+const drawPortraitBrand = (ctx, w, h, bgImg, qrImg, productName, code) => {
+  drawOuterFrame(ctx, w, h);
+
+  const pad = w * 0.07;
+  const innerX = pad;
+  const innerW = w - pad * 2;
+  const innerY = pad * 1.05;
+  const bottom = h - pad;
+  const gap = h * 0.02;
+
+  let cursorY = innerY;
+  if (bgImg) {
+    const srcW = bgImg.naturalWidth || bgImg.width;
+    const srcH = bgImg.naturalHeight || bgImg.height;
+    const sx = srcW * BRAND_SRC.x;
+    const sy = srcH * BRAND_SRC.y;
+    const sw = srcW * BRAND_SRC.w;
+    const sh = srcH * BRAND_SRC.h;
+    const logoMaxH = h * 0.2;
+    const scale = Math.min(innerW / sw, logoMaxH / sh);
+    const logoW = sw * scale;
+    const logoH = sh * scale;
+    const logoX = innerX + (innerW - logoW) / 2;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(logoX, cursorY, logoW, logoH);
+    ctx.clip();
+    ctx.drawImage(bgImg, sx, sy, sw, sh, logoX, cursorY, logoW, logoH);
+    ctx.restore();
+    cursorY += logoH + gap;
+  } else {
+    drawSmallVectorBrand(ctx, w / 2, innerW, h * 0.7, cursorY - h * 0.02);
+    cursorY += h * 0.22;
+  }
+
+  const nameH = h * 0.2;
+  drawNameBlock(ctx, productName, innerX, cursorY, innerW, nameH, bgImg ? PILL_BLUE : BLUE);
+  cursorY += nameH + gap;
+
+  drawQrPanel(ctx, qrImg, innerX, cursorY, innerW, Math.max(80, bottom - cursorY), code);
+};
+
 const drawFallbackBrand = (ctx, w, h, qrImg, productName, code) => {
   drawOuterFrame(ctx, w, h);
 
@@ -351,7 +427,7 @@ const toLabelItems = (items) => {
     .filter((item) => item.code);
 };
 
-export const renderQrLabelCanvas = async (code, productName = '') => {
+export const renderQrLabelCanvas = async (code, productName = '', size) => {
   const qrPayload = String(code || '').trim();
   if (!qrPayload) {
     throw new Error('Nhập mã hàng hóa để tạo tem.');
@@ -361,6 +437,10 @@ export const renderQrLabelCanvas = async (code, productName = '') => {
     throw new Error(`Chưa có tên sản phẩm cho mã '${qrPayload}'.`);
   }
 
+  const resolved = resolveLabelSize(size);
+  const { w, h } = getLabelPixels(resolved);
+  const portrait = resolved.heightMm > resolved.widthMm;
+
   const qrUrl = await QRCode.toDataURL(qrPayload, {
     errorCorrectionLevel: 'M',
     margin: 1,
@@ -369,8 +449,6 @@ export const renderQrLabelCanvas = async (code, productName = '') => {
   });
   const [qrImg, bgImg] = await Promise.all([loadImage(qrUrl), loadLabelBackground()]);
 
-  const w = LABEL_PX_W;
-  const h = LABEL_PX_H;
   const canvas = document.createElement('canvas');
   canvas.width = w;
   canvas.height = h;
@@ -378,7 +456,9 @@ export const renderQrLabelCanvas = async (code, productName = '') => {
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
 
-  if (bgImg) {
+  if (portrait) {
+    drawPortraitBrand(ctx, w, h, bgImg, qrImg, labelName, qrPayload);
+  } else if (bgImg) {
     drawFromTemplate(ctx, w, h, bgImg, qrImg, labelName, qrPayload);
   } else {
     drawFallbackBrand(ctx, w, h, qrImg, labelName, qrPayload);
@@ -387,7 +467,7 @@ export const renderQrLabelCanvas = async (code, productName = '') => {
   return canvas;
 };
 
-export const exportQrLabelsPdf = async (items) => {
+export const exportQrLabelsPdf = async (items, size) => {
   const list = toLabelItems(items);
   if (!list.length) {
     throw new Error('Nhập ít nhất một mã hàng hóa.');
@@ -397,10 +477,14 @@ export const exportQrLabelsPdf = async (items) => {
     throw new Error(`Chưa có tên sản phẩm cho mã '${missing.code}'.`);
   }
 
+  const resolved = resolveLabelSize(size);
+  const orientation = resolved.widthMm >= resolved.heightMm ? 'landscape' : 'portrait';
+  const format = [resolved.widthMm, resolved.heightMm];
+
   const doc = new jsPDF({
-    orientation: 'landscape',
+    orientation,
     unit: 'mm',
-    format: [LABEL_W_MM, LABEL_H_MM],
+    format,
     compress: true,
   });
 
@@ -408,8 +492,8 @@ export const exportQrLabelsPdf = async (items) => {
   const pageH = doc.internal.pageSize.getHeight();
 
   for (let i = 0; i < list.length; i += 1) {
-    if (i > 0) doc.addPage([LABEL_W_MM, LABEL_H_MM], 'landscape');
-    const canvas = await renderQrLabelCanvas(list[i].code, list[i].name);
+    if (i > 0) doc.addPage(format, orientation);
+    const canvas = await renderQrLabelCanvas(list[i].code, list[i].name, resolved);
     doc.addImage(
       canvas.toDataURL('image/png'),
       'PNG',
@@ -451,7 +535,7 @@ const waitForImages = (doc) =>
     });
   });
 
-export const printQrLabels = async (items) => {
+export const printQrLabels = async (items, size) => {
   const list = toLabelItems(items);
   if (!list.length) {
     throw new Error('Nhập ít nhất một mã hàng hóa.');
@@ -461,9 +545,13 @@ export const printQrLabels = async (items) => {
     throw new Error(`Chưa có tên sản phẩm cho mã '${missing.code}'.`);
   }
 
+  const resolved = resolveLabelSize(size);
+  const widthMm = resolved.widthMm;
+  const heightMm = resolved.heightMm;
+
   const images = [];
   for (const item of list) {
-    const canvas = await renderQrLabelCanvas(item.code, item.name);
+    const canvas = await renderQrLabelCanvas(item.code, item.name, resolved);
     images.push(canvas.toDataURL('image/png'));
   }
 
@@ -471,8 +559,8 @@ export const printQrLabels = async (items) => {
   iframe.setAttribute('aria-hidden', 'true');
   iframe.style.cssText = [
     'position:fixed',
-    `width:${LABEL_W_MM}mm`,
-    `height:${LABEL_H_MM}mm`,
+    `width:${widthMm}mm`,
+    `height:${heightMm}mm`,
     'left:-100vw',
     'top:0',
     'border:0',
@@ -496,18 +584,18 @@ export const printQrLabels = async (items) => {
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>In tem QR ${LABEL_W_MM}x${LABEL_H_MM}mm</title>
+  <title>In tem QR ${widthMm}x${heightMm}mm</title>
   <style>
-    @page { size: ${LABEL_W_MM}mm ${LABEL_H_MM}mm; margin: 0; }
+    @page { size: ${widthMm}mm ${heightMm}mm; margin: 0; }
     html, body {
       margin: 0;
       padding: 0;
-      width: ${LABEL_W_MM}mm;
+      width: ${widthMm}mm;
       background: #fff;
     }
     .label {
-      width: ${LABEL_W_MM}mm;
-      height: ${LABEL_H_MM}mm;
+      width: ${widthMm}mm;
+      height: ${heightMm}mm;
       overflow: hidden;
       page-break-after: always;
       break-after: page;
@@ -517,8 +605,8 @@ export const printQrLabels = async (items) => {
       break-after: auto;
     }
     img {
-      width: ${LABEL_W_MM}mm;
-      height: ${LABEL_H_MM}mm;
+      width: ${widthMm}mm;
+      height: ${heightMm}mm;
       display: block;
       print-color-adjust: exact;
       -webkit-print-color-adjust: exact;

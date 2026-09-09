@@ -9,6 +9,8 @@ import {
   Tab,
   Tabs,
   TextField,
+  ToggleButton,
+  ToggleButtonGroup,
   Typography,
 } from '@mui/material';
 import HistoryIcon from '@mui/icons-material/History';
@@ -20,12 +22,13 @@ import PageHeader from '../common/PageHeader';
 import { useToast } from '../../context/ToastContext';
 import { LAYOUT } from '../../constants/layout';
 import {
-  LABEL_H_MM,
-  LABEL_W_MM,
+  DEFAULT_LABEL_SIZE_ID,
+  LABEL_SIZES,
   exportQrLabelsPdf,
   parseLabelCodes,
   printQrLabels,
   renderQrLabelCanvas,
+  resolveLabelSize,
 } from '../../utils/qrLabel';
 import { hanghoaNameOf, lookupHanghoaByCode } from '../../utils/xuatKhoApi';
 import { logQrLabelPrint } from '../apis';
@@ -44,7 +47,9 @@ const QrLabelPage = () => {
   const [products, setProducts] = useState({});
   const [lookupBusy, setLookupBusy] = useState(false);
   const [historyTick, setHistoryTick] = useState(0);
+  const [sizeId, setSizeId] = useState(DEFAULT_LABEL_SIZE_ID);
   const productCache = useRef(new Map());
+  const labelSize = resolveLabelSize(sizeId);
 
   const codes = useMemo(() => parseLabelCodes(rawCodes), [rawCodes]);
   const previewCode = codes[0] || '';
@@ -124,7 +129,7 @@ const QrLabelPage = () => {
     setRendering(true);
     const timer = window.setTimeout(async () => {
       try {
-        const canvas = await renderQrLabelCanvas(previewCode, previewProduct.name);
+        const canvas = await renderQrLabelCanvas(previewCode, previewProduct.name, labelSize);
         if (cancelled) return;
         setPreviewUrl(canvas.toDataURL('image/png'));
         setError('');
@@ -142,7 +147,7 @@ const QrLabelPage = () => {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [previewCode, previewProduct, lookupBusy]);
+  }, [previewCode, previewProduct, lookupBusy, labelSize]);
 
   const labelPages = () => codes.flatMap((code) => Array.from({ length: copyCount }, () => ({
     code,
@@ -153,8 +158,8 @@ const QrLabelPage = () => {
     try {
       await logQrLabelPrint({
         method,
-        widthMm: LABEL_W_MM,
-        heightMm: LABEL_H_MM,
+        widthMm: labelSize.widthMm,
+        heightMm: labelSize.heightMm,
         items: pages,
       });
     } catch {
@@ -170,7 +175,7 @@ const QrLabelPage = () => {
     setExporting(true);
     try {
       const pages = labelPages();
-      const fileName = await exportQrLabelsPdf(pages);
+      const fileName = await exportQrLabelsPdf(pages, labelSize);
       await recordLabelPrint('pdf', pages);
       setHistoryTick((n) => n + 1);
       toast.success(`Đã tải ${fileName}`);
@@ -189,7 +194,7 @@ const QrLabelPage = () => {
     setPrinting(true);
     try {
       const pages = labelPages();
-      await printQrLabels(pages);
+      await printQrLabels(pages, labelSize);
       await recordLabelPrint('print', pages);
       setHistoryTick((n) => n + 1);
     } catch (err) {
@@ -204,7 +209,7 @@ const QrLabelPage = () => {
       <PageHeader
         icon={<QrCode2Icon />}
         title="Tem QR"
-        subtitle={`Tem ${LABEL_W_MM} × ${LABEL_H_MM} mm · in lại tem đã lưu hoặc tạo tem mới`}
+        subtitle={`Tem ${labelSize.widthMm} × ${labelSize.heightMm} mm · in lại tem đã lưu hoặc tạo tem mới`}
         actions={isCreateTab ? (
           <>
             <Button
@@ -259,7 +264,11 @@ const QrLabelPage = () => {
               value={rawCodes}
               onChange={(e) => setRawCodes(e.target.value)}
               placeholder="0005-0005099"
-              helperText="Mỗi dòng một mã. Tem in tên sản phẩm bên trái, mã ngay dưới QR."
+              helperText={
+                labelSize.heightMm > labelSize.widthMm
+                  ? 'Mỗi dòng một mã. Tem dọc: tên sản phẩm phía trên, QR bên dưới.'
+                  : 'Mỗi dòng một mã. Tem in tên sản phẩm bên trái, mã ngay dưới QR.'
+              }
               fullWidth
               multiline
               minRows={3}
@@ -288,20 +297,41 @@ const QrLabelPage = () => {
                 })}
               </Stack>
             )}
-            <TextField
-              label="Số bản mỗi mã"
-              type="number"
-              value={copies}
-              onChange={(e) => setCopies(e.target.value)}
-              inputProps={{ min: 1, max: 50 }}
-              sx={{ maxWidth: 180 }}
-            />
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ sm: 'flex-end' }}>
+              <Box>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.75 }}>
+                  Khổ tem
+                </Typography>
+                <ToggleButtonGroup
+                  exclusive
+                  size="small"
+                  value={sizeId}
+                  onChange={(_, next) => {
+                    if (next) setSizeId(next);
+                  }}
+                >
+                  {LABEL_SIZES.map((size) => (
+                    <ToggleButton key={size.id} value={size.id} sx={{ px: 1.5, fontWeight: 700 }}>
+                      {size.label}
+                    </ToggleButton>
+                  ))}
+                </ToggleButtonGroup>
+              </Box>
+              <TextField
+                label="Số bản mỗi mã"
+                type="number"
+                value={copies}
+                onChange={(e) => setCopies(e.target.value)}
+                inputProps={{ min: 1, max: 50 }}
+                sx={{ maxWidth: 180 }}
+              />
+            </Stack>
           </Stack>
         </Paper>
 
         <Paper variant="outlined" sx={{ p: LAYOUT.paperPadding, borderRadius: 2 }}>
           <Typography variant="subtitle2" fontWeight={800} sx={{ mb: 1.5 }}>
-            Xem trước (khổ in {LABEL_W_MM} × {LABEL_H_MM} mm)
+            Xem trước (khổ in {labelSize.widthMm} × {labelSize.heightMm} mm)
           </Typography>
           {error && (
             <Alert severity="error" sx={{ mb: 1.5 }}>{error}</Alert>
@@ -325,10 +355,10 @@ const QrLabelPage = () => {
                 src={previewUrl}
                 alt={`Tem QR ${previewCode}`}
                 sx={{
-                  width: 'min(100%, 480px)',
+                  width: labelSize.heightMm > labelSize.widthMm ? 'min(100%, 320px)' : 'min(100%, 480px)',
                   maxWidth: '100%',
                   height: 'auto',
-                  aspectRatio: `${LABEL_W_MM} / ${LABEL_H_MM}`,
+                  aspectRatio: `${labelSize.widthMm} / ${labelSize.heightMm}`,
                   objectFit: 'contain',
                   display: 'block',
                   boxShadow: '0 8px 24px rgba(15, 23, 42, 0.18)',
@@ -340,8 +370,10 @@ const QrLabelPage = () => {
             )}
           </Box>
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1.25 }}>
-            Tem in tên sản phẩm bên trái, mã hàng hóa dưới QR. Chọn khổ giấy
-            {` ${LABEL_W_MM}×${LABEL_H_MM} mm`}, lề Không, tỷ lệ 100%.
+            {labelSize.heightMm > labelSize.widthMm
+              ? 'Tem dọc: tên sản phẩm phía trên, mã hàng hóa dưới QR. Chọn khổ giấy'
+              : 'Tem in tên sản phẩm bên trái, mã hàng hóa dưới QR. Chọn khổ giấy'}
+            {` ${labelSize.widthMm}×${labelSize.heightMm} mm`}, lề Không, tỷ lệ 100%.
           </Typography>
         </Paper>
       </Stack>
