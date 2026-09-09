@@ -108,7 +108,7 @@ const WorkerRow = ({
           </IconButton>
         </Tooltip>
         <Tooltip title="Xóa">
-          <IconButton size="small" onClick={() => onDelete(worker._id)} aria-label="Xóa" color="error">
+          <IconButton size="small" onClick={() => onDelete(worker)} aria-label="Xóa" color="error">
             <Delete sx={{ fontSize: 17 }} />
           </IconButton>
         </Tooltip>
@@ -150,8 +150,8 @@ const WorkersPage = () => {
   }, [editOpen, setHasUnsavedChanges]);
 
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
-  const [password, setPassword] = useState('');
-  const [deleteTargetId, setDeleteTargetId] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
   const [performanceOpen, setPerformanceOpen] = useState(false);
   const [kpiData, setKpiData] = useState(null);
@@ -175,32 +175,29 @@ const WorkersPage = () => {
     fetchWorkers();
   }, []);
 
-  const isPasswordVerified = () => {
-    const verifiedUntil = localStorage.getItem('worker_verified_until');
-    return verifiedUntil && new Date(verifiedUntil) > new Date();
+  const handleDelete = (worker) => {
+    setDeleteTarget(worker);
+    setConfirmDialogOpen(true);
   };
 
-  const markPasswordVerified = () => {
-    const expiry = new Date(Date.now() + 60 * 60 * 10000); // 10 giờ
-    localStorage.setItem('worker_verified_until', expiry.toISOString());
+  const handleCloseDeleteDialog = () => {
+    if (deleting) return;
+    setConfirmDialogOpen(false);
+    setDeleteTarget(null);
   };
 
-  const handleDelete = async (id) => {
-    if (isPasswordVerified()) {
-      proceedDelete(id);
-    } else {
-      setDeleteTargetId(id);
-      setConfirmDialogOpen(true);
-    }
-  };
-
-  const proceedDelete = async (id) => {
-    if (!window.confirm('Bạn có chắc muốn xoá thợ này?')) return;
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget?._id) return;
     try {
-      await deleteWorker(id);
+      setDeleting(true);
+      await deleteWorker(deleteTarget._id);
+      setConfirmDialogOpen(false);
+      setDeleteTarget(null);
       fetchWorkers();
     } catch (error) {
       toast.error(error.response?.data?.message || 'Xoá thợ thất bại');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -579,52 +576,34 @@ const WorkersPage = () => {
         </DialogActions>
       </Dialog>
 
-      {/* Dialog xác thực mật khẩu xoá */}
-      <Dialog open={confirmDialogOpen} onClose={() => setConfirmDialogOpen(false)} maxWidth="sm" fullWidth>
+      {/* Dialog xác nhận xóa thợ */}
+      <Dialog open={confirmDialogOpen} onClose={handleCloseDeleteDialog} maxWidth="sm" fullWidth>
         <DialogTitle sx={{ color: '#dc2626', fontWeight: 'bold' }}>
-          🔒 Xác thực để xoá
+          Xóa thợ
         </DialogTitle>
         <DialogContent>
-          <Typography sx={{ mb: 2, color: '#64748b' }}>
-            Vui lòng nhập mật khẩu để xác nhận việc xóa thợ này.
+          <Typography sx={{ color: '#64748b' }}>
+            {deleteTarget?.name
+              ? `Bạn có chắc muốn xoá thợ "${deleteTarget.name}" không?`
+              : 'Bạn có chắc muốn xoá thợ này không?'}
           </Typography>
-          <TextField
-            type="password"
-            label="Nhập mật khẩu"
-            fullWidth
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            sx={{
-              mt: 2,
-              '& .MuiOutlinedInput-root': {
-                borderRadius: 2,
-              }
-            }}
-          />
         </DialogContent>
         <DialogActions sx={{ p: 3 }}>
           <Button
-            onClick={() => setConfirmDialogOpen(false)}
+            onClick={handleCloseDeleteDialog}
             variant="outlined"
+            disabled={deleting}
             sx={{ px: 3 }}
           >
             Huỷ
           </Button>
           <Button
             variant="contained"
-            onClick={() => {
-              if (password === '123456@') {
-                markPasswordVerified();
-                setConfirmDialogOpen(false);
-                setPassword('');
-                proceedDelete(deleteTargetId);
-              } else {
-                toast.error('Sai mật khẩu!');
-              }
-            }}
+            onClick={handleConfirmDelete}
+            disabled={deleting}
             sx={{ bgcolor: '#dc2626', px: 3 }}
           >
-            Xác nhận xóa
+            {deleting ? 'Đang xóa...' : 'Xóa'}
           </Button>
         </DialogActions>
       </Dialog>

@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { getDateRangeForPeriod, getTodayDate } from '../utils/dateFilters';
 
-export const usePeriodFilter = (initialPeriod = 'today') => {
+export const usePeriodFilter = (initialPeriod = 'today', initialDates = null) => {
   const [period, setPeriod] = useState(initialPeriod);
-  const [fromDate, setFromDate] = useState(getTodayDate());
-  const [toDate, setToDate] = useState(getTodayDate());
+  const [fromDate, setFromDate] = useState(() => initialDates?.from || getTodayDate());
+  const [toDate, setToDate] = useState(() => initialDates?.to || getTodayDate());
 
   useEffect(() => {
     if (period !== 'custom') {

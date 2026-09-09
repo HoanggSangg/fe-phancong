@@ -23,19 +23,36 @@ import {
   Autorenew,
   History,
   Person,
-  AddCircle,
-  RemoveCircle,
 } from '@mui/icons-material';
-import { formatHistoryNote } from '../../utils/manageCarsHelpers';
+import { ROLE_LABELS } from '../../utils/permissions';
 
-const getHistoryActionMeta = (log) => {
-  if (log.action === 'removed' || log.action === 'reassigned') {
-    return { text: log.actionLabel || 'Đã thay đổi', color: 'error.main', Icon: RemoveCircle };
-  }
-  if (log.action === 'added') {
-    return { text: log.actionLabel || 'Thêm mới', color: 'success.main', Icon: AddCircle };
-  }
-  return { text: log.actionLabel || log.action, color: 'text.primary', Icon: Person };
+const ACTION_LABELS = {
+  create: 'Tạo mới',
+  update: 'Cập nhật',
+  delete: 'Xóa',
+  update_status: 'Đổi trạng thái',
+  assign_workers: 'Phân công',
+  manual_items: 'Hạng mục SC',
+  upload: 'Tải lên',
+  xuat_kho: 'Xuất kho',
+};
+
+const formatDateTime = (value) => {
+  if (!value) return '—';
+  return new Date(value).toLocaleString('vi-VN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+};
+
+const isFailedLog = (log) => log?.metadata?.success === false;
+
+const getActionLabel = (log) => {
+  const base = ACTION_LABELS[log.action] || log.action;
+  return isFailedLog(log) ? `${base} (thất bại)` : base;
 };
 
 const WorkerHistoryDialog = ({
@@ -45,7 +62,10 @@ const WorkerHistoryDialog = ({
   loading,
   error,
   data,
-}) => (
+}) => {
+  const operationLogs = data?.operationLogs || [];
+
+  return (
   <Dialog
     open={open}
     onClose={onClose}
@@ -113,41 +133,66 @@ const WorkerHistoryDialog = ({
             Lịch sử thao tác
           </Typography>
 
-          {data.historyLogs?.length > 0 ? (
+          {operationLogs.length > 0 ? (
             <Paper variant="outlined" sx={{ borderRadius: 2, overflow: 'hidden' }}>
-              <Box sx={{ maxHeight: 360, overflow: 'auto' }}>
+              <Box sx={{ maxHeight: 420, overflow: 'auto' }}>
                 <Table size="small" stickyHeader>
                   <TableHead>
                     <TableRow>
-                      <TableCell><strong>Thợ</strong></TableCell>
-                      <TableCell><strong>Hành động</strong></TableCell>
-                      <TableCell><strong>Giai đoạn</strong></TableCell>
-                      <TableCell><strong>Ghi chú</strong></TableCell>
                       <TableCell><strong>Thời gian</strong></TableCell>
+                      <TableCell><strong>Người thao tác</strong></TableCell>
+                      <TableCell><strong>Hành động</strong></TableCell>
+                      <TableCell><strong>Nội dung</strong></TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {data.historyLogs.map((log) => {
-                      const { text, color, Icon } = getHistoryActionMeta(log);
+                    {operationLogs.map((log) => {
+                      const details = Array.isArray(log.metadata?.details)
+                        ? log.metadata.details.filter(Boolean)
+                        : [];
+                      const failed = isFailedLog(log);
                       return (
-                        <TableRow key={log.id || `${log.name}-${log.timestamp}`} hover>
+                        <TableRow key={log._id} hover sx={failed ? { bgcolor: '#fef2f2' } : undefined}>
+                          <TableCell sx={{ whiteSpace: 'nowrap' }}>
+                            {formatDateTime(log.createdAt)}
+                          </TableCell>
                           <TableCell>
-                            <Stack direction="row" alignItems="center" spacing={1}>
-                              <Avatar sx={{ width: 28, height: 28 }}>
-                                <Person fontSize="small" />
-                              </Avatar>
-                              <span>{log.name}</span>
-                            </Stack>
+                            <Typography variant="body2" fontWeight={600}>
+                              {log.fullName || log.username || '—'}
+                            </Typography>
+                            {log.role ? (
+                              <Typography variant="caption" color="text.secondary">
+                                {ROLE_LABELS[log.role] || log.role}
+                              </Typography>
+                            ) : null}
                           </TableCell>
-                          <TableCell sx={{ color, fontWeight: 600 }}>
-                            <Stack direction="row" alignItems="center" spacing={0.5}>
-                              <Icon fontSize="small" />
-                              <span>{text}</span>
-                            </Stack>
+                          <TableCell>
+                            <Chip
+                              size="small"
+                              label={getActionLabel(log)}
+                              color={failed ? 'error' : 'default'}
+                              variant="outlined"
+                            />
                           </TableCell>
-                          <TableCell>{log.phaseLabel || '—'}</TableCell>
-                          <TableCell>{formatHistoryNote(log.note) || '—'}</TableCell>
-                          <TableCell>{new Date(log.timestamp).toLocaleString('vi-VN')}</TableCell>
+                          <TableCell>
+                            <Typography variant="body2" color={failed ? 'error.main' : 'text.primary'}>
+                              {log.description || '—'}
+                            </Typography>
+                            {details.length > 0 && (
+                              <Stack component="ul" sx={{ m: 0, pl: 2.2, mt: 0.5 }}>
+                                {details.map((line, index) => (
+                                  <Typography
+                                    key={`${log._id}-detail-${index}`}
+                                    component="li"
+                                    variant="caption"
+                                    color="text.secondary"
+                                  >
+                                    {line}
+                                  </Typography>
+                                ))}
+                              </Stack>
+                            )}
+                          </TableCell>
                         </TableRow>
                       );
                     })}
@@ -156,7 +201,7 @@ const WorkerHistoryDialog = ({
               </Box>
             </Paper>
           ) : (
-            <Alert severity="info">Chưa có lịch sử thay đổi thợ.</Alert>
+            <Alert severity="info">Chưa có lịch sử thao tác của xe này.</Alert>
           )}
         </Stack>
       ) : null}
@@ -167,6 +212,7 @@ const WorkerHistoryDialog = ({
       </Button>
     </DialogActions>
   </Dialog>
-);
+  );
+};
 
 export default WorkerHistoryDialog;

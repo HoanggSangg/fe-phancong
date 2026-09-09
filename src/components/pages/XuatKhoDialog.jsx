@@ -5,6 +5,10 @@ import {
   Button,
   CircularProgress,
   Collapse,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   IconButton,
   Paper,
   Stack,
@@ -17,7 +21,29 @@ import RemoveIcon from '@mui/icons-material/Remove';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { useToast } from '../../context/ToastContext';
 import { commitXuatKho, getXuatKhoLichSu, lookupHanghoaByCode } from '../../utils/xuatKhoApi';
-import { extractHanghoaCode, fmtQty, normHanghoa, rowMatchesHanghoa } from '../../utils/hanghoaScan';
+import {
+  extractHanghoaCode,
+  findHistoryHanghoa,
+  fmtExportedAt,
+  fmtQty,
+  normHanghoa,
+  rowMatchesHanghoa,
+} from '../../utils/hanghoaScan';
+
+const describeHistoryRow = (row) => {
+  const name = row?.ten || row?.ma || row?.khoaHangHoa || row?.khoa || 'sản phẩm';
+  const code = row?.ma || row?.khoaHangHoa || row?.khoa || '';
+  const qty = fmtQty(row?.soLuong);
+  const unit = row?.donViTinh ? ` ${row.donViTinh}` : '';
+  const time = fmtExportedAt(row?.lastExportedAt);
+  return {
+    name,
+    code,
+    detail: time
+      ? `Đã xuất ${qty}${unit} lúc ${time}`
+      : `Đã xuất ${qty}${unit} trước đó`,
+  };
+};
 
 const QtyStepper = ({ value, min = 1, max, disabled, onChange }) => {
   const qty = Number(value) || 0;
@@ -77,6 +103,9 @@ const XuatKhoDialog = forwardRef(({
   const pendingByCodeRef = useRef(new Map());
   const cartRef = useRef([]);
   const prevKhoaRef = useRef('');
+  const historySummaryRef = useRef([]);
+  const promptingRef = useRef(false);
+  const dupResolverRef = useRef(null);
 
   const [cart, setCart] = useState([]);
   const [looking, setLooking] = useState(false);
@@ -85,10 +114,15 @@ const XuatKhoDialog = forwardRef(({
   const [historySummary, setHistorySummary] = useState([]);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [dupDialog, setDupDialog] = useState({ open: false, title: '', lines: [] });
 
   useEffect(() => {
     cartRef.current = cart;
   }, [cart]);
+
+  useEffect(() => {
+    historySummaryRef.current = historySummary;
+  }, [historySummary]);
 
   const resetCart = useCallback(() => {
     setCart([]);
@@ -98,6 +132,36 @@ const XuatKhoDialog = forwardRef(({
     cartRef.current = [];
     lookingCodesRef.current.clear();
     pendingByCodeRef.current.clear();
+    promptingRef.current = false;
+    if (dupResolverRef.current) {
+      dupResolverRef.current(false);
+      dupResolverRef.current = null;
+    }
+    setDupDialog({ open: false, title: '', lines: [] });
+  }, []);
+
+  const closeDupDialog = useCallback((ok) => {
+    promptingRef.current = false;
+    setDupDialog((prev) => ({ ...prev, open: false }));
+    const resolve = dupResolverRef.current;
+    dupResolverRef.current = null;
+    if (resolve) resolve(Boolean(ok));
+  }, []);
+
+  const askDuplicateConfirm = useCallback((title, lines) => {
+    if (dupResolverRef.current) {
+      dupResolverRef.current(false);
+      dupResolverRef.current = null;
+    }
+    promptingRef.current = true;
+    return new Promise((resolve) => {
+      dupResolverRef.current = resolve;
+      setDupDialog({
+        open: true,
+        title: title || 'Sản phẩm này đã tồn tại rồi',
+        lines: Array.isArray(lines) ? lines : [],
+      });
+    });
   }, []);
 
   const loadHistory = useCallback(async () => {
@@ -165,7 +229,7 @@ const XuatKhoDialog = forwardRef(({
       toast.error('Chưa có mã hàng hóa.');
       return false;
     }
-    if (submitting) return false;
+    if (submitting || promptingRef.current) return false;
 
     const codeKey = normHanghoa(code);
     const existing = cartRef.current.find((row) => rowMatchesHanghoa(row, null, code));
@@ -248,6 +312,33 @@ const XuatKhoDialog = forwardRef(({
       return;
     }
 
+    if (promptingRef.current) return;
+
+    const duplicates = lines
+      .map((line) => {
+        const historyRow = findHistoryHanghoa(historySummaryRef.current, line, line.ma || line.khoaHangHoa);
+        if (!historyRow) return null;
+        return { line, historyRow };
+      })
+      .filter(Boolean);
+    if (duplicates.length) {
+      const ok = await askDuplicateConfirm(
+        duplicates.length === 1 ? 'Sản phẩm này đã tồn tại rồi' : 'Có sản phẩm đã xuất trước đó',
+        duplicates.map((row) => ({
+          ...describeHistoryRow({
+            ...row.historyRow,
+            ten: row.line.ten || row.historyRow.ten,
+            ma: row.line.ma || row.historyRow.ma,
+          }),
+          question: 'Bạn có muốn xuất tiếp không?',
+        })),
+      );
+      if (!ok) {
+        toast.info('Đã hủy xuất. Sản phẩm trùng vẫn còn trong danh sách.');
+        return;
+      }
+    }
+
     setSubmitting(true);
     try {
       const result = await commitXuatKho({
@@ -263,6 +354,7 @@ const XuatKhoDialog = forwardRef(({
       toast.success(`Đã xuất ${count} mã.`);
       setNotice(null);
       setCart([]);
+      cartRef.current = [];
       await loadHistory();
     } catch (err) {
       const data = err?.response?.data || {};
@@ -280,6 +372,7 @@ const XuatKhoDialog = forwardRef(({
   const vehicleLabel = [plateNumber, roCode || khoaBaoGia].filter(Boolean).join(' · ');
 
   return (
+    <>
     <Paper variant="outlined" sx={{ p: { xs: 1.5, sm: 2 }, borderRadius: 2 }}>
       <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.25 }}>
         <Inventory2Icon color="primary" fontSize="small" />
@@ -406,6 +499,7 @@ const XuatKhoDialog = forwardRef(({
                     {(row.ma || row.khoaHangHoa) && row.ten && (
                       <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
                         {row.ma || row.khoaHangHoa}
+                        {fmtExportedAt(row.lastExportedAt) ? ` · ${fmtExportedAt(row.lastExportedAt)}` : ''}
                       </Typography>
                     )}
                   </Box>
@@ -419,13 +513,56 @@ const XuatKhoDialog = forwardRef(({
           variant="contained"
           fullWidth
           onClick={handleExport}
-          disabled={looking || submitting || cart.length === 0}
+          disabled={looking || submitting || cart.length === 0 || dupDialog.open}
           sx={{ height: 48, fontSize: 16 }}
         >
           {submitting ? 'Đang lưu…' : `Xuất${cart.length ? ` (${cart.length})` : ''}`}
         </Button>
       </Stack>
     </Paper>
+    <Dialog
+      open={dupDialog.open}
+      onClose={() => closeDupDialog(false)}
+      maxWidth="xs"
+      fullWidth
+    >
+      <DialogTitle sx={{ fontWeight: 800, pb: 1 }}>
+        {dupDialog.title}
+      </DialogTitle>
+      <DialogContent>
+        <Stack spacing={1.25}>
+          {dupDialog.lines.map((line, index) => (
+            <Box key={`${line.code || line.name}-${index}`}>
+              <Typography variant="body2" fontWeight={700}>
+                {line.name}
+              </Typography>
+              {line.code && line.code !== line.name && (
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                  {line.code}
+                </Typography>
+              )}
+              <Typography variant="body2" color="text.secondary">
+                {line.detail}
+              </Typography>
+            </Box>
+          ))}
+          <Typography variant="body2" fontWeight={600}>
+            {dupDialog.lines.length > 1
+              ? 'Bạn có muốn xuất tiếp các sản phẩm này không?'
+              : (dupDialog.lines[0]?.question || 'Bạn có muốn xuất tiếp không?')}
+          </Typography>
+        </Stack>
+      </DialogContent>
+      <DialogActions sx={{ px: 3, pb: 2 }}>
+        <Button onClick={() => closeDupDialog(false)} variant="outlined">
+          Không
+        </Button>
+        <Button onClick={() => closeDupDialog(true)} variant="contained" autoFocus>
+          Xuất tiếp
+        </Button>
+      </DialogActions>
+    </Dialog>
+    </>
   );
 });
 

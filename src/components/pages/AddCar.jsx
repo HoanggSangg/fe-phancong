@@ -120,7 +120,11 @@ const AddCar = ({ onSuccess }) => {
   const [supervisors, setSupervisors] = useState([]);
   const [locations, setLocations] = useState([]);
   const [workersLoaded, setWorkersLoaded] = useState(false);
+  const [locationsLoaded, setLocationsLoaded] = useState(false);
+  const [supervisorsLoaded, setSupervisorsLoaded] = useState(false);
   const workersLoadingRef = useRef(false);
+  const locationsLoadingRef = useRef(false);
+  const supervisorsLoadingRef = useRef(false);
 
   const [externalData, setExternalData] = useState(null);
   const [lookupLoading, setLookupLoading] = useState(false);
@@ -143,29 +147,33 @@ const AddCar = ({ onSuccess }) => {
     return () => setHasUnsavedChanges(false, 'add-car');
   }, [formData, externalData, setHasUnsavedChanges]);
 
-  useEffect(() => {
-    let cancelled = false;
+  const ensureLocations = useCallback(async () => {
+    if (locationsLoaded || locationsLoadingRef.current) return;
+    locationsLoadingRef.current = true;
+    try {
+      const locationRes = await getAllLocations();
+      setLocations(locationRes.data || []);
+      setLocationsLoaded(true);
+    } catch {
+      // ignore
+    } finally {
+      locationsLoadingRef.current = false;
+    }
+  }, [locationsLoaded]);
 
-    const fetchFormMeta = async () => {
-      try {
-        // Cascade: locations trước → supervisors sau (tránh 2 API lớn cùng lúc)
-        const locationRes = await getAllLocations();
-        if (cancelled) return;
-        setLocations(locationRes.data || []);
-
-        const supervisorRes = await getAllSupervisors();
-        if (cancelled) return;
-        setSupervisors(supervisorRes.data || []);
-      } catch {
-        // ignore
-      }
-    };
-
-    fetchFormMeta();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const ensureSupervisors = useCallback(async () => {
+    if (supervisorsLoaded || supervisorsLoadingRef.current) return;
+    supervisorsLoadingRef.current = true;
+    try {
+      const supervisorRes = await getAllSupervisors();
+      setSupervisors(supervisorRes.data || []);
+      setSupervisorsLoaded(true);
+    } catch {
+      // ignore
+    } finally {
+      supervisorsLoadingRef.current = false;
+    }
+  }, [supervisorsLoaded]);
 
   const ensureAvailableWorkers = useCallback(async () => {
     if (workersLoaded) return availableWorkers;
@@ -741,6 +749,7 @@ const AddCar = ({ onSuccess }) => {
             options={supervisors}
             getOptionLabel={(option) => option.name || ''}
             value={formData.supervisor}
+            onOpen={ensureSupervisors}
             onChange={(e, value) =>
               setFormData((prev) => ({ ...prev, supervisor: value }))
             }
@@ -753,6 +762,7 @@ const AddCar = ({ onSuccess }) => {
             options={locations}
             getOptionLabel={(option) => option.name || ''}
             value={formData.location}
+            onOpen={ensureLocations}
             onChange={(e, value) =>
               setFormData((prev) => ({ ...prev, location: value }))
             }

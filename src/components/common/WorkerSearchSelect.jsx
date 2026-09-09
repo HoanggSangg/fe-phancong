@@ -6,6 +6,7 @@ const WorkerSearchSelect = ({
   workers = [],
   value = '',
   onChange,
+  onOpen,
   label = 'Tìm thợ',
   placeholder = 'Nhập tên, SBD...',
   allowEmpty = true,
@@ -31,6 +32,7 @@ const WorkerSearchSelect = ({
       sx={sx}
       options={options}
       value={selected}
+      onOpen={onOpen}
       onChange={(_, option) => onChange(option?._id || '')}
       getOptionLabel={(option) =>
         option?._id === '' ? emptyLabel : getWorkerLabel(option)

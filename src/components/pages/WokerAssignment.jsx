@@ -30,7 +30,6 @@ import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import { getCarROLabel, normalizeROKey } from "../../utils/carListHelpers";
 import {
   getAllWorkers,
-  getAllCars,
   addManualJobToWorker,
   removeManualJobFromWorker,
 } from "../apis/index";
@@ -38,7 +37,7 @@ import { queryKeys } from "../../lib/queryKeys";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../context/ToastContext";
 import { useUnsavedChanges } from "../../context/UnsavedChangesContext";
-import { ACTIVE_CAR_STATUSES, BUSY_CAR_STATUSES, CAR_STATUS_LABELS, hasPermission, isKtv } from "../../utils/permissions";
+import { ACTIVE_CAR_STATUSES, BUSY_CAR_STATUSES, CAR_STATUS_LABELS, hasPermission, isKtv, isGiamSat } from "../../utils/permissions";
 import { filterWorkersByKeyword } from "../../utils/workerSearch";
 import useIsMobile from "../../hooks/useIsMobile";
 import useDebouncedValue from "../../hooks/useDebouncedValue";
@@ -68,27 +67,18 @@ const WokerAssignment = () => {
   }, [jobInputs, setHasUnsavedChanges]);
 
   const isKtvUser = isKtv(user);
+  const isGiamSatUser = isGiamSat(user);
   const canManageJobs = hasPermission(user, 'workers.woker') && !isKtvUser;
   const canViewCars = hasPermission(user, 'cars.manage');
   const pageVisible = usePageVisible();
 
-  const carsParams = isKtvUser
-    ? { mine: '1', statusFilter: 'not_delivered', slim: '1' }
-    : { statusFilter: 'not_delivered', slim: '1' };
-
-  // Xe + thợ độc lập → tải song song (slim payload cho phân công)
-  const carsQuery = useQuery({
-    queryKey: [...(isKtvUser ? queryKeys.carsMine : queryKeys.cars), 'not_delivered', 'slim'],
-    queryFn: async () => (await getAllCars(carsParams)).data,
-    staleTime: 45_000,
-    refetchInterval: pageVisible ? 60_000 : false,
-    refetchIntervalInBackground: false,
-  });
-
   const workersQuery = useQuery({
-    queryKey: queryKeys.workers.all,
+    queryKey: [...queryKeys.workers.all, 'withCars', isGiamSatUser ? 'team' : 'all'],
     queryFn: async () => {
-      const res = await getAllWorkers();
+      const res = await getAllWorkers({
+        includeCars: 1,
+        ...(isGiamSatUser ? { teamScope: 1 } : {}),
+      });
       return res?.data?.workers || res?.data || [];
     },
     staleTime: 45_000,
@@ -97,18 +87,16 @@ const WokerAssignment = () => {
   });
 
   const workers = workersQuery.data || [];
-  const cars = carsQuery.data || [];
-  const pageLoading = carsQuery.isLoading || workersQuery.isLoading;
+  const pageLoading = workersQuery.isLoading;
 
   const reloadWorkers = async () => {
-    await queryClient.invalidateQueries({ queryKey: queryKeys.workers.all });
+    await queryClient.invalidateQueries({ queryKey: [...queryKeys.workers.all, 'withCars'] });
   };
 
   const reloadAll = async () => {
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: queryKeys.workers.all }),
+      queryClient.invalidateQueries({ queryKey: [...queryKeys.workers.all, 'withCars'] }),
       queryClient.invalidateQueries({ queryKey: queryKeys.workers.available }),
-      queryClient.invalidateQueries({ queryKey: queryKeys.cars }),
     ]);
   };
 
@@ -121,25 +109,11 @@ const WokerAssignment = () => {
 
   const getWorkerId = (workerRef) => String(workerRef?._id || workerRef || "");
 
-  const getWorkerAssignedCars = (workerId) => {
-    const wid = String(workerId);
+  const getWorkerAssignedCars = (worker) =>
+    (worker.assignedCars || []).filter((car) => ACTIVE_CAR_STATUSES.includes(car.status));
 
-    return cars.filter((car) => {
-      if (!ACTIVE_CAR_STATUSES.includes(car.status)) return false;
-
-      return car.workers?.some((w) => getWorkerId(w.worker) === wid);
-    });
-  };
-
-  const getWorkerBusyCars = (workerId) => {
-    const wid = String(workerId);
-
-    return cars.filter((car) => {
-      if (!BUSY_CAR_STATUSES.includes(car.status)) return false;
-
-      return car.workers?.some((w) => getWorkerId(w.worker) === wid);
-    });
-  };
+  const getWorkerBusyCars = (worker) =>
+    (worker.assignedCars || []).filter((car) => BUSY_CAR_STATUSES.includes(car.status));
 
   const getWorkerRoleOnCar = (car, workerId) => {
     const assignment = car.workers?.find((w) => getWorkerId(w.worker) === String(workerId));
@@ -155,8 +129,8 @@ const WokerAssignment = () => {
 
   const buildWorkerRows = (sourceWorkers) =>
     sourceWorkers.map((worker) => {
-      const assignedCars = getWorkerAssignedCars(worker._id);
-      const busyCars = getWorkerBusyCars(worker._id);
+      const assignedCars = getWorkerAssignedCars(worker);
+      const busyCars = getWorkerBusyCars(worker);
       const manualJobs = getManualJobsByDate(worker);
 
       const isBusy = worker.status === 'busy';
@@ -181,12 +155,12 @@ const WokerAssignment = () => {
 
   const workerRows = useMemo(
     () => buildWorkerRows(filteredWorkers),
-    [filteredWorkers, cars, selectedDate]
+    [filteredWorkers, selectedDate]
   );
 
   const allWorkerRows = useMemo(
     () => buildWorkerRows(workers),
-    [workers, cars, selectedDate]
+    [workers, selectedDate]
   );
 
   const handleAddJob = async (worker) => {
@@ -630,11 +604,13 @@ const WokerAssignment = () => {
     <PageLayout sx={{ bgcolor: "grey.50", minHeight: "100vh" }}>
       <PageHeader
         emoji="📋"
-        title={isKtvUser ? "Công việc của tôi" : "Phân công công việc theo thợ"}
+        title={isKtvUser ? "Công việc của tôi" : isGiamSatUser ? "Công việc trong tổ" : "Phân công công việc theo thợ"}
         subtitle={
           isKtvUser
             ? "Xem xe đang được gán và công việc ghi tay trong ngày"
-            : "Giao việc ghi tay theo ngày và theo dõi xe đang được gán cho từng thợ"
+            : isGiamSatUser
+              ? "Xem và giao việc ghi tay cho thợ trong tổ của bạn"
+              : "Giao việc ghi tay theo ngày và theo dõi xe đang được gán cho từng thợ"
         }
         actions={
           <Button

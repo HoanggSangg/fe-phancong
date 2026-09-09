@@ -13,6 +13,8 @@ import {
 import { Person } from '@mui/icons-material';
 import { getAvailableWorkers } from '../apis';
 import { filterWorkersByKeyword } from '../../utils/workerSearch';
+import { isGiamSat } from '../../utils/permissions';
+import { useAuth } from '../../context/AuthContext';
 import PageLayout from '../common/PageLayout';
 import PageHeader from '../common/PageHeader';
 import useIsMobile from '../../hooks/useIsMobile';
@@ -92,6 +94,8 @@ const WorkerRow = ({ worker }) => (
 );
 
 const AvailableWorkersPage = () => {
+  const { user } = useAuth();
+  const teamScope = isGiamSat(user);
   const isMobile = useIsMobile();
   const pageVisible = usePageVisible();
   const [workers, setWorkers] = useState([]);
@@ -104,7 +108,7 @@ const AvailableWorkersPage = () => {
     if (silent && document.visibilityState === 'hidden') return;
     if (!silent) setLoading(true);
     try {
-      const res = await getAvailableWorkers();
+      const res = await getAvailableWorkers(teamScope ? { teamScope: 1 } : undefined);
       setWorkers(res.data.workers || res.data || []);
       setLastUpdated(new Date());
     } catch {
@@ -112,7 +116,7 @@ const AvailableWorkersPage = () => {
     } finally {
       if (!silent) setLoading(false);
     }
-  }, []);
+  }, [teamScope]);
 
   useEffect(() => {
     let cancelled = false;

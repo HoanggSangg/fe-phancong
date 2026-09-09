@@ -55,7 +55,6 @@ import useOperationVoiceMonitor from '../../hooks/useOperationVoiceMonitor';
 import useManageCarsBootstrap from '../../hooks/useManageCarsBootstrap';
 import useManageCarsList from '../../hooks/useManageCarsList';
 import useRepairItems from '../../hooks/useRepairItems';
-import useDeferredReady from '../../hooks/useDeferredReady';
 import usePageVisible from '../../hooks/usePageVisible';
 import WorkerHistoryDialog from '../ManageCars/WorkerHistoryDialog';
 import StatusUpdateDialog from '../ManageCars/StatusUpdateDialog';
@@ -102,6 +101,7 @@ const ManageCars = () => {
   const [pageFullscreen, setPageFullscreen] = useState(false);
   const [highlightCarId, setHighlightCarId] = useState('');
   const [searchParams, setSearchParams] = useSearchParams();
+  const [filtersRequested, setFiltersRequested] = useState(false);
   const openCarHandledRef = useRef(false);
 
   const carsListQuery = useManageCarsList(user, {
@@ -114,11 +114,7 @@ const ManageCars = () => {
     searchPlate,
   });
 
-  // Sau list chính: filters → voice poll (không song song lúc mở trang)
-  const filtersReady = useDeferredReady(carsListQuery.isFetched, 450);
-  const voiceReady = useDeferredReady(carsListQuery.isFetched, 1100);
   const pageVisible = usePageVisible();
-  const ktvSyncReady = useDeferredReady(isKtvUser && carsListQuery.isFetched, 2000);
 
   const {
     workers,
@@ -134,7 +130,7 @@ const ManageCars = () => {
     refreshAvailableWorkers,
     invalidateHomeDashboard,
   } = useManageCarsBootstrap(user, {
-    loadFilters: filtersReady,
+    loadFilters: filtersRequested,
   });
 
   const handleRemoteCarChange = useCallback(async () => {
@@ -146,27 +142,36 @@ const ManageCars = () => {
 
   const { voiceEnabled, toggleVoice, testVoice } = useOperationVoiceMonitor({
     poll: canPollLogs,
-    pollReady: voiceReady,
     onNewCarLogs: handleRemoteCarChange,
   });
 
   useEffect(() => {
-    if (!ktvSyncReady || !pageVisible) return undefined;
+    if (!isKtvUser || !pageVisible) return undefined;
 
-    const syncCars = () => {
+    const timer = window.setInterval(() => {
       if (document.visibilityState === 'hidden') return;
-      // Chỉ sync list đang xem — không invalidate toàn dashboard mỗi lần
       refreshManageCarsList().catch(() => {});
-    };
+    }, CAR_SYNC_INTERVAL_MS);
 
-    const timer = window.setInterval(syncCars, CAR_SYNC_INTERVAL_MS);
     return () => window.clearInterval(timer);
-  }, [ktvSyncReady, pageVisible, refreshManageCarsList]);
+  }, [isKtvUser, pageVisible, refreshManageCarsList]);
+
+  const handleRepairSaveCompleted = useCallback(async (updatedCar) => {
+    if (updatedCar?._id) {
+      patchCarInCache(updatedCar);
+      patchCarInManageCarsList(updatedCar);
+    }
+    invalidateManageCarsList();
+    await refreshAvailableWorkers();
+    invalidateHomeDashboard();
+    invalidateWorkerJobCaches();
+  }, [refreshAvailableWorkers, invalidateHomeDashboard]);
 
   const repair = useRepairItems({
     allWorkers,
     ensureAllWorkers,
     setSnackbar: toast.fromSnackbar,
+    onCarCompleted: handleRepairSaveCompleted,
   });
 
   useEffect(() => {
@@ -637,6 +642,7 @@ const ManageCars = () => {
     onDelete: handleDelete,
     onOpenHistory: handleOpenWorkerHistory,
     highlightCarId,
+    onFiltersOpen: () => setFiltersRequested(true),
   };
 
   return (
@@ -708,6 +714,7 @@ const ManageCars = () => {
         apiRepairItems={repair.apiRepairItems}
         manualRepairItems={repair.manualRepairItems}
         allWorkers={allWorkers}
+        workerGroups={repair.workerGroups}
         workersById={repair.workersById}
         revenueBase={repair.revenueBase}
         onSave={repair.handleSaveRepairAssignments}
@@ -715,6 +722,7 @@ const ManageCars = () => {
         onRepairPercentageChange={repair.handleRepairPercentageChange}
         onAddRepairWorkerRow={repair.handleAddRepairWorkerRow}
         onRemoveRepairWorkerRow={repair.handleRemoveRepairWorkerRow}
+        onApplyWorkerGroup={repair.handleApplyWorkerGroup}
         onManualFieldChange={repair.handleManualFieldChange}
         onAddManualItem={repair.handleAddManualItem}
         onRemoveManualItem={repair.handleRemoveManualItem}

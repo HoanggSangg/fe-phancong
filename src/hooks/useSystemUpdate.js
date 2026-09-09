@@ -64,21 +64,34 @@ const useSystemUpdate = () => {
 
     const handleConnect = () => {
       emitPresence(window.location.pathname);
-      checkVersion();
+      window.setTimeout(() => checkVersion(), 1500);
     };
 
     socket.on('system:update-available', handleSystemUpdate);
     socket.on('connect', handleConnect);
 
+    let idleId;
+    let timeoutId;
     if (socket.connected) {
-      handleConnect();
-    } else {
-      checkVersion();
+      emitPresence(window.location.pathname);
+      if (typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function') {
+        idleId = window.requestIdleCallback(() => checkVersion(), { timeout: 2500 });
+      } else {
+        timeoutId = window.setTimeout(() => checkVersion(), 800);
+      }
     }
 
     return () => {
       socket.off('system:update-available', handleSystemUpdate);
       socket.off('connect', handleConnect);
+      if (
+        idleId != null
+        && typeof window !== 'undefined'
+        && typeof window.cancelIdleCallback === 'function'
+      ) {
+        window.cancelIdleCallback(idleId);
+      }
+      if (timeoutId) window.clearTimeout(timeoutId);
     };
   }, [isAuthenticated, loading, applyUpdateIfNeeded, checkVersion]);
 

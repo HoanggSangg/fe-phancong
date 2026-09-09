@@ -1,38 +1,39 @@
-import { useQuery } from '@tanstack/react-query';
-import {
-  getWorkingAndPendingCars,
-  getOverdueCars,
-  getAllLocations,
-} from '../../components/apis/index';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { getWorkingAndPendingCars } from '../../components/apis/index';
 import { useAuth } from '../../context/AuthContext';
 import { queryKeys } from '../../lib/queryKeys';
-import useDeferredReady from '../useDeferredReady';
+import { getLocationsFromCars } from '../../utils/carListHelpers';
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 
-const fetchOverdueCars = async () => {
-  try {
-    const res = await getOverdueCars();
-    return res.data?.cars || [];
-  } catch (error) {
-    if (error?.response?.status === 401 || error?.response?.status === 403) {
-      return [];
-    }
-    throw error;
-  }
-};
+const STATUS_KEYS = [
+  'pending',
+  'working',
+  'done',
+  'waiting_wash',
+  'waiting_handover',
+  'delivered',
+  'additional_repair',
+];
 
 const useHomeDashboard = () => {
   const { isAuthenticated, loading } = useAuth();
+  const queryClient = useQueryClient();
   const enabled = isAuthenticated && !loading;
   const today = todayISO();
 
-  // 1) API chính: xe theo trạng thái trong ngày
   const carsQuery = useQuery({
     queryKey: [...queryKeys.homeDashboard, 'cars', today],
     queryFn: async () => {
       const res = await getWorkingAndPendingCars(today);
-      return res.data || {};
+      const payload = res.data || {};
+      const overdue = STATUS_KEYS
+        .flatMap((key) => payload[key] || [])
+        .filter((car) => car.isLate && car.status !== 'delivered')
+        .filter((car, index, list) => list.findIndex((item) => item._id === car._id) === index)
+        .map((car) => ({ ...car, isLate: true }));
+      queryClient.setQueryData(queryKeys.overdueCars, overdue);
+      return payload;
     },
     enabled,
     staleTime: 45_000,
@@ -46,26 +47,10 @@ const useHomeDashboard = () => {
     },
   });
 
-  // 2) Sau khi cars xong + browser rảnh → overdue (đánh dấu trễ hẹn)
-  const overdueReady = useDeferredReady(enabled && carsQuery.isFetched, 400);
-  const overdueQuery = useQuery({
-    queryKey: queryKeys.overdueCars,
-    queryFn: fetchOverdueCars,
-    enabled: overdueReady,
-    staleTime: 30_000,
-  });
-
-  // 3) Cuối cùng → locations (filter phụ)
-  const locationsReady = useDeferredReady(overdueReady && overdueQuery.isFetched, 200);
-  const locationsQuery = useQuery({
-    queryKey: queryKeys.locations,
-    queryFn: async () => (await getAllLocations()).data || [],
-    enabled: locationsReady,
-    staleTime: 5 * 60_000,
-  });
-
-  const carStatusData = carsQuery.data || {};
-  const overdueRaw = overdueQuery.data || [];
+  const carStatusData = STATUS_KEYS.reduce((acc, key) => {
+    acc[key] = carsQuery.data?.[key] || [];
+    return acc;
+  }, {});
 
   const todayCars = [];
   Object.values(carStatusData).forEach((cars) => {
@@ -76,20 +61,19 @@ const useHomeDashboard = () => {
     });
   });
 
-  const overdueIds = new Set(overdueRaw.map((car) => car._id));
+  const overdueCars = [
+    ...todayCars.filter((car) => car.isLate),
+    ...Object.values(carStatusData)
+      .flat()
+      .filter((car) => car.isLate && car.currentDate !== today),
+  ].filter((car, index, list) => list.findIndex((item) => item._id === car._id) === index);
 
   const data = carsQuery.data !== undefined
     ? {
-      carsToday: todayCars.map((car) => ({
-        ...car,
-        isLate: overdueIds.has(car._id),
-      })),
-      overdueCars: overdueRaw.map((car) => ({
-        ...car,
-        isLate: true,
-      })),
+      carsToday: todayCars,
+      overdueCars: overdueCars.map((car) => ({ ...car, isLate: true })),
       carsByStatus: carStatusData,
-      locations: locationsQuery.data || [],
+      locations: getLocationsFromCars([...todayCars, ...overdueCars]),
       todayISO: today,
     }
     : undefined;
@@ -97,8 +81,8 @@ const useHomeDashboard = () => {
   return {
     data,
     isLoading: carsQuery.isLoading,
-    filtersLoading: locationsReady && locationsQuery.isLoading,
-    isFetching: carsQuery.isFetching || locationsQuery.isFetching || overdueQuery.isFetching,
+    filtersLoading: false,
+    isFetching: carsQuery.isFetching,
   };
 };
 

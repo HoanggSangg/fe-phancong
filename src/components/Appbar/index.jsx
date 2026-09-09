@@ -34,6 +34,7 @@ import BarChartIcon from '@mui/icons-material/BarChart';
 import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
+import GroupWorkIcon from '@mui/icons-material/GroupWork';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { getNavGroupsForUser, ROLE_LABELS } from '../../utils/permissions';
@@ -47,7 +48,6 @@ import {
   drawerNavItemSx,
 } from '../../constants/brand';
 import useOverdueCarsMarquee, { formatOverdueMarqueeLabel } from '../../hooks/queries/useOverdueCarsMarquee';
-import useDeferredReady from '../../hooks/useDeferredReady';
 
 const NAV_ICONS = {
   'cars.today': <DirectionsCarIcon fontSize="small" />,
@@ -58,6 +58,7 @@ const NAV_ICONS = {
   'workers.available': <PersonSearchIcon fontSize="small" />,
   'workers.repair-history': <HistoryIcon fontSize="small" />,
   'workers.main': <EngineeringIcon fontSize="small" />,
+  'worker-groups.manage': <GroupWorkIcon fontSize="small" />,
   'reports.revenue': <BarChartIcon fontSize="small" />,
   'reports.praise': <EmojiEventsIcon fontSize="small" />,
   'reports.warning': <WarningAmberIcon fontSize="small" />,
@@ -77,12 +78,11 @@ const AppBarComponent = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const { user, logout, isAuthenticated, loading } = useAuth();
+  const { user, logout } = useAuth();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
-  const marqueeEnabled = useDeferredReady(!isMobile && isAuthenticated && !loading, 900);
-  const { data: overdueCars = [] } = useOverdueCarsMarquee(marqueeEnabled);
+  const { data: overdueCars = [] } = useOverdueCarsMarquee(false);
   const marqueeText = formatOverdueMarqueeLabel(overdueCars);
   const marqueeDuration = Math.max(12, Math.min(40, overdueCars.length * 4 + 8));
 

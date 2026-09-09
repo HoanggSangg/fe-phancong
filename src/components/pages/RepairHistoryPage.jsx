@@ -28,7 +28,8 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
-import { CAR_STATUS_LABELS, isKtv, hasPermission } from '../../utils/permissions';
+import { useSearchParams } from 'react-router-dom';
+import { CAR_STATUS_LABELS, isKtv, isGiamSat, hasPermission } from '../../utils/permissions';
 import WorkerSearchSelect from '../common/WorkerSearchSelect';
 import { formatMoney } from '../../utils/dateFilters';
 import usePeriodFilter from '../../hooks/usePeriodFilter';
@@ -39,11 +40,9 @@ import {
   sumAssignmentsRevenue,
 } from '../../utils/repairHistoryExcel';
 import useRepairHistory, { fetchRepairHistoryData } from '../../hooks/queries/useRepairHistory';
-import useRevenueSettings from '../../hooks/queries/useRevenueSettings';
 import useWorkers from '../../hooks/queries/useWorkers';
-import useDeferredReady from '../../hooks/useDeferredReady';
 import { REPAIR_HISTORY_PAGE_SIZE } from '../../utils/repairHistory';
-import { getItemRevenueBaseAmount, getRevenueBaseLabel } from '../../utils/revenueHelpers';
+import { getItemRevenueBaseAmount, getRevenueBaseLabel, normalizeRevenueBase } from '../../utils/revenueHelpers';
 import PageLayout from '../common/PageLayout';
 import PageHeader from '../common/PageHeader';
 import FilterPanel from '../common/FilterPanel';
@@ -60,37 +59,53 @@ const formatAnimatedMoney = (value, animationKey) => (
 const RepairHistoryPage = () => {
   const { user } = useAuth();
   const toast = useToast();
+  const [searchParams] = useSearchParams();
+  const urlWorkerId = searchParams.get('workerId') || '';
+  const urlFrom = searchParams.get('from') || '';
+  const urlTo = searchParams.get('to') || '';
+  const urlName = searchParams.get('name') || '';
+  const hasUrlRange = Boolean(urlFrom && urlTo);
+
   const isKtvUser = isKtv(user?.role);
+  const isGiamSatUser = isGiamSat(user);
   const canViewRevenue = hasPermission(user, 'reports.revenue');
   const canViewItemPrices = isKtvUser || canViewRevenue;
+  const canFilterWorkers = !isKtvUser;
 
   const [page, setPage] = useState(1);
   const [exporting, setExporting] = useState(false);
   const [includeDeliveredDetails, setIncludeDeliveredDetails] = useState(false);
   const [expandedDeliveredCars, setExpandedDeliveredCars] = useState(() => new Set());
-  const { period, setPeriod, fromDate, setFromDate, toDate, setToDate } = usePeriodFilter('today');
-  const [workerFilter, setWorkerFilter] = useState('');
+  const { period, setPeriod, fromDate, setFromDate, toDate, setToDate } = usePeriodFilter(
+    hasUrlRange ? 'custom' : 'today',
+    hasUrlRange ? { from: urlFrom, to: urlTo } : null
+  );
+  const [workerFilter, setWorkerFilter] = useState(urlWorkerId);
 
   const workerIdParam = !isKtvUser && workerFilter ? workerFilter : undefined;
 
-  const { data: revenueSettings, isLoading: revenueSettingsLoading } = useRevenueSettings(
-    canViewItemPrices
-  );
-  const revenueBase = revenueSettings?.revenueBase || 'amount';
-  const revenueBaseLabel = getRevenueBaseLabel(revenueBase);
-
-  const { data, isLoading, isFetching, error, isFetched } = useRepairHistory({
+  const { data, isLoading, isFetching, error } = useRepairHistory({
     from: fromDate,
     to: toDate,
     workerId: workerIdParam,
     page,
-    enabled: Boolean(fromDate && toDate && (!canViewItemPrices || !revenueSettingsLoading)),
+    enabled: Boolean(fromDate && toDate),
   });
 
-  const historyLoading = (canViewItemPrices && revenueSettingsLoading) || isLoading;
+  const historyLoading = isLoading;
+  const revenueBase = normalizeRevenueBase(data?.revenueBase);
+  const revenueBaseLabel = getRevenueBaseLabel(revenueBase);
 
-  const workersReady = useDeferredReady(canViewRevenue && !isKtvUser && isFetched, 400);
-  const { data: workers = [] } = useWorkers(workersReady);
+  const [workersEnabled, setWorkersEnabled] = useState(Boolean(urlWorkerId));
+  const { data: workers = [] } = useWorkers(canFilterWorkers && workersEnabled, {
+    teamScope: isGiamSatUser,
+  });
+
+  const workersForSelect = useMemo(() => {
+    if (!workerFilter) return workers;
+    if (workers.some((worker) => String(worker._id) === String(workerFilter))) return workers;
+    return [{ _id: workerFilter, name: urlName || 'Thợ đã chọn', soBaoDanh: '' }, ...workers];
+  }, [workers, workerFilter, urlName]);
 
   useEffect(() => {
     setPage(1);
@@ -426,7 +441,11 @@ const RepairHistoryPage = () => {
         subtitle={
           isKtvUser
             ? 'Hạng mục sửa chữa được phân công cho bạn, gom theo từng xe'
-            : 'Hạng mục sửa chữa gom theo từng xe — xe đã giao mặc định thu gọn'
+            : urlName
+              ? `Hạng mục sửa chữa của ${urlName}, gom theo từng xe`
+              : isGiamSatUser
+              ? 'Hạng mục sửa chữa của tổ bạn phụ trách, gom theo từng xe'
+              : 'Hạng mục sửa chữa gom theo từng xe — xe đã giao mặc định thu gọn'
         }
         actions={
           canViewItemPrices ? (
@@ -472,12 +491,13 @@ const RepairHistoryPage = () => {
             }
             label="Kèm chi tiết xe đã giao"
           />
-          {canViewRevenue && (
+          {canFilterWorkers && (
             <WorkerSearchSelect
-              workers={workers}
+              workers={workersForSelect}
               value={workerFilter}
               onChange={setWorkerFilter}
-              label="Lọc theo thợ"
+              onOpen={() => setWorkersEnabled(true)}
+              label={isGiamSatUser ? 'Lọc thợ trong tổ' : 'Lọc theo thợ'}
               sx={{ minWidth: { xs: '100%', sm: 260 }, width: { xs: '100%', sm: 'auto' } }}
             />
           )}

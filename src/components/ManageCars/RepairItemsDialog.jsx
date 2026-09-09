@@ -198,14 +198,38 @@ const InlineWorkers = React.memo(
   function InlineWorkers({
     item,
     allWorkers,
+    workerGroups = [],
     canManage,
     onRepairWorkerChange,
     onRepairPercentageChange,
     onAddRepairWorkerRow,
     onRemoveRepairWorkerRow,
+    onApplyWorkerGroup,
   }) {
     return (
       <Stack spacing={0.5} sx={{ minWidth: 430 }}>
+        {canManage && workerGroups.length > 0 && (
+          <Autocomplete
+            size="small"
+            sx={{ width: 400, ...COMPACT_INPUT_SX }}
+            options={workerGroups}
+            getOptionLabel={(group) => {
+              const total = (group.members || []).reduce(
+                (sum, member) => sum + (Number(member.percentage) || 0),
+                0
+              );
+              return `${group.name} (${group.members?.length || 0} thợ · ${total}%)`;
+            }}
+            value={null}
+            onChange={(_, group) => {
+              if (group) onApplyWorkerGroup?.(item._id, group);
+            }}
+            isOptionEqualToValue={(option, value) => option._id === value?._id}
+            renderInput={(params) => (
+              <TextField {...params} placeholder="Chọn nhóm thợ" />
+            )}
+          />
+        )}
         {(item.selectedWorkers || []).map((entry, rowIndex) => {
           const selectedQuickPercentage =
             COMMON_PERCENTAGE_OPTIONS.find((option) => Number(entry.percentage) === option) ?? null;
@@ -293,6 +317,7 @@ const InlineWorkers = React.memo(
   (prev, next) =>
     prev.item === next.item &&
     prev.allWorkers === next.allWorkers &&
+    prev.workerGroups === next.workerGroups &&
     prev.canManage === next.canManage
 );
 
@@ -326,12 +351,14 @@ const ManualRepairItemRow = React.memo(
     index,
     canManage,
     allWorkers,
+    workerGroups,
     onManualFieldChange,
     onRemoveManualItem,
     onRepairWorkerChange,
     onRepairPercentageChange,
     onAddRepairWorkerRow,
     onRemoveRepairWorkerRow,
+    onApplyWorkerGroup,
   }) {
     return (
       <TableRow hover sx={{ bgcolor: '#fffbeb' }}>
@@ -407,11 +434,13 @@ const ManualRepairItemRow = React.memo(
           <InlineWorkers
             item={item}
             allWorkers={allWorkers}
+            workerGroups={workerGroups}
             canManage={canManage}
             onRepairWorkerChange={onRepairWorkerChange}
             onRepairPercentageChange={onRepairPercentageChange}
             onAddRepairWorkerRow={onAddRepairWorkerRow}
             onRemoveRepairWorkerRow={onRemoveRepairWorkerRow}
+            onApplyWorkerGroup={onApplyWorkerGroup}
           />
         </TableCell>
         {canManage && (
@@ -428,7 +457,8 @@ const ManualRepairItemRow = React.memo(
     prev.item === next.item &&
     prev.index === next.index &&
     prev.canManage === next.canManage &&
-    prev.allWorkers === next.allWorkers
+    prev.allWorkers === next.allWorkers &&
+    prev.workerGroups === next.workerGroups
 );
 
 // ============================================================
@@ -440,11 +470,13 @@ const ApiRepairItemRow = React.memo(
     item,
     index,
     allWorkers,
+    workerGroups,
     canManage,
     onRepairWorkerChange,
     onRepairPercentageChange,
     onAddRepairWorkerRow,
     onRemoveRepairWorkerRow,
+    onApplyWorkerGroup,
   }) {
     return (
       <TableRow hover>
@@ -486,11 +518,13 @@ const ApiRepairItemRow = React.memo(
           <InlineWorkers
             item={item}
             allWorkers={allWorkers}
+            workerGroups={workerGroups}
             canManage={canManage}
             onRepairWorkerChange={onRepairWorkerChange}
             onRepairPercentageChange={onRepairPercentageChange}
             onAddRepairWorkerRow={onAddRepairWorkerRow}
             onRemoveRepairWorkerRow={onRemoveRepairWorkerRow}
+            onApplyWorkerGroup={onApplyWorkerGroup}
           />
         </TableCell>
       </TableRow>
@@ -500,7 +534,8 @@ const ApiRepairItemRow = React.memo(
     prev.item === next.item &&
     prev.index === next.index &&
     prev.canManage === next.canManage &&
-    prev.allWorkers === next.allWorkers
+    prev.allWorkers === next.allWorkers &&
+    prev.workerGroups === next.workerGroups
 );
 
 const RepairItemsDialog = ({
@@ -515,6 +550,7 @@ const RepairItemsDialog = ({
   apiRepairItems,
   manualRepairItems,
   allWorkers,
+  workerGroups = [],
   workersById,
   revenueBase = 'amount',
   onSave,
@@ -522,6 +558,7 @@ const RepairItemsDialog = ({
   onRepairPercentageChange,
   onAddRepairWorkerRow,
   onRemoveRepairWorkerRow,
+  onApplyWorkerGroup,
   onManualFieldChange,
   onAddManualItem,
   onRemoveManualItem,
@@ -597,11 +634,13 @@ const RepairItemsDialog = ({
                           item={item}
                           index={index}
                           allWorkers={allWorkers}
+                          workerGroups={workerGroups}
                           canManage={canManage}
                           onRepairWorkerChange={onRepairWorkerChange}
                           onRepairPercentageChange={onRepairPercentageChange}
                           onAddRepairWorkerRow={onAddRepairWorkerRow}
                           onRemoveRepairWorkerRow={onRemoveRepairWorkerRow}
+                          onApplyWorkerGroup={onApplyWorkerGroup}
                         />
                       ))}
                     </TableBody>
@@ -643,12 +682,14 @@ const RepairItemsDialog = ({
                           index={index}
                           canManage={canManage}
                           allWorkers={allWorkers}
+                          workerGroups={workerGroups}
                           onManualFieldChange={onManualFieldChange}
                           onRemoveManualItem={onRemoveManualItem}
                           onRepairWorkerChange={onRepairWorkerChange}
                           onRepairPercentageChange={onRepairPercentageChange}
                           onAddRepairWorkerRow={onAddRepairWorkerRow}
                           onRemoveRepairWorkerRow={onRemoveRepairWorkerRow}
+                          onApplyWorkerGroup={onApplyWorkerGroup}
                         />
                       ))}
                     </TableBody>

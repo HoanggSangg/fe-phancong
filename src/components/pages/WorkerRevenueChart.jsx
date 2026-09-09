@@ -25,13 +25,15 @@ import {
   CartesianGrid,
   LabelList,
 } from 'recharts';
+import { useNavigate } from 'react-router-dom';
 import {
   getWorkerRevenueChart,
   getWorkerWeeklyRevenueSummary,
 } from '../apis/index';
 import { formatMoney } from '../../utils/dateFilters';
-import { getRevenueBaseLabel } from '../../utils/revenueHelpers';
-import useRevenueSettings from '../../hooks/queries/useRevenueSettings';
+import { getRevenueBaseLabel, normalizeRevenueBase } from '../../utils/revenueHelpers';
+import { ROLES } from '../../utils/permissions';
+import { useAuth } from '../../context/AuthContext';
 import usePeriodFilter from '../../hooks/usePeriodFilter';
 import PeriodFilterToolbar from '../common/PeriodFilterToolbar';
 import FullscreenDialog from '../common/FullscreenDialog';
@@ -126,7 +128,7 @@ const getChartLayout = (count, maxNameLength, fullscreen = false) => {
   };
 };
 
-const RevenueBarChart = ({ chartData, fullscreen = false, height = 400 }) => {
+const RevenueBarChart = ({ chartData, fullscreen = false, height = 400, onWorkerClick }) => {
   const containerRef = useRef(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
   const maxNameLength = getMaxNameLength(chartData);
@@ -150,13 +152,21 @@ const RevenueBarChart = ({ chartData, fullscreen = false, height = 400 }) => {
     return () => observer.disconnect();
   }, [fullscreen, height, chartData.length]);
 
-  const renderXAxisTick = ({ x, y, payload }) => (    <text
+  const handleWorkerClick = (payload) => {
+    const workerId = payload?.workerId || payload?._id;
+    if (!workerId || !onWorkerClick) return;
+    onWorkerClick(payload);
+  };
+
+  const renderXAxisTick = ({ x, y, payload }) => (
+    <text
       x={x}
       y={y}
       dy={layout.tickDy}
       textAnchor={layout.textAnchor}
       fill="#475569"
       fontSize={layout.tickFontSize}
+      style={{ cursor: onWorkerClick ? 'pointer' : 'default' }}
       transform={layout.labelAngle !== 0 ? `rotate(${layout.labelAngle}, ${x}, ${y})` : undefined}
     >
       {payload.value}
@@ -172,6 +182,7 @@ const RevenueBarChart = ({ chartData, fullscreen = false, height = 400 }) => {
         height: fullscreen ? '100%' : height,
         minHeight: fullscreen ? 280 : height,
         flex: fullscreen ? 1 : undefined,
+        cursor: onWorkerClick ? 'pointer' : 'default',
       }}
     >
       {size.width > 0 && size.height > 0 ? (
@@ -180,6 +191,10 @@ const RevenueBarChart = ({ chartData, fullscreen = false, height = 400 }) => {
             data={chartData}
             margin={layout.margin}
             barCategoryGap={layout.barCategoryGap}
+            onClick={(state) => {
+              const payload = state?.activePayload?.[0]?.payload;
+              if (payload) handleWorkerClick(payload);
+            }}
           >
             <CartesianGrid strokeDasharray="3 3" vertical={false} />
             <XAxis
@@ -190,8 +205,11 @@ const RevenueBarChart = ({ chartData, fullscreen = false, height = 400 }) => {
             />
             <YAxis tickFormatter={formatMillion} width={52} tick={{ fontSize: 12 }} />
             <Tooltip
-              formatter={(value) => formatMoney(value)}
-              labelFormatter={(label, payload) => payload?.[0]?.payload?.name || label}
+              formatter={(value) => [formatMoney(value), 'Doanh thu']}
+              labelFormatter={(label, payload) => {
+                const name = payload?.[0]?.payload?.name || label;
+                return onWorkerClick ? `${name} — bấm để xem lịch sử sửa chữa` : name;
+              }}
             />
             <Bar
               dataKey="totalRevenue"
@@ -199,6 +217,8 @@ const RevenueBarChart = ({ chartData, fullscreen = false, height = 400 }) => {
               fill="#1976d2"
               radius={[4, 4, 0, 0]}
               maxBarSize={layout.maxBarSize}
+              cursor={onWorkerClick ? 'pointer' : undefined}
+              onClick={(entry) => handleWorkerClick(entry?.payload || entry)}
             >
               {layout.showLabels && (
                 <LabelList
@@ -216,6 +236,9 @@ const RevenueBarChart = ({ chartData, fullscreen = false, height = 400 }) => {
   );
 };
 const WorkerRevenueChart = () => {
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const canOpenRepairHistory = user?.role === ROLES.ADMIN;
   const theme = useTheme();
   const isMdUp = useMediaQuery(theme.breakpoints.up('md'));
   const isSmUp = useMediaQuery(theme.breakpoints.up('sm'));
@@ -225,8 +248,7 @@ const WorkerRevenueChart = () => {
   const [weeklySummary, setWeeklySummary] = useState(null);
   const [weeklyLoading, setWeeklyLoading] = useState(false);
   const [chartFullscreen, setChartFullscreen] = useState(false);
-  const { data: revenueSettings } = useRevenueSettings();
-  const revenueBase = revenueSettings?.revenueBase || 'amount';
+  const [revenueBase, setRevenueBase] = useState('amount');
 
   const revenueBaseLabel = getRevenueBaseLabel(revenueBase);
 
@@ -235,6 +257,9 @@ const WorkerRevenueChart = () => {
       setLoading(true);
       const res = await getWorkerRevenueChart(from, to);
       setData(Array.isArray(res.data?.data) ? res.data.data : []);
+      if (res.data?.revenueBase) {
+        setRevenueBase(normalizeRevenueBase(res.data.revenueBase));
+      }
     } catch {
       setData([]);
     } finally {
@@ -252,6 +277,19 @@ const WorkerRevenueChart = () => {
     } finally {
       setWeeklyLoading(false);
     }
+  };
+
+  const openWorkerRepairHistory = (worker) => {
+    const workerId = worker?.workerId || worker?._id;
+    if (!workerId) return;
+
+    const params = new URLSearchParams({
+      workerId: String(workerId),
+      from: fromDate,
+      to: toDate,
+    });
+    if (worker.name) params.set('name', worker.name);
+    navigate(`/repair-history?${params.toString()}`);
   };
 
   const handleViewChart = () => {
@@ -423,7 +461,14 @@ const WorkerRevenueChart = () => {
             gap: 1,
           }}
         >
-          <Typography fontWeight="bold">Biểu đồ cột doanh thu theo thợ</Typography>
+          <Box>
+            <Typography fontWeight="bold">Biểu đồ cột doanh thu theo thợ</Typography>
+            {canOpenRepairHistory && (
+              <Typography variant="caption" color="text.secondary">
+                Bấm vào cột doanh thu để xem lịch sử sửa chữa của thợ
+              </Typography>
+            )}
+          </Box>
           <Button
             variant="outlined"
             size="small"
@@ -445,7 +490,11 @@ const WorkerRevenueChart = () => {
               Chưa có dữ liệu doanh thu cho ngày đã chọn.
             </Alert>
           ) : (
-            <RevenueBarChart chartData={chartData} height={chartHeight} />
+            <RevenueBarChart
+              chartData={chartData}
+              height={chartHeight}
+              onWorkerClick={canOpenRepairHistory ? openWorkerRepairHistory : undefined}
+            />
           )}
         </Box>      </Paper>
 
@@ -457,7 +506,11 @@ const WorkerRevenueChart = () => {
         fillContent
       >
         <Box sx={{ flex: 1, minHeight: 0, minWidth: 0, width: '100%', p: { xs: 1, sm: 2 } }}>
-          <RevenueBarChart chartData={chartData} fullscreen />
+          <RevenueBarChart
+            chartData={chartData}
+            fullscreen
+            onWorkerClick={canOpenRepairHistory ? openWorkerRepairHistory : undefined}
+          />
         </Box>      </FullscreenDialog>
 
       <Divider sx={{ my: 2 }} />

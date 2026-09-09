@@ -26,7 +26,7 @@ const useOverdueCarsMarquee = (enabled = true) =>
     },
     enabled: enabled && !!getStoredToken(),
     staleTime: 30_000,
-    refetchInterval: 60_000,
+    refetchInterval: enabled ? 60_000 : false,
     refetchIntervalInBackground: false,
     retry: (failureCount, error) => {
       if (error?.response?.status === 401 || error?.response?.status === 403) {

@@ -255,6 +255,7 @@ const CarTable = ({
   onStatusFilterChange,
   highlightCarId = '',
   filtersLoading = false,
+  onFiltersOpen,
 }) => (
   <Paper variant="outlined" sx={{ width: '100%', overflowX: 'auto', borderRadius: 3 }}>
     {!hideSearch && (
@@ -275,6 +276,7 @@ const CarTable = ({
             value={tableSupervisor}
             label="Chọn giám sát"
             onChange={(e) => onTableSupervisorChange(e.target.value)}
+            onOpen={onFiltersOpen}
             disabled={filtersLoading}
           >
             <MenuItem value="">Tất cả giám sát</MenuItem>
@@ -437,6 +439,7 @@ const CarsPanel = ({
   onDelete,
   onOpenHistory,
   highlightCarId = '',
+  onFiltersOpen,
 }) => {
   const deliveredCount = displayedCars.filter((car) => car.status === 'delivered').length;
 
@@ -453,6 +456,7 @@ const CarsPanel = ({
                   id="manage-cars-location-select"
                   value={selectedLocation}
                   onChange={(e) => onLocationChange(e.target.value)}
+                  onOpen={onFiltersOpen}
                   label="Địa điểm"
                   disabled={filtersLoading}
                 >
@@ -542,6 +546,7 @@ const CarsPanel = ({
                 value={tableSupervisor}
                 label="Chọn giám sát"
                 onChange={(e) => onTableSupervisorChange(e.target.value)}
+                onOpen={onFiltersOpen}
                 disabled={filtersLoading}
               >
                 <MenuItem value="">Tất cả giám sát</MenuItem>
@@ -643,6 +648,7 @@ const CarsPanel = ({
             onStatusFilterChange={onStatusFilterChange}
             highlightCarId={highlightCarId}
             filtersLoading={filtersLoading}
+            onFiltersOpen={onFiltersOpen}
           />
         )}
       </Box>

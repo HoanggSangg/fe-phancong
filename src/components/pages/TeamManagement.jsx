@@ -22,7 +22,6 @@ import {
 import GroupsIcon from '@mui/icons-material/Groups';
 import {
   getAllTeams,
-  getTeamById,
   createTeam,
   updateTeam,
   deleteTeam,
@@ -85,16 +84,6 @@ const TeamManagement = () => {
     if (workersLoadedRef.current) return;
     await fetchWorkers();
   }, [fetchWorkers]);
-
-  const fetchTeamDetail = async (teamId) => {
-    try {
-      const res = await getTeamById(teamId);
-      const data = res.data?.data || res.data;
-      setSelectedTeam(data);
-    } catch {
-      toast.error('Lỗi khi lấy chi tiết tổ');
-    }
-  };
 
   useEffect(() => {
     fetchTeams();
@@ -166,8 +155,9 @@ const TeamManagement = () => {
     }
   };
 
-  const handleSelectTeam = async (teamId) => {
-    await Promise.all([fetchTeamDetail(teamId), ensureWorkers()]);
+  const handleSelectTeam = (teamId) => {
+    const team = teams.find((item) => item._id === teamId);
+    setSelectedTeam(team || null);
     setSelectedWorkerId('');
     setSelectedTeamRole('KTV');
   };
@@ -199,7 +189,6 @@ const TeamManagement = () => {
 
       await fetchTeams();
       await fetchWorkers();
-      await fetchTeamDetail(selectedTeam._id);
 
       setSelectedWorkerId('');
       setSelectedTeamRole('KTV');
@@ -218,7 +207,6 @@ const TeamManagement = () => {
     try {
       const res = await updateWorkerTeamRole(selectedTeam._id, workerId, teamRole);
       await fetchTeams();
-      await fetchTeamDetail(selectedTeam._id);
       if (res.data?.message) {
         // soft feedback
       }
@@ -239,7 +227,6 @@ const TeamManagement = () => {
 
       await fetchTeams();
       await fetchWorkers();
-      await fetchTeamDetail(selectedTeam._id);
 
       toast.success('Xóa thợ khỏi tổ thành công');
     } catch (error) {
@@ -409,6 +396,7 @@ const TeamManagement = () => {
                       labelId="add-worker-select-label"
                       label="Chọn thợ"
                       value={selectedWorkerId}
+                      onOpen={ensureWorkers}
                       onChange={(e) => setSelectedWorkerId(e.target.value)}
                       sx={{ minWidth: 280 }}
                     >

@@ -37,7 +37,7 @@ import {
   deleteUser,
   getAllWorkers,
 } from '../apis';
-import { ROLE_LABELS, ROLE_DESCRIPTIONS, ASSIGNABLE_ROLES, isKtv } from '../../utils/permissions';
+import { ROLE_LABELS, ROLE_DESCRIPTIONS, ASSIGNABLE_ROLES } from '../../utils/permissions';
 import { useToast } from '../../context/ToastContext';
 import PageLayout from '../common/PageLayout';
 import PageHeader from '../common/PageHeader';
@@ -76,6 +76,13 @@ const UserManagement = () => {
     [workers]
   );
 
+  const ttWorkers = useMemo(
+    () => workers.filter((worker) => worker.teamRole === 'TT' && worker.team),
+    [workers]
+  );
+
+  const workerOptions = form.role === 'giam_sat' ? ttWorkers : workers;
+
   const loadUsers = async () => {
     const usersRes = await getUsers();
     setUsers(usersRes.data || []);
@@ -94,25 +101,8 @@ const UserManagement = () => {
   useEffect(() => {
     const init = async () => {
       try {
-        // 1) API chính: users
         const usersRes = await getUsers();
-        const nextUsers = usersRes.data || [];
-        setUsers(nextUsers);
-
-        // 2) Workers chỉ khi danh sách users cần map thợ (sau khi users xong)
-        const needsWorkers = nextUsers.some(
-          (item) => isKtv(item) || item.worker
-        );
-        if (needsWorkers) {
-          await new Promise((resolve) => {
-            if (typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function') {
-              window.requestIdleCallback(() => resolve(), { timeout: 1500 });
-            } else {
-              window.setTimeout(resolve, 300);
-            }
-          });
-          await loadWorkers();
-        }
+        setUsers(usersRes.data || []);
       } catch {
         toast.error('Không tải được dữ liệu');
       }
@@ -160,6 +150,11 @@ const UserManagement = () => {
 
   const handleSave = async () => {
     try {
+      if (form.role === 'giam_sat' && !form.workerId) {
+        toast.error('Giám sát phải liên kết thợ TT của một tổ');
+        return;
+      }
+
       const payload = {
         fullName: form.fullName,
         role: form.role,
@@ -198,6 +193,10 @@ const UserManagement = () => {
 
   const handleQuickRole = async (user, role) => {
     if (user.role === role) return;
+    if (role === 'giam_sat') {
+      toast.error('Giám sát phải liên kết thợ TT. Hãy mở form sửa tài khoản.');
+      return;
+    }
     if (!window.confirm(`Đổi vai trò ${user.fullName} thành ${ROLE_LABELS[role]}?`)) return;
     try {
       await updateUser(user._id, { role });
@@ -380,7 +379,21 @@ const UserManagement = () => {
               fullWidth
               required={!editingUser}
             />
-            <TextField select label="Vai trò" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })} fullWidth>
+            <TextField
+              select
+              label="Vai trò"
+              value={form.role}
+              onChange={(e) => {
+                const role = e.target.value;
+                const next = { ...form, role };
+                if (role === 'giam_sat') {
+                  const stillValid = ttWorkers.some((worker) => worker._id === form.workerId);
+                  if (!stillValid) next.workerId = '';
+                }
+                setForm(next);
+              }}
+              fullWidth
+            >
               {ASSIGNABLE_ROLES.map((role) => (
                 <MenuItem key={role} value={role}>{ROLE_LABELS[role]}</MenuItem>
               ))}
@@ -391,15 +404,26 @@ const UserManagement = () => {
             <Divider />
             <TextField
               select
-              label="Liên kết thợ (KTV / Lái xe / Kho)"
+              label={form.role === 'giam_sat' ? 'Liên kết thợ TT (tổ trưởng)' : 'Liên kết thợ (KTV / Lái xe / Kho)'}
               value={form.workerId}
               onChange={(e) => setForm({ ...form, workerId: e.target.value })}
               fullWidth
-              helperText="KTV, Lái xe, Kho cần liên kết thợ để xem đúng xe đang làm"
+              required={form.role === 'giam_sat'}
+              helperText={
+                form.role === 'giam_sat'
+                  ? (ttWorkers.length
+                    ? 'Giám sát phải là TT của một tổ. Chỉ hiện thợ đang giữ chức vụ TT.'
+                    : 'Chưa có thợ TT. Hãy gán TT trong Quản lý tổ trước.')
+                  : 'KTV, Lái xe, Kho cần liên kết thợ để xem đúng xe đang làm'
+              }
             >
-              <MenuItem value="">Không liên kết</MenuItem>
-              {workers.map((worker) => (
-                <MenuItem key={worker._id} value={worker._id}>{worker.name} ({worker.soBaoDanh})</MenuItem>
+              <MenuItem value="">{form.role === 'giam_sat' ? 'Chọn thợ TT' : 'Không liên kết'}</MenuItem>
+              {workerOptions.map((worker) => (
+                <MenuItem key={worker._id} value={worker._id}>
+                  {worker.name} ({worker.soBaoDanh})
+                  {worker.team?.name ? ` — ${worker.team.name}` : ''}
+                  {worker.teamRole === 'TT' ? ' · TT' : ''}
+                </MenuItem>
               ))}
             </TextField>
             <FormControlLabel

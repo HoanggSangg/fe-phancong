@@ -1,16 +1,15 @@
 import { useCallback, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  getAllSupervisors,
   getAvailableWorkers,
-  getAllLocations,
   getAllWorkers,
+  getManageCarsFilters,
 } from '../components/apis/index';
 import { queryKeys } from '../lib/queryKeys';
 import { isKtv } from '../utils/permissions';
 
 /**
- * Filters phụ (locations → supervisors) chỉ chạy khi loadFilters=true.
+ * Filters phụ (locations + supervisors) chỉ chạy khi loadFilters=true — 1 API.
  * Workers chỉ fetch khi mở dialog (ensure*).
  */
 const useManageCarsBootstrap = (user, { loadFilters = false } = {}) => {
@@ -21,19 +20,16 @@ const useManageCarsBootstrap = (user, { loadFilters = false } = {}) => {
   const isKtvUser = isKtv(user);
   const filtersEnabled = loadFilters && !isKtvUser;
 
-  // Cascade: locations trước, supervisors sau khi locations xong
-  const locationsQuery = useQuery({
-    queryKey: queryKeys.locations,
-    queryFn: async () => (await getAllLocations()).data,
+  const filtersQuery = useQuery({
+    queryKey: ['cars', 'manage-filters'],
+    queryFn: async () => {
+      const data = (await getManageCarsFilters()).data || {};
+      queryClient.setQueryData(queryKeys.locations, data.locations || []);
+      queryClient.setQueryData(queryKeys.supervisors, data.supervisors || []);
+      return data;
+    },
     staleTime: 5 * 60_000,
     enabled: filtersEnabled,
-  });
-
-  const supervisorsQuery = useQuery({
-    queryKey: queryKeys.supervisors,
-    queryFn: async () => (await getAllSupervisors()).data,
-    staleTime: 5 * 60_000,
-    enabled: filtersEnabled && locationsQuery.isFetched,
   });
 
   const ensureAvailableWorkers = useCallback(async () => {
@@ -83,9 +79,9 @@ const useManageCarsBootstrap = (user, { loadFilters = false } = {}) => {
     setWorkers,
     allWorkers,
     availableWorkers,
-    supervisors: supervisorsQuery.data || [],
-    locations: locationsQuery.data || [],
-    filtersLoading: filtersEnabled && (locationsQuery.isLoading || supervisorsQuery.isLoading),
+    supervisors: filtersQuery.data?.supervisors || [],
+    locations: filtersQuery.data?.locations || [],
+    filtersLoading: filtersEnabled && filtersQuery.isLoading,
     ensureAvailableWorkers,
     ensureAllWorkers,
     refreshManageCarsList,

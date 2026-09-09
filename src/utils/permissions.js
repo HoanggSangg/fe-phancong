@@ -18,8 +18,8 @@ export const ROLE_LABELS = {
 
 export const ROLE_DESCRIPTIONS = {
   admin: 'Toàn quyền: quản lý xe, thợ, báo cáo, địa điểm, giám sát và tài khoản',
-  giam_sat: 'Quản lý xe, phân công thợ, xem báo cáo, tải ảnh chứng từ — không xóa xe hay quản lý hệ thống',
-  ktv: 'Xem tất cả xe trong ngày, quản lý xe của mình, chi tiết công việc và tải ảnh chứng từ',
+  giam_sat: 'Quản lý xe, phân công thợ, xem báo cáo như trước. Chi tiết công việc, lịch sử sửa chữa và thợ rảnh xem toàn bộ dữ liệu trong tổ (TT)',
+  ktv: 'Chỉ xem xe, công việc và lịch sử sửa chữa của chính mình',
   lai_xe: 'Quyền như KTV, thêm chức năng tải ảnh chứng từ',
   kho: 'Quyền như KTV, thêm chức năng tải ảnh chứng từ',
   cvdv: 'Quyền như Giám sát, thêm chức năng tải ảnh chứng từ',
@@ -101,6 +101,16 @@ export const PERMISSION_CATALOG = [
     adminArea: true,
     adminGroup: 'Quản lý',
     defaultRoles: ['admin', 'giam_sat', 'cvdv'],
+  },
+  {
+    key: 'worker-groups.manage',
+    label: 'Nhóm thợ',
+    group: 'Thợ & công việc',
+    path: '/worker-groups',
+    adminPath: '/admin/worker-groups',
+    adminArea: true,
+    adminGroup: 'Quản lý',
+    defaultRoles: ['admin'],
   },
   { key: 'reports.revenue', label: 'Doanh thu thợ', group: 'Báo cáo', path: '/workers/revenue-chart', defaultRoles: ['admin', 'giam_sat', 'cvdv'] },
   {
@@ -334,6 +344,11 @@ export const getPermissionGroups = () =>
 export const isKtv = (roleOrUser) => {
   const role = typeof roleOrUser === 'object' ? roleOrUser?.role : roleOrUser;
   return KTV_LIKE_ROLES.includes(role);
+};
+
+export const isGiamSat = (roleOrUser) => {
+  const role = typeof roleOrUser === 'object' ? roleOrUser?.role : roleOrUser;
+  return role === ROLES.GIAM_SAT;
 };
 
 export const isGiamSatLike = (roleOrUser) => {

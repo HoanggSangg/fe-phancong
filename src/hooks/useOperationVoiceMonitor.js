@@ -96,7 +96,7 @@ const useOperationVoiceMonitor = ({ poll = true, pollReady = true, onNewCarLogs 
   }, [latestLog]);
 
   useEffect(() => {
-    if (!poll || !pollReady || !pageVisible) return undefined;
+    if (!poll || !pollReady || !pageVisible || !voiceEnabled) return undefined;
 
     const today = getTodayDate();
 
@@ -123,7 +123,7 @@ const useOperationVoiceMonitor = ({ poll = true, pollReady = true, onNewCarLogs 
     fetchVoiceLogs();
     const timer = window.setInterval(fetchVoiceLogs, POLL_INTERVAL_MS);
     return () => window.clearInterval(timer);
-  }, [poll, pollReady, pageVisible, processLogs]);
+  }, [poll, pollReady, pageVisible, voiceEnabled, processLogs]);
 
   return {
     voiceEnabled,

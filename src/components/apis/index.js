@@ -8,14 +8,14 @@ export const createUser = (data) => api.post('/auth/users', data);
 export const updateUser = (id, data) => api.put(`/auth/users/${id}`, data);
 export const deleteUser = (id) => api.delete(`/auth/users/${id}`);
 
-export const getAllWorkers = () => api.get('/worker');
+export const getAllWorkers = (params) => api.get('/worker', { params });
 export const createWorker = (data) => api.post('/worker', data);
 export const importWorkersBulk = (workers) => api.post('/worker/import', { workers });
 export const updateWorker = (id, data) => api.put(`/worker/${id}`, data);
 export const toggleWorkerCountRevenue = (id, countRevenue) =>
   api.patch(`/worker/${id}/count-revenue`, { countRevenue });
 export const deleteWorker = (id) => api.delete(`/worker/${id}`);
-export const getAvailableWorkers = () => api.get('/worker/available');
+export const getAvailableWorkers = (params) => api.get('/worker/available', { params });
 export const lookupCarOrRO = (keyword, plate = '') =>
   api.get(`/external/lookup/${keyword}`, { params: { plate } });
 
@@ -26,6 +26,7 @@ export const deleteSupervisor = (id) => api.delete(`/supervisors/${id}`);
 
 export const getAllCars = (params) => api.get('/cars', { params });
 export const getManageCarsList = (params) => api.get('/cars/manage-list', { params });
+export const getManageCarsFilters = () => api.get('/cars/manage-filters');
 export const getCarById = (id, params) => api.get(`/cars/${id}`, { params });
 export const createCar = (data) => api.post('/cars', data);
 export const updateCar = (id, data) => api.put(`/cars/${id}`, data);
@@ -84,6 +85,12 @@ export const updateWorkerTeamRole = (teamId, workerId, teamRole) =>
   api.patch(`/teams/${teamId}/workers/${workerId}/role`, { teamRole });
 export const removeWorkerFromTeam = (teamId, workerId) =>
   api.delete(`/teams/${teamId}/workers/${workerId}`);
+
+export const getWorkerGroups = () => api.get('/worker-groups');
+export const getWorkerGroupById = (id) => api.get(`/worker-groups/${id}`);
+export const createWorkerGroup = (data) => api.post('/worker-groups', data);
+export const updateWorkerGroup = (id, data) => api.put(`/worker-groups/${id}`, data);
+export const deleteWorkerGroup = (id) => api.delete(`/worker-groups/${id}`);
 export const addManualJobToWorker = (workerId, data) =>
   api.post(`/worker/${workerId}/manual-jobs`, data);
 export const removeManualJobFromWorker = (workerId, jobId) =>

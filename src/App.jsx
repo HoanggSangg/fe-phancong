@@ -32,6 +32,7 @@ const AdminDashboardPage = lazy(() => import('./components/pages/AdminDashboardP
 const WeeklyPraiseForm = lazy(() => import('./components/pages/WeeklyPraiseForm'));
 const WeeklyWarningForm = lazy(() => import('./components/pages/WeeklyWarningForm'));
 const TeamManagement = lazy(() => import('./components/pages/TeamManagement'));
+const WorkerGroupManagement = lazy(() => import('./components/pages/WorkerGroupManagement'));
 const UserManagement = lazy(() => import('./components/pages/UserManagement'));
 const AccountPermissionsPage = lazy(() => import('./components/pages/AccountPermissionsPage'));
 const OperationHistoryPage = lazy(() => import('./components/pages/OperationHistoryPage'));
@@ -144,10 +145,15 @@ const AdminShell = () => (
   </AdminOnlyRoute>
 );
 
+const DefaultRedirect = () => {
+  const { user } = useAuth();
+  return <Navigate to={getFirstAllowedPath(user)} replace />;
+};
+
 const AppLayout = () => (
   <Routes>
     <Route element={<AppShell />}>
-      <Route path="/" element={<Navigate to="/cars" replace />} />
+      <Route path="/" element={<DefaultRedirect />} />
       <Route path="/cars" element={withSuspense(<PermissionRoute permission="cars.today"><CarsTodayPage /></PermissionRoute>)} />
       <Route path="/cars/add" element={withSuspense(<PermissionRoute permission="cars.add"><AddCarPage /></PermissionRoute>)} />
       <Route path="/cars/manage" element={withSuspense(<PermissionRoute permission="cars.manage"><ManageCarsPage /></PermissionRoute>)} />
@@ -178,6 +184,16 @@ const AppLayout = () => (
           </PermissionRoute>
         )}
       />
+      <Route
+        path="/worker-groups"
+        element={withSuspense(
+          <PermissionRoute permission="worker-groups.manage">
+            <PreferAdminPath permission="worker-groups.manage">
+              <WorkerGroupManagement />
+            </PreferAdminPath>
+          </PermissionRoute>
+        )}
+      />
       <Route path="/dashboard" element={<Navigate to="/admin/dashboard" replace />} />
       <Route path="/system" element={<Navigate to="/admin" replace />} />
       <Route path="/locations" element={<Navigate to="/admin/locations" replace />} />
@@ -190,7 +206,7 @@ const AppLayout = () => (
       <Route path="/payroll" element={<Navigate to="/admin/payroll" replace />} />
       <Route path="/qr-labels" element={<Navigate to="/admin/qr-labels" replace />} />
 
-      <Route path="*" element={<Navigate to="/cars" replace />} />
+      <Route path="*" element={<DefaultRedirect />} />
     </Route>
   </Routes>
 );
@@ -218,6 +234,7 @@ function App() {
               <Route path="dashboard" element={withSuspense(<PermissionRoute permission="reports.dashboard"><AdminDashboardPage /></PermissionRoute>)} />
               <Route path="workers" element={withSuspense(<PermissionRoute permission="workers.main"><MainWorkersPage /></PermissionRoute>)} />
               <Route path="teams" element={withSuspense(<PermissionRoute permission="teams.manage"><TeamManagement /></PermissionRoute>)} />
+              <Route path="worker-groups" element={withSuspense(<PermissionRoute permission="worker-groups.manage"><WorkerGroupManagement /></PermissionRoute>)} />
               <Route path="locations" element={withSuspense(<PermissionRoute permission="system.locations"><LocationManager /></PermissionRoute>)} />
               <Route path="insurance" element={withSuspense(<PermissionRoute permission="system.insurance"><InsurancePage /></PermissionRoute>)} />
               <Route path="supervisors" element={withSuspense(<PermissionRoute permission="system.supervisors"><SupervisorsPage /></PermissionRoute>)} />

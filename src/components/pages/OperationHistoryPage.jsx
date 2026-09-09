@@ -37,6 +37,7 @@ import PageLayout from '../common/PageLayout';
 import PageHeader from '../common/PageHeader';
 import FilterPanel from '../common/FilterPanel';
 import { extractSoChungTu, isValidSoChungTu } from '../../utils/uploadUrl';
+import { getCarRefFromOperationLog, openManageCarsForCar } from '../../utils/carListHelpers';
 
 const POLL_INTERVAL_MS = 45_000;
 
@@ -217,6 +218,15 @@ const OperationHistoryPage = () => {
     navigate(`/upload-image?soChungTu=${encodeURIComponent(soChungTu)}`);
   };
 
+  const handleViewManageCar = (log) => {
+    const carRef = getCarRefFromOperationLog(log);
+    if (!carRef) {
+      toast.error('Không xác định được biển số xe để mở quản lý xe.');
+      return;
+    }
+    openManageCarsForCar(navigate, carRef);
+  };
+
   const renderDetails = (log) => {
     const meta = log.metadata || {};
     const failed = isFailedLog(log);
@@ -287,19 +297,28 @@ const OperationHistoryPage = () => {
             ))}
           </Stack>
         )}
+        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mt: 0.5 }}>
         {(isDocImage || log.module === 'xuat_kho') && isValidSoChungTu(getLogSoChungTu(log)) && (
-          <Box>
             <Button
               size="small"
               variant="outlined"
               startIcon={<DirectionsCarIcon />}
               onClick={() => handleViewUploadCar(log)}
-              sx={{ mt: 0.5 }}
             >
               Xem xe / tải ảnh
             </Button>
-          </Box>
         )}
+        {getCarRefFromOperationLog(log) && (
+            <Button
+              size="small"
+              variant="outlined"
+              startIcon={<DirectionsCarIcon />}
+              onClick={() => handleViewManageCar(log)}
+            >
+              Xem xe
+            </Button>
+        )}
+        </Stack>
       </Stack>
     );
   };

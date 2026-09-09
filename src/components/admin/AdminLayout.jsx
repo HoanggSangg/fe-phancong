@@ -21,6 +21,7 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import EngineeringIcon from '@mui/icons-material/Engineering';
 import GroupsIcon from '@mui/icons-material/Groups';
+import GroupWorkIcon from '@mui/icons-material/GroupWork';
 import LocationOnIcon from '@mui/icons-material/LocationOn';
 import HealthAndSafetyIcon from '@mui/icons-material/HealthAndSafety';
 import SupervisorAccountIcon from '@mui/icons-material/SupervisorAccount';
@@ -44,6 +45,7 @@ const NAV_ICONS = {
   'reports.dashboard': <DashboardIcon fontSize="small" />,
   'workers.main': <EngineeringIcon fontSize="small" />,
   'teams.manage': <GroupsIcon fontSize="small" />,
+  'worker-groups.manage': <GroupWorkIcon fontSize="small" />,
   'system.locations': <LocationOnIcon fontSize="small" />,
   'system.insurance': <HealthAndSafetyIcon fontSize="small" />,
   'system.supervisors': <SupervisorAccountIcon fontSize="small" />,
