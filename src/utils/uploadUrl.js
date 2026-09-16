@@ -39,6 +39,16 @@ export const extractSoChungTu = (qrText) => {
 
 export const isValidSoChungTu = (value) => /^TT[A-Z0-9]+$/.test(value);
 
+/** Số chứng từ TT... dùng cho trang tải ảnh, lấy từ RO của xe. */
+export const getSoChungTuFromCar = (car) => {
+  const candidates = [car?.roNumber, car?.roCode, car?.roKey];
+  for (const value of candidates) {
+    const code = extractSoChungTu(value);
+    if (isValidSoChungTu(code)) return code;
+  }
+  return '';
+};
+
 export const buildUploadUrl = (soChungTu) => {
   const base = getUploadBaseUrl();
   const separator = base.includes('?') ? '&' : '?';

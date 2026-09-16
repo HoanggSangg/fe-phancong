@@ -27,7 +27,7 @@ import FullscreenIcon from '@mui/icons-material/Fullscreen';
 import DirectionsCarIcon from '@mui/icons-material/DirectionsCar';
 import dayjs from 'dayjs';
 import customParseFormat from 'dayjs/plugin/customParseFormat';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { useUnsavedChanges } from '../../context/UnsavedChangesContext';
@@ -49,6 +49,7 @@ import {
   invalidateManageCarsList,
 } from '../../lib/carCache';
 import { findCarByPlateAndRO, getCarROLabel } from '../../utils/carListHelpers';
+import { getSoChungTuFromCar } from '../../utils/uploadUrl';
 import FullscreenDialog from '../common/FullscreenDialog';
 import OperationVoiceControls from '../common/OperationVoiceControls';
 import useOperationVoiceMonitor from '../../hooks/useOperationVoiceMonitor';
@@ -78,7 +79,9 @@ const ManageCars = () => {
   const canPollLogs = canPollOperationLogs(user);
   const canManage = canEditManagedCars(user);
   const canSyncExternal = hasPermission(user, 'cars.add');
+  const canUploadImage = hasPermission(user, 'cars.upload-image');
   const isKtvUser = isKtv(user);
+  const navigate = useNavigate();
 
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState('not_delivered');
@@ -393,6 +396,15 @@ const ManageCars = () => {
     return res.data;
   }, [isKtvUser]);
 
+  const handleOpenUploadImage = (car) => {
+    const soChungTu = getSoChungTuFromCar(car);
+    if (!soChungTu) {
+      toast.error('Xe này chưa có số chứng từ (TT...) để mở trang tải ảnh.');
+      return;
+    }
+    navigate(`/upload-image?soChungTu=${encodeURIComponent(soChungTu)}`);
+  };
+
   const handleOpenWorkerHistory = async (car) => {
     setHistoryDialogOpen(true);
     setHistoryLoading(true);
@@ -634,6 +646,7 @@ const ManageCars = () => {
     onTableSupervisorChange: handleTableSupervisorChange,
     canManage,
     canDelete,
+    canUploadImage,
     getStatusConfig,
     renderStatusIcon,
     onStatusChange: handleStatusChangeClick,
@@ -641,6 +654,7 @@ const ManageCars = () => {
     onEdit: handleEditClick,
     onDelete: handleDelete,
     onOpenHistory: handleOpenWorkerHistory,
+    onUploadImage: handleOpenUploadImage,
     highlightCarId,
     onFiltersOpen: () => setFiltersRequested(true),
   };

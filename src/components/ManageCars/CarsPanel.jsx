@@ -31,12 +31,14 @@ import {
   Edit,
   Error,
   History,
+  PhotoCamera,
   ReceiptLong,
 } from '@mui/icons-material';
 import DirectionsCarIcon from '@mui/icons-material/DirectionsCar';
 import dayjs from 'dayjs';
 import { getCarROLabel } from '../../utils/carListHelpers';
 import { getAvailableStatusTransitions, getConditionConfig } from '../../utils/carStatusConfig';
+import { getSoChungTuFromCar } from '../../utils/uploadUrl';
 import FilterPanel from '../common/FilterPanel';
 
 const HIGHLIGHT_ROW_SX = {
@@ -74,53 +76,75 @@ const CarActions = ({
   car,
   canManage,
   canDelete,
+  canUploadImage,
   onLoadRepairItems,
   onEdit,
   onDelete,
   onOpenHistory,
-}) => (
-  <Box sx={{ display: 'flex', gap: 0.5 }}>
-    <Tooltip title="Chi tiết lệnh sửa chữa (API + công việc ngoài báo giá)">
-      <span>
-        <IconButton size="small" color="info" onClick={() => onLoadRepairItems(car)} sx={{ borderRadius: 2 }}>
-          <ReceiptLong />
-        </IconButton>
-      </span>
-    </Tooltip>
-    {canManage && (
-      <Tooltip title="Sửa xe">
+  onUploadImage,
+}) => {
+  const soChungTu = getSoChungTuFromCar(car);
+
+  return (
+    <Box sx={{ display: 'flex', gap: 0.5 }}>
+      <Tooltip title="Chi tiết lệnh sửa chữa (API + công việc ngoài báo giá)">
         <span>
-          <IconButton size="small" color="primary" onClick={() => onEdit(car)} sx={{ borderRadius: 2 }}>
-            <Edit />
+          <IconButton size="small" color="info" onClick={() => onLoadRepairItems(car)} sx={{ borderRadius: 2 }}>
+            <ReceiptLong />
           </IconButton>
         </span>
       </Tooltip>
-    )}
-    {canDelete && (
-      <Tooltip title="Xoá xe">
-        <span>
-          <IconButton size="small" color="error" onClick={() => onDelete(car._id)} sx={{ borderRadius: 2 }}>
-            <Delete />
-          </IconButton>
-        </span>
-      </Tooltip>
-    )}
-    {canManage && (
-      <Tooltip title="Lịch sử thay đổi thợ">
-        <span>
-          <IconButton size="small" color="secondary" onClick={() => onOpenHistory(car)} sx={{ borderRadius: 2 }}>
-            <History />
-          </IconButton>
-        </span>
-      </Tooltip>
-    )}
-  </Box>
-);
+      {canUploadImage && (
+        <Tooltip title={soChungTu ? `Tải ảnh (${soChungTu})` : 'Chưa có số chứng từ (TT...) để tải ảnh'}>
+          <span>
+            <IconButton
+              size="small"
+              color="success"
+              disabled={!soChungTu}
+              onClick={() => onUploadImage(car)}
+              sx={{ borderRadius: 2 }}
+            >
+              <PhotoCamera />
+            </IconButton>
+          </span>
+        </Tooltip>
+      )}
+      {canManage && (
+        <Tooltip title="Sửa xe">
+          <span>
+            <IconButton size="small" color="primary" onClick={() => onEdit(car)} sx={{ borderRadius: 2 }}>
+              <Edit />
+            </IconButton>
+          </span>
+        </Tooltip>
+      )}
+      {canDelete && (
+        <Tooltip title="Xoá xe">
+          <span>
+            <IconButton size="small" color="error" onClick={() => onDelete(car._id)} sx={{ borderRadius: 2 }}>
+              <Delete />
+            </IconButton>
+          </span>
+        </Tooltip>
+      )}
+      {canManage && (
+        <Tooltip title="Lịch sử thay đổi thợ">
+          <span>
+            <IconButton size="small" color="secondary" onClick={() => onOpenHistory(car)} sx={{ borderRadius: 2 }}>
+              <History />
+            </IconButton>
+          </span>
+        </Tooltip>
+      )}
+    </Box>
+  );
+};
 
 const CarCard = ({
   car,
   canManage,
   canDelete,
+  canUploadImage,
   getStatusConfig,
   renderStatusIcon,
   onStatusChange,
@@ -128,6 +152,7 @@ const CarCard = ({
   onEdit,
   onDelete,
   onOpenHistory,
+  onUploadImage,
   highlightCarId = '',
 }) => (
   <Card
@@ -225,10 +250,12 @@ const CarCard = ({
         car={car}
         canManage={canManage}
         canDelete={canDelete}
+        canUploadImage={canUploadImage}
         onLoadRepairItems={onLoadRepairItems}
         onEdit={onEdit}
         onDelete={onDelete}
         onOpenHistory={onOpenHistory}
+        onUploadImage={onUploadImage}
       />
     </CardActions>
   </Card>
@@ -244,6 +271,7 @@ const CarTable = ({
   supervisors,
   canManage,
   canDelete,
+  canUploadImage,
   getStatusConfig,
   renderStatusIcon,
   onStatusChange,
@@ -251,6 +279,7 @@ const CarTable = ({
   onEdit,
   onDelete,
   onOpenHistory,
+  onUploadImage,
   statusFilter,
   onStatusFilterChange,
   highlightCarId = '',
@@ -390,10 +419,12 @@ const CarTable = ({
                     car={car}
                     canManage={canManage}
                     canDelete={canDelete}
+                    canUploadImage={canUploadImage}
                     onLoadRepairItems={onLoadRepairItems}
                     onEdit={onEdit}
                     onDelete={onDelete}
                     onOpenHistory={onOpenHistory}
+                    onUploadImage={onUploadImage}
                   />
                 </TableCell>
               </TableRow>
@@ -431,6 +462,7 @@ const CarsPanel = ({
   onTableSupervisorChange,
   canManage,
   canDelete,
+  canUploadImage,
   getStatusConfig,
   renderStatusIcon,
   onStatusChange,
@@ -438,6 +470,7 @@ const CarsPanel = ({
   onEdit,
   onDelete,
   onOpenHistory,
+  onUploadImage,
   highlightCarId = '',
   onFiltersOpen,
 }) => {
@@ -614,6 +647,7 @@ const CarsPanel = ({
                   car={car}
                   canManage={canManage}
                   canDelete={canDelete}
+                  canUploadImage={canUploadImage}
                   getStatusConfig={getStatusConfig}
                   renderStatusIcon={renderStatusIcon}
                   onStatusChange={onStatusChange}
@@ -621,6 +655,7 @@ const CarsPanel = ({
                   onEdit={onEdit}
                   onDelete={onDelete}
                   onOpenHistory={onOpenHistory}
+                  onUploadImage={onUploadImage}
                   highlightCarId={highlightCarId}
                 />
               ))
@@ -637,6 +672,7 @@ const CarsPanel = ({
             supervisors={supervisors}
             canManage={canManage}
             canDelete={canDelete}
+            canUploadImage={canUploadImage}
             getStatusConfig={getStatusConfig}
             renderStatusIcon={renderStatusIcon}
             onStatusChange={onStatusChange}
@@ -644,6 +680,7 @@ const CarsPanel = ({
             onEdit={onEdit}
             onDelete={onDelete}
             onOpenHistory={onOpenHistory}
+            onUploadImage={onUploadImage}
             statusFilter={statusFilter}
             onStatusFilterChange={onStatusFilterChange}
             highlightCarId={highlightCarId}
