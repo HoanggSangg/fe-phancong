@@ -11,6 +11,7 @@ import {
   createEmptyManualItem,
   isItemWorkerPercentageValid,
   getItemWorkerTotalPercentage,
+  buildChangedRepairPayload,
 } from '../utils/manageCarsHelpers';
 
 const pickSavedCar = (res) => res?.data?.car || null;
@@ -24,7 +25,7 @@ const useRepairItems = ({ allWorkers, ensureAllWorkers, setSnackbar, onCarComple
   const [repairSaving, setRepairSaving] = useState(false);
   const [syncExternalLoading, setSyncExternalLoading] = useState(false);
   const [workerGroups, setWorkerGroups] = useState([]);
-  const initialManualCountRef = useRef(0);
+  const initialItemsRef = useRef([]);
 
   const { data: revenueSettings } = useRevenueSettings(repairDialogOpen);
   const revenueBase = revenueSettings?.revenueBase || 'amount';
@@ -53,7 +54,7 @@ const useRepairItems = ({ allWorkers, ensureAllWorkers, setSnackbar, onCarComple
 
       const itemsRes = await getCarRepairItems(car._id);
       const mappedItems = (itemsRes.data || []).map(mapRepairItemToState);
-      initialManualCountRef.current = mappedItems.filter((item) => item.isManual).length;
+      initialItemsRef.current = mappedItems;
       setRepairItems(mappedItems);
       setRepairLoading(false);
 
@@ -89,6 +90,10 @@ const useRepairItems = ({ allWorkers, ensureAllWorkers, setSnackbar, onCarComple
       setRepairCar(car);
       const itemsRes = await getCarRepairItems(car._id);
       const refreshed = (itemsRes.data || []).map(mapRepairItemToState);
+      initialItemsRef.current = [
+        ...refreshed.filter((item) => !item.isManual),
+        ...initialItemsRef.current.filter((item) => item.isManual),
+      ];
       setRepairItems((previous) => {
         const previousById = new Map(previous.map((item) => [item._id, item]));
         return [
@@ -240,18 +245,18 @@ const useRepairItems = ({ allWorkers, ensureAllWorkers, setSnackbar, onCarComple
     setRepairItems((prev) => prev.filter((item) => item._id !== itemId));
   }, []);
 
-  const buildWorkersPayload = useCallback((item) =>
-    item.selectedWorkers
-      .filter((entry) => entry.worker)
-      .map((entry) => ({
-        workerId: entry.worker._id,
-        percentage: Number(entry.percentage) || 0,
-      })), []);
-
   const handleSaveRepairAssignments = useCallback(async () => {
-    if (!repairCar) return;
+    if (!repairCar || repairSaving || syncExternalLoading) return;
+    const payload = buildChangedRepairPayload(repairItems, initialItemsRef.current);
+    if (!payload.assignments.length && payload.manualItems === undefined) {
+      setSnackbar({ open: true, message: 'Không có thay đổi cần lưu', severity: 'info' });
+      return;
+    }
+    const changedIds = new Set(payload.assignments.map((item) => item.itemId));
+    const changedItems = repairItems.filter((item) => item.isManual
+      ? payload.manualItems !== undefined : changedIds.has(item._id));
 
-    const invalidPercentItem = repairItems.find((item) => !isItemWorkerPercentageValid(item));
+    const invalidPercentItem = changedItems.find((item) => !isItemWorkerPercentageValid(item));
     if (invalidPercentItem) {
       setSnackbar({
         open: true,
@@ -261,7 +266,7 @@ const useRepairItems = ({ allWorkers, ensureAllWorkers, setSnackbar, onCarComple
       return;
     }
 
-    const invalidManualItem = manualRepairItems.find((item) => !String(item.content || '').trim());
+    const invalidManualItem = changedItems.find((item) => item.isManual && !String(item.content || '').trim());
     if (invalidManualItem) {
       setSnackbar({
         open: true,
@@ -274,27 +279,7 @@ const useRepairItems = ({ allWorkers, ensureAllWorkers, setSnackbar, onCarComple
     try {
       setRepairSaving(true);
 
-      const shouldSaveManual = manualRepairItems.length > 0 || initialManualCountRef.current > 0;
-      const response = await saveRepairAssignments(repairCar._id, {
-        assignments: apiRepairItems.map((item) => ({
-          itemId: item._id,
-          workers: buildWorkersPayload(item),
-        })),
-        ...(shouldSaveManual ? {
-          manualItems: manualRepairItems.map((item) => ({
-            _id: item._id,
-            groupName: item.groupName,
-            content: item.content,
-            quantity: item.quantity,
-            unitPrice: item.unitPrice,
-            amount: item.amount,
-            unitCostPrice: item.unitCostPrice,
-            costAmount: item.costAmount,
-            unit: item.unit,
-            workers: buildWorkersPayload(item),
-          })),
-        } : {}),
-      });
+      const response = await saveRepairAssignments(repairCar._id, payload);
       const savedCar = pickSavedCar(response);
 
       setRepairDialogOpen(false);
@@ -322,9 +307,8 @@ const useRepairItems = ({ allWorkers, ensureAllWorkers, setSnackbar, onCarComple
   }, [
     repairCar,
     repairItems,
-    manualRepairItems,
-    apiRepairItems,
-    buildWorkersPayload,
+    repairSaving,
+    syncExternalLoading,
     setSnackbar,
     onCarCompleted,
   ]);
