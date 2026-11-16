@@ -1,9 +1,7 @@
 import {
-  Alert,
   Autocomplete,
   Box,
   Button,
-  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
@@ -16,7 +14,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import { Edit, Sync } from '@mui/icons-material';
+import { Edit } from '@mui/icons-material';
 import { WORKER_SELECT_SX } from '../../constants/layout';
 import { getCarROLabel } from '../../utils/carListHelpers';
 
@@ -25,12 +23,10 @@ const CarEditDialog = ({
   onClose,
   editData,
   supervisors,
+  supervisorsLoading = false,
   mergeSelectedWorkers,
   onChange,
   onSave,
-  onSyncExternal,
-  syncExternalLoading = false,
-  canSyncExternal = false,
 }) => {
   const roLabel = getCarROLabel(editData);
 
@@ -42,28 +38,9 @@ const CarEditDialog = ({
             <Edit color="primary" />
             <Typography variant="h6" fontWeight="bold">Cập nhật thông tin xe</Typography>
           </Box>
-          {canSyncExternal && (
-            <Button
-              variant="outlined"
-              color="info"
-              size="small"
-              startIcon={syncExternalLoading ? <CircularProgress size={16} color="inherit" /> : <Sync />}
-              onClick={onSyncExternal}
-              disabled={syncExternalLoading || !editData._id}
-            >
-              {syncExternalLoading ? 'Đang tải API...' : 'Tải lại từ API'}
-            </Button>
-          )}
         </Box>
       </DialogTitle>
       <DialogContent sx={{ p: 3 }}>
-        {canSyncExternal && (
-          <Alert severity="info" sx={{ mb: 2 }}>
-            Tải lại dữ liệu báo giá theo RO hiện tại (loại xe, giờ giao, hạng mục sửa chữa).
-            Phân công thợ trên hạng mục API đã có sẽ được giữ nguyên.
-          </Alert>
-        )}
-
         <Grid container spacing={2} sx={{ mt: 0 }}>
           <Grid size={{ xs: 12, sm: 6 }}>
             <TextField
@@ -117,8 +94,8 @@ const CarEditDialog = ({
             />
           </Grid>
           <Grid size={{ xs: 12, sm: 6 }}>
-            <FormControl fullWidth sx={{ mb: 2 }} size="small">
-              <InputLabel id="car-edit-supervisor-label">Giám sát</InputLabel>
+            <FormControl fullWidth sx={{ mb: 2 }} size="small" disabled={supervisorsLoading}>
+              <InputLabel id="car-edit-supervisor-label" shrink>Giám sát</InputLabel>
               <Select
                 labelId="car-edit-supervisor-label"
                 id="car-edit-supervisor-select"
@@ -126,7 +103,11 @@ const CarEditDialog = ({
                 value={editData.supervisor || ''}
                 onChange={onChange}
                 label="Giám sát"
+                notched
                 displayEmpty
+                renderValue={(value) => supervisorsLoading
+                  ? 'Đang tải giám sát...'
+                  : (supervisors.find((supervisor) => supervisor._id === value)?.name || 'Không chọn')}
               >
                 <MenuItem value="">
                   <em>Không chọn</em>

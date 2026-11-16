@@ -5,6 +5,7 @@ import {
   Box,
   Button,
   Chip,
+  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
@@ -27,6 +28,7 @@ import {
   Delete,
   EditNote,
   ReceiptLong,
+  Sync,
 } from '@mui/icons-material';
 import { formatMoney } from '../../utils/dateFilters';
 import {
@@ -207,11 +209,11 @@ const InlineWorkers = React.memo(
     onApplyWorkerGroup,
   }) {
     return (
-      <Stack spacing={0.5} sx={{ minWidth: 430 }}>
+      <Stack spacing={1} sx={{ minWidth: { xs: 0, sm: 430 }, width: '100%' }}>
         {canManage && workerGroups.length > 0 && (
           <Autocomplete
             size="small"
-            sx={{ width: 400, ...COMPACT_INPUT_SX }}
+            sx={{ width: { xs: '100%', sm: 400 }, ...COMPACT_INPUT_SX }}
             options={workerGroups}
             getOptionLabel={(group) => {
               const total = (group.members || []).reduce(
@@ -237,12 +239,12 @@ const InlineWorkers = React.memo(
           return (
             <Box
               key={`${item._id}-${rowIndex}`}
-              sx={{ display: 'flex', gap: 0.75, alignItems: 'center' }}
+              sx={{ display: 'flex', gap: 0.75, alignItems: 'center', flexWrap: { xs: 'wrap', sm: 'nowrap' }, minWidth: 0 }}
             >
               <Autocomplete
                 size="small"
                 disabled={!canManage}
-                sx={{ width: 220, ...COMPACT_INPUT_SX }}
+                sx={{ width: { xs: '100%', sm: 220 }, minWidth: 0, ...COMPACT_INPUT_SX }}
                 options={allWorkers}
                 getOptionLabel={(option) => option.name || ''}
                 value={entry.worker}
@@ -282,6 +284,7 @@ const InlineWorkers = React.memo(
                 <IconButton
                   size="small"
                   color="error"
+                  aria-label="Xóa thợ khỏi hạng mục"
                   onClick={() => onRemoveRepairWorkerRow(item._id, rowIndex)}
                   sx={{ p: 0.25 }}
                 >
@@ -295,6 +298,7 @@ const InlineWorkers = React.memo(
           <IconButton
             size="small"
             color="primary"
+            aria-label="Thêm thợ vào hạng mục"
             onClick={() => onAddRepairWorkerRow(item._id)}
             sx={{ alignSelf: 'flex-start', p: 0.25 }}
           >
@@ -337,6 +341,72 @@ const renderCompactRepairTableHead = (canManage, editable = false) => (
     )}
   </TableRow>
 );
+
+const MobileRepairItemCard = React.memo(function MobileRepairItemCard({
+  item,
+  index,
+  canManage,
+  onManualFieldChange,
+  onRemoveManualItem,
+  ...workerProps
+}) {
+  const manual = Boolean(item.isManual);
+  const fields = [
+    { key: 'quantity', label: 'Số lượng', money: false },
+    { key: 'unitPrice', label: 'Đơn giá', money: true },
+    { key: 'amount', label: 'Thành tiền', money: true },
+    { key: 'unitCostPrice', label: 'Giá vốn', money: true },
+    { key: 'costAmount', label: 'Thành tiền vốn', money: true },
+  ];
+
+  return (
+    <Paper variant="outlined" sx={{ p: 1.5, minWidth: 0, borderRadius: 2, bgcolor: manual ? '#fffbeb' : 'background.paper' }}>
+      <Stack spacing={1.5} sx={{ minWidth: 0 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
+          <Chip size="small" label={`#${index + 1}`} />
+          <Typography variant="caption" color="text.secondary" sx={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere' }}>
+            {manual ? 'Công việc ngoài báo giá' : (item.groupName || 'Khác')}
+          </Typography>
+          {manual && canManage && (
+            <IconButton size="small" color="error" aria-label="Xóa công việc ngoài báo giá" onClick={() => onRemoveManualItem(item._id)}>
+              <Delete fontSize="small" />
+            </IconButton>
+          )}
+        </Box>
+        {manual ? (
+          <>
+            <DebouncedTextField size="small" fullWidth label="Nhóm" value={item.groupName || ''} disabled={!canManage}
+              onCommit={(value) => onManualFieldChange(item._id, 'groupName', value)} />
+            <DebouncedTextField size="small" fullWidth multiline minRows={2} label="Nội dung" value={item.content || ''} disabled={!canManage}
+              onCommit={(value) => onManualFieldChange(item._id, 'content', value)} />
+          </>
+        ) : (
+          <Typography variant="body2" fontWeight={600} sx={{ overflowWrap: 'anywhere', whiteSpace: 'normal' }}>{item.content}</Typography>
+        )}
+        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 1.5 }}>
+          {fields.map(({ key, label, money }) => {
+            const Field = money ? DebouncedMoneyField : DebouncedTextField;
+            return manual ? (
+              <Field key={key} size="small" fullWidth label={label} value={item[key] ?? (money ? 0 : 1)} disabled={!canManage}
+                {...(!money ? { type: 'number', inputProps: { min: 0, step: 1 } } : {})}
+                onCommit={(value) => onManualFieldChange(item._id, key, value)} sx={{ minWidth: 0 }} />
+            ) : (
+              <Box key={key} sx={{ minWidth: 0 }}>
+                <Typography variant="caption" color="text.secondary">{label}</Typography>
+                <Typography variant="body2" fontWeight={key === 'amount' ? 700 : 400} sx={{ overflowWrap: 'anywhere' }}>
+                  {money ? formatMoney(item[key]) : `${item.quantity ?? 0}${item.unit ? ` ${item.unit}` : ''}`}
+                </Typography>
+              </Box>
+            );
+          })}
+        </Box>
+        <Divider />
+        <Typography variant="subtitle2">Phân công thợ</Typography>
+        <InlineWorkers item={item} canManage={canManage} {...workerProps} />
+      </Stack>
+    </Paper>
+  );
+});
 
 // ============================================================
 // ✅ ManualRepairItemRow: tách riêng + memo hoá.
@@ -546,6 +616,9 @@ const RepairItemsDialog = ({
   repairCar,
   repairLoading,
   repairSaving,
+  canSyncExternal = false,
+  onSyncExternal,
+  syncExternalLoading = false,
   repairItems,
   apiRepairItems,
   manualRepairItems,
@@ -583,28 +656,42 @@ const RepairItemsDialog = ({
   return (
     <Dialog
       open={open}
-      onClose={onClose}
+      onClose={syncExternalLoading ? undefined : onClose}
       maxWidth="xl"
       fullWidth
       fullScreen={isMobile}
       TransitionComponent={Slide}
       TransitionProps={{ direction: 'up' }}
-      PaperProps={{ sx: { borderRadius: isMobile ? 0 : 3 } }}
+      PaperProps={{ sx: { borderRadius: isMobile ? 0 : 3, minWidth: 0 } }}
     >
       <DialogTitle>
         <Box>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <ReceiptLong color="info" />
-            <Typography variant="h6" fontWeight="bold">
-              Chi tiết lệnh sửa chữa — {repairCar?.plateNumber || ''} - {repairCar?.roNumber || ''}
-            </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <ReceiptLong color="info" />
+              <Typography variant="h6" fontWeight="bold">
+                Chi tiết lệnh sửa chữa — {repairCar?.plateNumber || ''} - {repairCar?.roNumber || ''}
+              </Typography>
+            </Box>
+            {canSyncExternal && (
+              <Button
+                variant="outlined"
+                color="info"
+                size="small"
+                startIcon={syncExternalLoading ? <CircularProgress size={16} color="inherit" /> : <Sync />}
+                onClick={onSyncExternal}
+                disabled={repairLoading || repairSaving || syncExternalLoading || !repairCar?._id}
+              >
+                {syncExternalLoading ? 'Đang tải API...' : 'Tải lại từ API'}
+              </Button>
+            )}
           </Box>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-            Mỗi hàng: thông tin hạng mục + phân công thợ trên cùng một dòng
+            {isMobile ? 'Mỗi thẻ gồm thông tin hạng mục và phân công thợ' : 'Mỗi hàng: thông tin hạng mục + phân công thợ trên cùng một dòng'}
           </Typography>
         </Box>
       </DialogTitle>
-      <DialogContent sx={{ p: isMobile ? 2 : 3 }}>
+      <DialogContent sx={{ p: isMobile ? 1.5 : 3, minWidth: 0 }}>
         {repairLoading ? (
           <Typography align="center" sx={{ py: 4 }}>
             Đang tải chi tiết sửa chữa...
@@ -623,6 +710,18 @@ const RepairItemsDialog = ({
                 <Alert severity="info" sx={{ py: 0.5, mb: 1 }}>
                   Chưa có hạng mục từ báo giá.
                 </Alert>
+              ) : isMobile ? (
+                <Stack spacing={1.5}>
+                  {apiRepairItems.map((item, index) => (
+                    <MobileRepairItemCard key={item._id} item={item} index={index} canManage={canManage}
+                      allWorkers={allWorkers} workerGroups={workerGroups}
+                      onRepairWorkerChange={onRepairWorkerChange}
+                      onRepairPercentageChange={onRepairPercentageChange}
+                      onAddRepairWorkerRow={onAddRepairWorkerRow}
+                      onRemoveRepairWorkerRow={onRemoveRepairWorkerRow}
+                      onApplyWorkerGroup={onApplyWorkerGroup} />
+                  ))}
+                </Stack>
               ) : (
                 <Paper variant="outlined" sx={{ overflowX: 'auto' }}>
                   <Table size="small" sx={{ minWidth: 1430 }}>
@@ -652,8 +751,8 @@ const RepairItemsDialog = ({
             <Divider sx={{ my: 1.5 }} />
 
             <Box>
-              <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
-                <Stack direction="row" alignItems="center" spacing={1}>
+              <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1, gap: 1, flexWrap: 'wrap' }}>
+                <Stack direction="row" alignItems="center" spacing={1} sx={{ minWidth: 0, flexWrap: 'wrap' }}>
                   <EditNote color="warning" sx={{ fontSize: 18 }} />
                   <Typography variant="subtitle1" fontWeight="bold">
                     Công việc ngoài báo giá
@@ -670,6 +769,19 @@ const RepairItemsDialog = ({
                 <Alert severity="warning" sx={{ py: 0.5 }}>
                   Chưa có công việc ngoài báo giá.
                 </Alert>
+              ) : isMobile ? (
+                <Stack spacing={1.5}>
+                  {manualRepairItems.map((item, index) => (
+                    <MobileRepairItemCard key={item._id} item={item} index={index} canManage={canManage}
+                      allWorkers={allWorkers} workerGroups={workerGroups}
+                      onManualFieldChange={onManualFieldChange} onRemoveManualItem={onRemoveManualItem}
+                      onRepairWorkerChange={onRepairWorkerChange}
+                      onRepairPercentageChange={onRepairPercentageChange}
+                      onAddRepairWorkerRow={onAddRepairWorkerRow}
+                      onRemoveRepairWorkerRow={onRemoveRepairWorkerRow}
+                      onApplyWorkerGroup={onApplyWorkerGroup} />
+                  ))}
+                </Stack>
               ) : (
                 <Paper variant="outlined" sx={{ overflowX: 'auto', borderColor: '#fcd34d' }}>
                   <Table size="small" sx={{ minWidth: 1430 }}>
@@ -720,7 +832,7 @@ const RepairItemsDialog = ({
                   {revenuePreview.map((entry) => (
                     <Box
                       key={entry.id}
-                      sx={{ display: 'flex', justifyContent: 'space-between' }}
+                      sx={{ display: 'flex', justifyContent: 'space-between', gap: 1, flexWrap: 'wrap' }}
                     >
                       <Typography variant="body2">{entry.name}</Typography>
                       <Typography variant="body2" fontWeight="bold">
@@ -734,8 +846,8 @@ const RepairItemsDialog = ({
           </Box>
         )}
       </DialogContent>
-      <DialogActions sx={{ justifyContent: 'center', gap: 2, p: 2, flexDirection: isMobile ? 'column' : 'row' }}>
-        <Button onClick={onClose} variant="outlined" fullWidth={isMobile}>
+      <DialogActions sx={{ justifyContent: 'center', gap: 1.5, p: isMobile ? 1.5 : 2, flexDirection: isMobile ? 'column' : 'row', '& > :not(style) ~ :not(style)': { ml: isMobile ? 0 : 1 } }}>
+        <Button onClick={onClose} variant="outlined" fullWidth={isMobile} disabled={syncExternalLoading}>
           Đóng
         </Button>
         {canManage && (
@@ -743,7 +855,7 @@ const RepairItemsDialog = ({
             onClick={onSave}
             variant="contained"
             color="primary"
-            disabled={repairLoading || repairSaving}
+            disabled={repairLoading || repairSaving || syncExternalLoading}
             fullWidth={isMobile}
           >
             {repairSaving ? 'Đang lưu...' : 'Lưu phân công & công việc ghi thêm'}

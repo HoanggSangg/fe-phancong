@@ -122,3 +122,5 @@ export const updateSystemSettings = (payload) => api.put('/system/settings', pay
 export const getSystemVersion = () => api.get('/system/version');
 export const getOnlineClients = () => api.get('/system/online-clients');
 export const publishSystemUpdate = (payload) => api.post('/system/publish-update', payload);
+
+export const saveRepairAssignments = (carId, payload) => api.put(`/cars/${carId}/repair-items/save`, payload);

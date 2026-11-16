@@ -6,7 +6,6 @@ import {
   getCarWorkerHistory,
   getCarById,
   getManageCarsList,
-  syncCarFromExternal,
 } from '../apis/index';
 import {
   Button,
@@ -90,7 +89,6 @@ const ManageCars = () => {
   const [searchPlateInput, setSearchPlateInput] = useState('');
   const [searchPlate, setSearchPlate] = useState('');
   const [editOpen, setEditOpen] = useState(false);
-  const [syncExternalLoading, setSyncExternalLoading] = useState(false);
   const [statusUpdateOpen, setStatusUpdateOpen] = useState(false);
   const [editData, setEditData] = useState({});
   const [statusUpdateData, setStatusUpdateData] = useState({});
@@ -133,7 +131,7 @@ const ManageCars = () => {
     refreshAvailableWorkers,
     invalidateHomeDashboard,
   } = useManageCarsBootstrap(user, {
-    loadFilters: filtersRequested,
+    loadFilters: filtersRequested || editOpen,
   });
 
   const handleRemoteCarChange = useCallback(async () => {
@@ -422,6 +420,7 @@ const ManageCars = () => {
   };
 
   const handleEditClick = async (car) => {
+    setFiltersRequested(true);
     try {
       const [fullCar, workersList] = await Promise.all([
         loadCarDetail(car),
@@ -449,61 +448,12 @@ const ManageCars = () => {
         ...fullCar,
         mainWorkers: mainWorkerIds,
         subWorkers: subWorkerIds,
-        supervisor: fullCar.supervisor?._id || '',
+        supervisor: fullCar.supervisor?._id || fullCar.supervisor || '',
       });
 
       setEditOpen(true);
     } catch {
       toast.fromSnackbar({ open: true, message: 'Không tải được chi tiết xe', severity: 'error' });
-    }
-  };
-
-  const handleSyncExternal = async () => {
-    if (!editData._id) return;
-
-    setSyncExternalLoading(true);
-    try {
-      const res = await syncCarFromExternal(editData._id);
-      const car = res.data?.car;
-      const repairSync = res.data?.repairSync || {};
-
-      if (car) {
-        setEditData((prev) => ({
-          ...prev,
-          plateNumber: car.plateNumber ?? prev.plateNumber,
-          externalCarTypeName: car.externalCarTypeName ?? prev.externalCarTypeName,
-          advisorName: car.advisorName ?? prev.advisorName,
-          deliveryTime: car.deliveryTime ?? prev.deliveryTime,
-          roNumber: car.roNumber ?? prev.roNumber,
-          roCode: car.roCode ?? prev.roCode,
-          roKey: car.roKey ?? prev.roKey,
-        }));
-
-        patchCarInCache(car);
-      }
-
-      invalidateManageCarsList();
-
-      const parts = [];
-      if (repairSync.updated) parts.push(`${repairSync.updated} hạng mục cập nhật`);
-      if (repairSync.created) parts.push(`${repairSync.created} hạng mục mới`);
-      if (repairSync.removed) parts.push(`${repairSync.removed} hạng mục đã xóa`);
-
-      toast.fromSnackbar({
-        open: true,
-        message: parts.length > 0
-          ? `Đã tải lại từ API — ${parts.join(', ')}`
-          : (res.data?.message || 'Đã tải lại dữ liệu từ API'),
-        severity: 'success',
-      });
-    } catch (err) {
-      toast.fromSnackbar({
-        open: true,
-        message: err.response?.data?.message || 'Không tải được dữ liệu từ API',
-        severity: 'error',
-      });
-    } finally {
-      setSyncExternalLoading(false);
     }
   };
 
@@ -697,12 +647,10 @@ const ManageCars = () => {
         onClose={() => setEditOpen(false)}
         editData={editData}
         supervisors={supervisors}
+        supervisorsLoading={filtersLoading}
         mergeSelectedWorkers={mergeSelectedWorkers}
         onChange={handleChange}
         onSave={handleEditSave}
-        onSyncExternal={handleSyncExternal}
-        syncExternalLoading={syncExternalLoading}
-        canSyncExternal={canSyncExternal}
       />
 
       <StatusUpdateDialog
@@ -724,6 +672,9 @@ const ManageCars = () => {
         repairCar={repair.repairCar}
         repairLoading={repair.repairLoading}
         repairSaving={repair.repairSaving}
+        canSyncExternal={canSyncExternal}
+        onSyncExternal={repair.handleSyncExternal}
+        syncExternalLoading={repair.syncExternalLoading}
         repairItems={repair.repairItems}
         apiRepairItems={repair.apiRepairItems}
         manualRepairItems={repair.manualRepairItems}

@@ -1,9 +1,9 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import {
-  assignRepairItemWorkers,
+  saveRepairAssignments,
   getCarRepairItems,
   getWorkerGroups,
-  saveManualRepairItems,
+  syncCarFromExternal,
 } from '../components/apis/index';
 import useRevenueSettings from './queries/useRevenueSettings';
 import {
@@ -22,6 +22,7 @@ const useRepairItems = ({ allWorkers, ensureAllWorkers, setSnackbar, onCarComple
   const [repairItems, setRepairItems] = useState([]);
   const [repairLoading, setRepairLoading] = useState(false);
   const [repairSaving, setRepairSaving] = useState(false);
+  const [syncExternalLoading, setSyncExternalLoading] = useState(false);
   const [workerGroups, setWorkerGroups] = useState([]);
   const initialManualCountRef = useRef(0);
 
@@ -78,6 +79,39 @@ const useRepairItems = ({ allWorkers, ensureAllWorkers, setSnackbar, onCarComple
       setRepairLoading(false);
     }
   }, [ensureAllWorkers, setSnackbar]);
+
+  const handleSyncExternal = useCallback(async () => {
+    if (!repairCar?._id || repairSaving || syncExternalLoading) return;
+    setSyncExternalLoading(true);
+    try {
+      const res = await syncCarFromExternal(repairCar._id);
+      const car = res.data?.car || repairCar;
+      setRepairCar(car);
+      const itemsRes = await getCarRepairItems(car._id);
+      const refreshed = (itemsRes.data || []).map(mapRepairItemToState);
+      setRepairItems((previous) => {
+        const previousById = new Map(previous.map((item) => [item._id, item]));
+        return [
+          ...refreshed.filter((item) => !item.isManual).map((item) => {
+            const draft = previousById.get(item._id);
+            return draft ? { ...item, selectedWorkers: draft.selectedWorkers } : item;
+          }),
+          // Keep unsaved manual edits, additions and removals in the current dialog.
+          ...previous.filter((item) => item.isManual),
+        ];
+      });
+      if (onCarCompleted) await onCarCompleted(car);
+      setSnackbar({ open: true, message: res.data?.message || 'Đã tải lại dữ liệu từ API', severity: 'success' });
+    } catch (err) {
+      setSnackbar({
+        open: true,
+        message: err.response?.data?.message || 'Không tải được dữ liệu từ API',
+        severity: 'error',
+      });
+    } finally {
+      setSyncExternalLoading(false);
+    }
+  }, [repairCar, repairSaving, syncExternalLoading, onCarCompleted, setSnackbar]);
 
   const handleRepairWorkerChange = useCallback((itemId, rowIndex, worker) => {
     setRepairItems((prev) =>
@@ -240,24 +274,14 @@ const useRepairItems = ({ allWorkers, ensureAllWorkers, setSnackbar, onCarComple
     try {
       setRepairSaving(true);
 
-      let savedCar = null;
-
-      if (apiRepairItems.length > 0) {
-        const assignRes = await assignRepairItemWorkers(
-          repairCar._id,
-          apiRepairItems.map((item) => ({
-            itemId: item._id,
-            workers: buildWorkersPayload(item),
-          }))
-        );
-        savedCar = pickSavedCar(assignRes) || savedCar;
-      }
-
       const shouldSaveManual = manualRepairItems.length > 0 || initialManualCountRef.current > 0;
-      if (shouldSaveManual) {
-        const manualRes = await saveManualRepairItems(
-          repairCar._id,
-          manualRepairItems.map((item) => ({
+      const response = await saveRepairAssignments(repairCar._id, {
+        assignments: apiRepairItems.map((item) => ({
+          itemId: item._id,
+          workers: buildWorkersPayload(item),
+        })),
+        ...(shouldSaveManual ? {
+          manualItems: manualRepairItems.map((item) => ({
             _id: item._id,
             groupName: item.groupName,
             content: item.content,
@@ -268,10 +292,10 @@ const useRepairItems = ({ allWorkers, ensureAllWorkers, setSnackbar, onCarComple
             costAmount: item.costAmount,
             unit: item.unit,
             workers: buildWorkersPayload(item),
-          }))
-        );
-        savedCar = pickSavedCar(manualRes) || savedCar;
-      }
+          })),
+        } : {}),
+      });
+      const savedCar = pickSavedCar(response);
 
       setRepairDialogOpen(false);
       setRepairCar(null);
@@ -312,6 +336,8 @@ const useRepairItems = ({ allWorkers, ensureAllWorkers, setSnackbar, onCarComple
     repairItems,
     repairLoading,
     repairSaving,
+    syncExternalLoading,
+    handleSyncExternal,
     workersById,
     apiRepairItems,
     manualRepairItems,
