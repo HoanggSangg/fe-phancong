@@ -21,6 +21,7 @@ import {
   TableRow,
   TextField,
   Typography,
+  useMediaQuery,
 } from '@mui/material';
 import Slide from '@mui/material/Slide';
 import {
@@ -41,7 +42,17 @@ import {
 } from '../../utils/revenueHelpers';
 
 const COMPACT_INPUT_SX = {
-  '& .MuiInputBase-root': { fontSize: 13, height: 32 },
+  '& .MuiInputBase-root': {
+    fontSize: { xs: '16px', sm: '13px' },
+    height: { xs: 40, sm: 32 },
+  },
+  // Keep the actual input at 16px on phones to avoid focus zoom on iOS.
+  '& .MuiInputBase-input': { fontSize: { xs: '16px', sm: '13px' } },
+  '@media (hover: none) and (pointer: coarse)': {
+    '& input.MuiAutocomplete-input, & input.MuiInputBase-input': {
+      fontSize: '16px !important',
+    },
+  },
   '& .MuiInputLabel-root': { fontSize: 12 },
 };
 
@@ -208,6 +219,22 @@ const InlineWorkers = React.memo(
     onRemoveRepairWorkerRow,
     onApplyWorkerGroup,
   }) {
+    const touchInput = useMediaQuery('(hover: none) and (pointer: coarse)');
+    const renderPickerInput = (params, placeholder) => (
+      <TextField
+        {...params}
+        placeholder={placeholder}
+        inputProps={{
+          ...params.inputProps,
+          // Apply to the HTML input itself, including landscape and standalone iOS.
+          style: {
+            ...params.inputProps?.style,
+            ...(touchInput ? { fontSize: '16px' } : {}),
+          },
+        }}
+      />
+    );
+
     return (
       <Stack spacing={1} sx={{ minWidth: { xs: 0, sm: 430 }, width: '100%' }}>
         {canManage && workerGroups.length > 0 && (
@@ -227,9 +254,7 @@ const InlineWorkers = React.memo(
               if (group) onApplyWorkerGroup?.(item._id, group);
             }}
             isOptionEqualToValue={(option, value) => option._id === value?._id}
-            renderInput={(params) => (
-              <TextField {...params} placeholder="Chọn nhóm thợ" />
-            )}
+            renderInput={(params) => renderPickerInput(params, 'Chọn nhóm thợ')}
           />
         )}
         {(item.selectedWorkers || []).map((entry, rowIndex) => {
@@ -249,9 +274,7 @@ const InlineWorkers = React.memo(
                 getOptionLabel={(option) => option.name || ''}
                 value={entry.worker}
                 onChange={(_, newValue) => onRepairWorkerChange(item._id, rowIndex, newValue)}
-                renderInput={(params) => (
-                  <TextField {...params} placeholder="Chọn thợ" />
-                )}
+                renderInput={(params) => renderPickerInput(params, 'Chọn thợ')}
                 isOptionEqualToValue={(option, value) => option._id === value?._id}
               />
               <DebouncedTextField
@@ -276,9 +299,7 @@ const InlineWorkers = React.memo(
                   }
                 }}
                 getOptionLabel={(option) => `${option}%`}
-                renderInput={(params) => (
-                  <TextField {...params} placeholder="Nhanh" />
-                )}
+                renderInput={(params) => renderPickerInput(params, 'Nhanh')}
               />
               {canManage && (
                 <IconButton
@@ -691,7 +712,15 @@ const RepairItemsDialog = ({
           </Typography>
         </Box>
       </DialogTitle>
-      <DialogContent sx={{ p: isMobile ? 1.5 : 3, minWidth: 0 }}>
+      <DialogContent sx={{
+        p: isMobile ? 1.5 : 3,
+        minWidth: 0,
+        '@media (max-width: 599.95px), (hover: none) and (pointer: coarse)': {
+          '& input.MuiInputBase-input, & textarea.MuiInputBase-input': {
+            fontSize: '16px !important',
+          },
+        },
+      }}>
         {repairLoading ? (
           <Typography align="center" sx={{ py: 4 }}>
             Đang tải chi tiết sửa chữa...
