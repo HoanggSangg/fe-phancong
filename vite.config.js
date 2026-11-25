@@ -1,4 +1,5 @@
 import fs from 'node:fs'
+import process from 'node:process'
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import { ensureCert, keyFile, certFile } from './scripts/ensure-dev-cert.mjs'
@@ -11,6 +12,8 @@ export default defineConfig(async ({ mode }) => {
   // Tắt: .env.local → VITE_DEV_HTTPS=false
   const useHttps = (env.VITE_DEV_HTTPS || process.env.VITE_DEV_HTTPS || 'true') !== 'false'
   const publicPort = Number(env.VITE_DEV_PORT || process.env.VITE_DEV_PORT || 5173)
+  const extraAllowedHosts = String(env.VITE_DEV_ALLOWED_HOSTS || '')
+    .split(',').map((host) => host.trim()).filter(Boolean)
 
   let httpsOption = false
   if (useHttps) {
@@ -36,7 +39,11 @@ export default defineConfig(async ({ mode }) => {
       port: publicPort,
       strictPort: true,
       https: httpsOption,
-      allowedHosts: true,
+      allowedHosts: ['localhost', '.localhost', ...extraAllowedHosts],
+      fs: {
+        strict: true,
+        deny: ['.env', '.env.*', '**/.env', '**/.env.*', '**/.git/**', '**/*.{crt,pem}', '**/*.{asc,key}'],
+      },
       // HMR dùng cùng host/port trình duyệt đang mở (wss khi HTTPS).
       hmr: useHttps
         ? {
